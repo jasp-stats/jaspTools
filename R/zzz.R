@@ -1,49 +1,32 @@
 .onAttach <- function(libname, pkgname) {
 
-  # set the working directory
-  dir1 <- file.path(libname, pkgname, "R") # attempt 1
-  dir2 <- getSrcDirectory(function(x) {x}) # attempt 2
-  correctDir <- endsWith(c(dir1, dir2), "Tools/JASPTools/R")
-  if (any(correctDir)) {
-    dirIndex <- min(which(correctDir))
-    dir <- c(dir1, dir2)[dirIndex]
-    setwd(dir)
-    message(paste("Changing working directory to", dir))
+  # attempt to find the JASP install on the disk
+  foundJASP <- FALSE
+  path1 <- file.path(libname, pkgname, "R") # attempt 1
+  path2 <- getSrcDirectory(function(x) {x}) # attempt 2
+  correctPath <- endsWith(c(path1, path2), file.path("Tools", "JASPTools", "R"))
+  if (any(correctPath)) {
+    index <- min(which(correctPath))
+    fullPath <- c(path1, path2)[index]
+    foundJASP <- TRUE
+    message("Found the root location of JASPTools.")
   } else {
-    message("Cannot set wd to required location. Did you set the argument lib.loc to path/to/jasp/jasp-desktop/Tools?")
+    message("Cannot find the install location of JASPTools.
+            Did you set the argument lib.loc to %path%/%to%/%jasp%/jasp-desktop/Tools?
+            To continue working with JASPTools you will have to set your working directory to %path%/%to%/%jasp%/jasp-desktop/Tools")
   }
 
-  # set the libpath to JASP R packages
-  pathToPackages <- NULL
-  os <- NULL
-  if (! is.null(Sys.info())) {
-    os <- Sys.info()['sysname']
-    if (os == "Darwin")
-      os <- "OSX"
-  } else {
-    if (grepl("^darwin", R.version$os))
-      os <- "OSX"
-  }
+  pathsToResources <- FALSE
+  if (foundJASP) {
 
-  if (! is.null(os) && os == "OSX") {
-
-    rVersions <- list.files("../../../../Frameworks/R.framework/Versions/")
-    if (! identical(rVersions, character(0))) {
-      rVersions <- suppressWarnings(as.numeric(rVersions))
-      r <- sort(rVersions, decreasing=TRUE)[1]
-      pathToPackages <- paste0("../../../../Frameworks/R.framework/Versions/", r, "/Resources/library/")
-    }
-
-  } else if (! is.null(os) && os == "Windows") {
-
-    findDirPackages <- function(path, needle) {
-      dirs <- list.files(path)
+    findDirPackages <- function(pathToBuild, needle) {
+      dirs <- list.files(pathToBuild)
       locations <- NULL
       if (! identical(dirs, character(0))) {
         for (dirName in dirs) {
-          name <- unlist(strsplit(dirName, "[\\W_]", perl=TRUE))
+          name <- unlist(strsplit(dirName, "[\\W_]", perl = TRUE))
           if (all(needle %in% tolower(name))) {
-            location <- paste0(path, dirName, "/R/library")
+            location <- file.path(pathToBuild, dirName, "R", "library")
             locations <- c(locations, location)
           }
         }
@@ -51,41 +34,94 @@
       return(locations)
     }
 
-    if (.Machine$sizeof.pointer == 8) { # 64 bits
-      pathToPackages <- findDirPackages("../../../../", c("jasp", "64"))
-    } else { # 32 bits
-      pathToPackages <- findDirPackages("../../../../", c("jasp", "32"))
+    # get location of jasp-desktop
+    explode <- unlist(strsplit(fullPath, .Platform$file.sep)) # php habits..
+    basePath <- paste(head(explode, length(explode) - 3), collapse = .Platform$file.sep)
+
+    # temporarily change wd
+    oldwd <- getwd()
+    setwd(basePath)
+    on.exit(setwd(oldwd))
+
+    # get locations of required resources (json, analyses, html)
+    relativePaths <- list(
+      r.dir = file.path("JASP-Engine", "JASP", "R"),
+      html.dir = file.path("JASP-Desktop", "html"),
+      json.dir = file.path("Resources", "Library"),
+      data.dir = file.path("Resources", "Data Sets")
+    )
+    absolutePaths <- lapply(relativePaths, normalizePath)
+    pathsToResources <- absolutePaths
+
+    # set the libpath to JASP R packages so users do not need to install any additional packages
+    pathToPackages <- NULL
+    os <- NULL
+    if (! is.null(Sys.info())) {
+      os <- Sys.info()["sysname"]
+      if (os == "Darwin")
+        os <- "OSX"
+    } else {
+      if (grepl("^darwin", R.version$os))
+        os <- "OSX"
     }
 
-  }
+    if (! is.null(os)) {
 
-  libPathSet <- FALSE
-  if (! is.null(pathToPackages)) {
-    for (path in pathToPackages) {
-      packages <- list.files(path)
-      if (! identical(packages, character(0)) && "base" %in% packages) {
-        message("Redirecting search path to installed JASP packages")
-        .libPaths(path)
-        libPathSet <- TRUE
-        break
+      if (os == "OSX") {
+
+        basePathPackages <- file.path("..", "Frameworks", "R.framework", "Versions")
+        rVersions <- list.files(basePathPackages)
+        if (! identical(rVersions, character(0))) {
+          rVersions <- suppressWarnings(as.numeric(rVersions))
+          r <- sort(rVersions, decreasing = TRUE)[1]
+          pathToPackages <- file.path(basePathPackages, r, "Resources", "library")
+        }
+
+      } else if (os == "Windows") {
+
+        if (.Machine$sizeof.pointer == 8) { # 64 bits
+          pathToPackages <- findDirPackages(file.path(".."), c("jasp", "64"))
+        } else { # 32 bits
+          pathToPackages <- findDirPackages(file.path(".."), c("jasp", "32"))
+        }
+
+      }
+
+    }
+
+    libPathSet <- FALSE
+    if (! is.null(pathToPackages)) {
+      for (path in pathToPackages) {
+        packages <- list.files(path)
+        if (! identical(packages, character(0)) && "base" %in% packages) {
+          message("Found the bundled R packages, redirecting the search path.")
+          .libPaths(path)
+          libPathSet <- TRUE
+          break
+        }
       }
     }
-  }
 
-  if (! libPathSet) {
-    message("Unable to set search path to installed JASP packages. Required packages will have to be installed manually.")
+    if (! libPathSet) {
+      message("Unable to find the bundled R packages.
+              Required packages will have to be installed manually.")
+    }
+
   }
 
   # create the temp html directory for the output
-  if (! dir.exists(paste0(tempdir(), "/html"))) {
-    dir.create(paste0(tempdir(), "/html"))
+  pathToHtml <- file.path(tempdir(), "JASPTools", "html")
+  if (! dir.exists(pathToHtml)) {
+    dir.create(pathToHtml, recursive = TRUE)
+    message(paste("Created temporary html output folder at", pathToHtml))
   }
 
-  # create empty globals for JASP to find
-  assign("dataset", NULL, envir=as.environment("package:JASPTools"))
-  assign("perform", NULL, envir=as.environment("package:JASPTools"))
-  assign(".ppi", NULL, envir=as.environment("package:JASPTools"))
-  assign(".baseCitation", NULL, envir=as.environment("package:JASPTools"))
-  assign(".masks", c("dataset", "perform", ".ppi"), envir=as.environment("package:JASPTools"))
+  # create globals for setup / JASP to find
+  assign("pathsToResources", pathsToResources, envir = as.environment("package:JASPTools"))
+  assign("dataset", NULL, envir = as.environment("package:JASPTools"))
+  assign("perform", NULL, envir = as.environment("package:JASPTools"))
+  assign(".ppi", NULL, envir = as.environment("package:JASPTools"))
+  assign(".baseCitation", NULL, envir = as.environment("package:JASPTools"))
+  assign(".masks", c("dataset", "perform", ".ppi"), envir = as.environment("package:JASPTools"))
 
 }

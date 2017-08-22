@@ -1,7 +1,7 @@
 .analysisOptionsFromFile <- function(analysis) {
 
-  file <- paste0(.getPkgOption("json.dir"), analysis, ".json")
-  analysisOpts <- try(rjson::fromJSON(file = file), silent=TRUE)
+  file <- file.path(.getPkgOption("json.dir"), paste0(analysis, ".json"))
+  analysisOpts <- try(rjson::fromJSON(file = file), silent = TRUE)
 
   if (inherits(analysisOpts, "try-error")) {
     stop("The analysis you supplied could not be found.
@@ -9,7 +9,7 @@
          and (2) your working directory is set properly.")
   }
 
-  if ("options" %in% analysisOpts) {
+  if ("options" %in% names(analysisOpts)) {
     return(analysisOpts[["options"]])
   } else {
     stop("The json file was found, but it appears to be invalid")
@@ -19,7 +19,7 @@
 
 .analysisOptionsFromQt <- function(x) {
 
-  json <- try(rjson::fromJSON(x), silent=TRUE)
+  json <- try(rjson::fromJSON(x), silent = TRUE)
 
   if (inherits(json, "try-error")) {
     stop("Your json is invalid, please copy the entire message
@@ -32,31 +32,30 @@
 }
 
 #' @export
-analysisOptions <- function(analysis=NULL, qt=NULL, hint=FALSE) {
+analysisOptions <- function(source, hint = FALSE) {
 
-  if (is.null(analysis) && is.null(qt)) {
-    stop("Please specify the analysis name or copy the json from Qt")
+  if (! is.character(source) || length(source) > 1) {
+    stop("Expecting a character input of length 1 as source,
+         either a json string or analysis name.")
   }
 
-  if (! is.null(analysis) && ! is.null(qt)) {
-    warning("Both analysis name and qt output are specified, ignoring the analysis name")
+  type <- "file"
+  if (jsonlite::validate(source) == TRUE) {
+    type <- "qt"
   }
 
   options <- NULL
-
-  if (! is.null(qt)) {
-    options <- .analysisOptionsFromQt(qt)
-  }
-
-  if (is.null(options) && ! is.null(analysis)) {
-    rawOptions <- .analysisOptionsFromFile(analysis)
+  if (type == "qt") {
+    options <- .analysisOptionsFromQt(source)
+  } else {
+    rawOptions <- .analysisOptionsFromFile(source)
     options <- .fillOptions(rawOptions, hint)
   }
 
   return(options)
 }
 
-.fillOptions <- function(options, hint=FALSE) {
+.fillOptions <- function(options, hint = FALSE) {
 
   for (i in 1:length(options)) {
     option <- options[[i]]
@@ -80,7 +79,7 @@ analysisOptions <- function(analysis=NULL, qt=NULL, hint=FALSE) {
   return(options)
 }
 
-.optionTypeToValue <- function(option, hint=FALSE) {
+.optionTypeToValue <- function(option, hint = FALSE) {
   switch(option[["type"]],
          Boolean =
            FALSE,

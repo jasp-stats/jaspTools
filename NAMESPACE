@@ -2,6 +2,6 @@
 
 export(analysisOptions)
 export(run)
-export(setPkgOption)
 export(view)
+export(setPkgOption)
 export(viewPkgOptions)
