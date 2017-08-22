@@ -5,17 +5,6 @@
 # create standard options for each analysis
 # JASP should init paths on viewPkgSettings()
 
-
-#' View the tables and plots in a results object.
-#'
-#' \code{view} allows you to view output independently of Qt. It uses the same
-#' javascript/css/html and should consequently generate identical output.
-#' This function may be called directly, but it is more convenient to use \code{JASPTools::run}.
-#'
-#' @param results An R list returned from an analysis (either directly or through run)
-#' or a json results string copied from the Qt terminal.
-#'
-#' @return A html page is generated and placed in a temp folder. All with tables and images
 view <- function(results) {
 
   content <- NULL
@@ -41,7 +30,7 @@ view <- function(results) {
   } else {
 
     stop("Incorrect object provided in results,
-         please enter a valid json string or a named results list.")
+    please enter a valid json string or a named results list.")
 
   }
 
@@ -53,7 +42,7 @@ view <- function(results) {
   )
   content <- try(rjson::toJSON(content))
   if (class(content) == "try-error") {
-    content <- paste0("{ \"status\" : \"error\", \"results\" : { \"error\" : 1, \"errorMessage\" : \"", "Unable to jsonify", "\" } }")
+    content <- paste0("{ \"status\" : \"error\", \"results\" : { \"error\" : 1, \"errorMessage\" : \"Unable to jsonify\" } }")
   }
 
   html <- readChar(file.path(.getPkgOption("html.dir"), "index.html"), 1000000)
@@ -76,8 +65,7 @@ view <- function(results) {
 
 }
 
-#' @export
-run <- function(name, dataset, options, perform = "run") {
+run <- function(name, dataset, options, perform = "run", returnResults = FALSE) {
 
   .initRunEnvironment(dataset = dataset, perform = perform)
   analysis <- eval(parse(text = name))
@@ -88,11 +76,23 @@ run <- function(name, dataset, options, perform = "run") {
   },
   error = function(e) e)
 
-  if (inherits(results, "error")) {
+  if (inherits(results, "expectedError")) {
 
-    error <- gsub("\"", "'", as.character(results), fixed = TRUE)
+    errorResponse <- paste0("{ \"status\" : \"error\", \"results\" : { \"title\" : \"error\", \"error\" : 1, \"errorMessage\" : \"", results$message, "\" } }")
+    view(errorResponse)
+
+  } else if (inherits(results, "error")) {
+
+    error <- gsub("\"", "'", as.character(results), fixed=TRUE)
     error <- gsub("\\\n", " ", error)
-    errorResponse <- paste0("{ \"status\" : \"exception\", \"results\" : { \"title\" : \"error\", \"error\" : 1, \"errorMessage\" : \"", error, "\" } }")
+
+    stackTrace <- as.character(results$stackTrace)
+    stackTrace <- gsub("\"", "'", stackTrace, fixed=TRUE)
+    stackTrace <- gsub("\\\\", "", stackTrace)
+    stackTrace <- paste(stackTrace, collapse="<br><br>")
+
+    errorMessage <- .generateErrorMessage(type='exception', error=error, stackTrace=stackTrace)
+    errorResponse <- paste0("{ \"status\" : \"exception\", \"results\" : { \"title\" : \"error\", \"error\" : 1, \"errorMessage\" : \"", errorMessage, "\" } }")
     view(errorResponse)
 
   } else if (is.null(results)) {
@@ -114,6 +114,10 @@ run <- function(name, dataset, options, perform = "run") {
     }
 
     view(results)
+  }
+
+  if (returnResults) {
+    return(results)
   }
 
 }

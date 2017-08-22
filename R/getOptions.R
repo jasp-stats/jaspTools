@@ -1,42 +1,8 @@
-.analysisOptionsFromFile <- function(analysis) {
-
-  file <- file.path(.getPkgOption("json.dir"), paste0(analysis, ".json"))
-  analysisOpts <- try(rjson::fromJSON(file = file), silent = TRUE)
-
-  if (inherits(analysisOpts, "try-error")) {
-    stop("The analysis you supplied could not be found.
-         Please ensure that (1) its name matches the main R function
-         and (2) your working directory is set properly.")
-  }
-
-  if ("options" %in% names(analysisOpts)) {
-    return(analysisOpts[["options"]])
-  } else {
-    stop("The json file was found, but it appears to be invalid")
-  }
-
-}
-
-.analysisOptionsFromQt <- function(x) {
-
-  json <- try(rjson::fromJSON(x), silent = TRUE)
-
-  if (inherits(json, "try-error")) {
-    stop("Your json is invalid, please copy the entire message
-          including the outer braces { } that was send to R in the Qt terminal.
-          Remember to use single quotes around the message.")
-  } else {
-    return(json[["options"]])
-  }
-
-}
-
-#' @export
 analysisOptions <- function(source, hint = FALSE) {
 
   if (! is.character(source) || length(source) > 1) {
     stop("Expecting a character input of length 1 as source,
-         either a json string or analysis name.")
+    either a json string or analysis name.")
   }
 
   type <- "file"
@@ -53,6 +19,39 @@ analysisOptions <- function(source, hint = FALSE) {
   }
 
   return(options)
+}
+
+.analysisOptionsFromFile <- function(analysis) {
+
+  file <- file.path(.getPkgOption("json.dir"), paste0(analysis, ".json"))
+  analysisOpts <- try(rjson::fromJSON(file = file), silent = TRUE)
+
+  if (inherits(analysisOpts, "try-error")) {
+    stop("The analysis you supplied could not be found.
+    Please ensure that (1) its name matches the main R function
+    and (2) your working directory is set properly.")
+  }
+
+  if ("options" %in% names(analysisOpts)) {
+    return(analysisOpts[["options"]])
+  } else {
+    stop("The json file was found, but it appears to be invalid")
+  }
+
+}
+
+.analysisOptionsFromQt <- function(x) {
+
+  json <- try(rjson::fromJSON(x), silent = TRUE)
+
+  if (inherits(json, "try-error")) {
+    stop("Your json is invalid, please copy the entire message
+    including the outer braces { } that was send to R in the Qt terminal.
+    Remember to use single quotes around the message.")
+  } else {
+    return(json[["options"]])
+  }
+
 }
 
 .fillOptions <- function(options, hint = FALSE) {

@@ -6,16 +6,18 @@
   .ppi = 96
 ))
 
-#' @export
 viewPkgOptions <- function() {
   for (i in 1:length(names(.pkgOptions))) {
     name <- names(.pkgOptions)[i]
-    value <- .getPkgOption(name, run = FALSE)
+    if (i == 1) { # one warning is enough.
+      value <- .getPkgOption(name, run = FALSE)
+    } else {
+      value <- suppressWarnings(.getPkgOption(name, run = FALSE))
+    }
     cat(name, "=", value, "\n")
   }
 }
 
-#' @export
 setPkgOption <- function(name, value) {
   assign(name, value, envir = .pkgOptions)
 }
@@ -24,14 +26,13 @@ setPkgOption <- function(name, value) {
   if (.JASPToolsReady() == FALSE) {
     if (run) {
       stop("JASPTools is not configured correctly. Please ensure the paths in viewPkgOptions() are correct.
-         If the paths are relative, your working directory must be correctly specified.")
+      If the paths are relative, your working directory must be correctly specified.")
     } else {
-      warning("JASPTools is not configured correctly. It will not find the directories.
-              Please set your working directory to %path%/to%jasp%jasp-desktop/Tools")
+      warning("JASPTools is not configured correctly. It will not find the needed resources.
+      Please set your working directory to %path%/to%jasp%jasp-desktop/Tools or specify absolute paths to the resources.")
     }
-  } else {
-    return(get(name, envir = .pkgOptions))
   }
+  return(get(name, envir = .pkgOptions))
 }
 
 .JASPToolsReady <- function() {
@@ -80,7 +81,7 @@ setPkgOption <- function(name, value) {
 }
 
 .requestTempFileNameNative <- function(...) {
-  root <- file.path(tempdir(), "html")
+  root <- file.path(tempdir(), "JASPTools", "html")
   list(
     root = root,
     relativePath = paste0(length(list.files(root)), ".png")

@@ -2,18 +2,17 @@
 
   # attempt to find the JASP install on the disk
   foundJASP <- FALSE
-  path1 <- file.path(libname, pkgname, "R") # attempt 1
-  path2 <- getSrcDirectory(function(x) {x}) # attempt 2
-  correctPath <- endsWith(c(path1, path2), file.path("Tools", "JASPTools", "R"))
-  if (any(correctPath)) {
-    index <- min(which(correctPath))
-    fullPath <- c(path1, path2)[index]
+  pkgPath <- file.path(libname, pkgname)
+  if (endsWith(pkgPath, file.path("Tools", "JASPTools"))) {
     foundJASP <- TRUE
     message("Found the root location of JASPTools.")
   } else {
     message("Cannot find the install location of JASPTools.
-            Did you set the argument lib.loc to %path%/%to%/%jasp%/jasp-desktop/Tools?
-            To continue working with JASPTools you will have to set your working directory to %path%/%to%/%jasp%/jasp-desktop/Tools")
+    Did you set the argument lib.loc to %path%/%to%/%jasp%/jasp-desktop/Tools?
+    To continue working with JASPTools you will have to either:
+    (1) set your working directory to %path%/%to%/%jasp%/jasp-desktop/Tools
+    or
+    (2) set the absolute paths through JASPTools::setPkgOption()")
   }
 
   pathsToResources <- FALSE
@@ -35,8 +34,8 @@
     }
 
     # get location of jasp-desktop
-    explode <- unlist(strsplit(fullPath, .Platform$file.sep)) # php habits..
-    basePath <- paste(head(explode, length(explode) - 3), collapse = .Platform$file.sep)
+    explode <- unlist(strsplit(pkgPath, .Platform$file.sep)) # php habits..
+    basePath <- paste(head(explode, length(explode) - 2), collapse = .Platform$file.sep)
 
     # temporarily change wd
     oldwd <- getwd()
@@ -104,7 +103,7 @@
 
     if (! libPathSet) {
       message("Unable to find the bundled R packages.
-              Required packages will have to be installed manually.")
+      Required packages will have to be installed manually.")
     }
 
   }
@@ -121,7 +120,7 @@
   assign("dataset", NULL, envir = as.environment("package:JASPTools"))
   assign("perform", NULL, envir = as.environment("package:JASPTools"))
   assign(".ppi", NULL, envir = as.environment("package:JASPTools"))
-  assign(".baseCitation", NULL, envir = as.environment("package:JASPTools"))
+  assign(".baseCitation", "x", envir = as.environment("package:JASPTools"))
   assign(".masks", c("dataset", "perform", ".ppi"), envir = as.environment("package:JASPTools"))
 
 }
