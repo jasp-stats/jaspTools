@@ -18,3 +18,90 @@ A html page is generated and placed in a temp folder.
 javascript/css/html and should generate identical output.
 This function may be called directly, but it is more convenient to use \code{JASPTools::run}.
 }
+\examples{
+options <- JASPTools::analysisOptions("BinomialTest")
+results <- JASPTools::run("BinomialTest", "debug", options, returnResults=TRUE, view=FALSE)
+JASPTools::view(results)
+
+# Above and below are identical (below is taken from the Qt terminal)
+
+JASPTools::view('{
+   "id" : 6,
+   "name" : "BinomialTest",
+   "results" : {
+      ".meta" : [
+         {
+            "name" : "binomial",
+            "type" : "table"
+         },
+         {
+            "meta" : [],
+            "name" : "descriptives",
+            "type" : "object"
+         }
+      ],
+      "binomial" : {
+         "citation" : [ "JASP Team (2017). JASP (Version 0.8.2) [Computer software]." ],
+         "data" : [
+            {
+               "case" : "",
+               "counts" : ".",
+               "level" : ".",
+               "lowerCI" : ".",
+               "p" : ".",
+               "proportion" : ".",
+               "total" : ".",
+               "upperCI" : "."
+            }
+         ],
+         "footnotes" : [
+            {
+               "symbol" : "<em>Note.</em>",
+               "text" : "Proportions tested against value: 0.5."
+            }
+         ],
+         "schema" : {
+            "fields" : [
+               {
+                  "combine" : true,
+                  "name" : "case",
+                  "title" : "",
+                  "type" : "string"
+               },
+               {
+                  "name" : "level",
+                  "title" : "Level",
+                  "type" : "string"
+               },
+               {
+                  "name" : "counts",
+                  "title" : "Counts",
+                  "type" : "integer"
+               },
+               {
+                  "name" : "total",
+                  "title" : "Total",
+                  "type" : "integer"
+               },
+               {
+                  "format" : "sf:4;dp:3",
+                  "name" : "proportion",
+                  "title" : "Proportion",
+                  "type" : "number"
+               },
+               {
+                  "format" : "dp:3;p:.001",
+                  "name" : "p",
+                  "title" : "p",
+                  "type" : "number"
+               }
+            ]
+         },
+         "title" : "Binomial Test"
+      },
+      "title" : "Binomial Test"
+   },
+   "revision" : 2,
+   "status" : "complete"
+}')
+}

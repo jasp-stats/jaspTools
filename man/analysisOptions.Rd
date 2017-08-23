@@ -18,7 +18,7 @@ Only works if \code{source} is set to the name of an analysis.}
 A list containing options you can supply to \code{JASPTools::run}.
 If \code{source} is an analysis name then all default options have been filled in and booleans set to FALSE.
 The options that have no default are left empty.
-If \code{hint} is set to TRUE then hints are set for these empty options; they are denoted by %'s.
+If \code{hint} is set to TRUE then hints are set for these empty options; they are placed between \%'s.
 }
 \description{
 \code{analysisOptions} provides an easy way to create analysis options.
@@ -26,10 +26,11 @@ You may use the json from the Qt terminal or from the json files found in resour
 The former you have to provide yourself, for the latter you only have to specify the name of the analysis.
 }
 \examples{
-# identical:
 options <- JASPTools::analysisOptions("BinomialTest")
 options[["variables"]] <- "contBinom"
-# and (taken from Qt terminal):
+
+# Above and below are identical (below is taken from the Qt terminal)
+
 options <- JASPPreview::analysisOptions('{
 "id" : 0,
 "name" : "BinomialTest",

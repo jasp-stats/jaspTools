@@ -9,9 +9,9 @@
 viewPkgOptions <- function() {
   for (i in 1:length(names(.pkgOptions))) {
     name <- names(.pkgOptions)[i]
-    if (i == 1) { # one warning is enough.
+    if (i == 1) {
       value <- .getPkgOption(name, run = FALSE)
-    } else {
+    } else { # one warning is enough.
       value <- suppressWarnings(.getPkgOption(name, run = FALSE))
     }
     cat(name, "=", value, "\n")

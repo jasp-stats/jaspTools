@@ -56,26 +56,27 @@ analysisOptions <- function(source, hint = FALSE) {
 
 .fillOptions <- function(options, hint = FALSE) {
 
+  output <- list()
   for (i in 1:length(options)) {
     option <- options[[i]]
     if ("default" %in% names(option)) {
-      options[[option[["name"]]]] <- option[["default"]]
+      output[[option[["name"]]]] <- option[["default"]]
     } else {
       if (option[["type"]] == "Table" && hint) {
         template <- option[["template"]]
-        options[[option[["name"]]]] <- list(list())
+        output[[option[["name"]]]] <- list(list())
         for (j in 1:length(template)) {
           name <- template[[j]][["name"]]
           value <- .optionTypeToValue(template[[j]], hint)
-          options[[option[["name"]]]][[1]][[name]] <- value
+          output[[option[["name"]]]][[1]][[name]] <- value
         }
       } else {
-        options[[option[["name"]]]] <- .optionTypeToValue(option, hint)
+        output[[option[["name"]]]] <- .optionTypeToValue(option, hint)
       }
     }
   }
 
-  return(options)
+  return(output)
 }
 
 .optionTypeToValue <- function(option, hint = FALSE) {

@@ -4,7 +4,7 @@
 \alias{run}
 \title{Run a JASP analysis in R.}
 \usage{
-run(name, dataset, options, perform = "run", returnResults = FALSE)
+run(name, dataset, options, perform = "run", returnResults = FALSE, view = TRUE)
 }
 \arguments{
 \item{name}{String indicating the name of the analysis to run.
@@ -16,7 +16,10 @@ This name is identical to that of the main function in a JASP analysis.}
 
 \item{perform}{String containing either "run" (default) or "init".}
 
-\item{returnResults}{Boolean. Should \code{run} return the analysis results in addition to passing it on to \code{JASPTools::view}?}
+\item{returnResults}{Boolean. Should \code{run} return the analysis results?}
+
+\item{view}{Boolean indicating whether to view the results in a webbrowser.}
+
 }
 \description{
 \code{run} makes it possible to execute a JASP analysis in R.
@@ -28,5 +31,30 @@ The output of the analysis is shown automatically through a call to \code{JASPTo
 \examples{
 options <- JASPTools::analysisOptions("BinomialTest")
 options[["variables"]] <- "contBinom"
+JASPTools::run("BinomialTest", "debug", options)
+
+# Above and below are identical (below is taken from the Qt terminal)
+
+options <- JASPTools::analysisOptions('{
+   "id" : 6,
+   "name" : "BinomialTest",
+   "options" : {
+      "VovkSellkeMPR" : false,
+      "confidenceInterval" : false,
+      "confidenceIntervalInterval" : 0.950,
+      "descriptivesPlots" : false,
+      "descriptivesPlotsConfidenceInterval" : 0.950,
+      "hypothesis" : "notEqualToTestValue",
+      "plotHeight" : 300,
+      "plotWidth" : 160,
+      "testValue" : 0.50,
+      "variables" : [ "contBinom" ]
+   },
+   "perform" : "run",
+   "revision" : 1,
+   "settings" : {
+      "ppi" : 192
+   }
+}')
 JASPTools::run("BinomialTest", "debug", options)
 }

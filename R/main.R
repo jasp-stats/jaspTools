@@ -3,7 +3,6 @@
 # add way of easily creating options
 # see if the unicode to html conversion is possible
 # create standard options for each analysis
-# JASP should init paths on viewPkgSettings()
 
 view <- function(results) {
 
@@ -65,7 +64,7 @@ view <- function(results) {
 
 }
 
-run <- function(name, dataset, options, perform = "run", returnResults = FALSE) {
+run <- function(name, dataset, options, perform = "run", returnResults = FALSE, view = TRUE) {
 
   .initRunEnvironment(dataset = dataset, perform = perform)
   analysis <- eval(parse(text = name))
@@ -79,7 +78,7 @@ run <- function(name, dataset, options, perform = "run", returnResults = FALSE) 
   if (inherits(results, "expectedError")) {
 
     errorResponse <- paste0("{ \"status\" : \"error\", \"results\" : { \"title\" : \"error\", \"error\" : 1, \"errorMessage\" : \"", results$message, "\" } }")
-    view(errorResponse)
+    if (view) view(errorResponse)
 
   } else if (inherits(results, "error")) {
 
@@ -93,11 +92,11 @@ run <- function(name, dataset, options, perform = "run", returnResults = FALSE) 
 
     errorMessage <- .generateErrorMessage(type='exception', error=error, stackTrace=stackTrace)
     errorResponse <- paste0("{ \"status\" : \"exception\", \"results\" : { \"title\" : \"error\", \"error\" : 1, \"errorMessage\" : \"", errorMessage, "\" } }")
-    view(errorResponse)
+    if (view) view(errorResponse)
 
   } else if (is.null(results)) {
 
-    view("null")
+    if (view) view("null")
 
   } else {
 
@@ -113,7 +112,7 @@ run <- function(name, dataset, options, perform = "run", returnResults = FALSE) 
       results <- list(results = results)
     }
 
-    view(results)
+    if (view) view(results)
   }
 
   if (returnResults) {
