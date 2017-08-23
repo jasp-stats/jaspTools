@@ -31,7 +31,7 @@ options[["variables"]] <- "contBinom"
 
 # Above and below are identical (below is taken from the Qt terminal)
 
-options <- JASPPreview::analysisOptions('{
+options <- JASPTools::analysisOptions('{
 "id" : 0,
 "name" : "BinomialTest",
 "options" : {
@@ -44,7 +44,7 @@ options <- JASPPreview::analysisOptions('{
   "plotHeight" : 300,
   "plotWidth" : 160,
   "testValue" : 0.50,
-  "variables" : []
+  "variables" : [ "contBinom" ]
 },
 "perform" : "run",
 "revision" : 0,
