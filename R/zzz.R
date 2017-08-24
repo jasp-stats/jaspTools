@@ -3,16 +3,23 @@
   # attempt to find the JASP install on the disk
   foundJASP <- FALSE
   pkgPath <- file.path(libname, pkgname)
-  if (endsWith(pkgPath, file.path("Tools", "JASPTools"))) {
+  if (endsWith(pkgPath, file.path("jasp-desktop", "Tools", "JASPTools"))) {
     foundJASP <- TRUE
     message("Found the root location of JASPTools.")
   } else {
-    message("Cannot find the install location of JASPTools.
+    message(paste(
+    "Error: Cannot find the install location of JASPTools.
+    Location provided:", libname, "
     Did you set the argument lib.loc to %path%/%to%/%jasp%/jasp-desktop/Tools?
-    To continue working with JASPTools you will have to either:
+    If you did, please execute unloadNamespace('JASPTools') and try again.
+
+    If the problem persists you will have to either:
     (1) set your working directory to %path%/%to%/%jasp%/jasp-desktop/Tools
     or
-    (2) set the absolute paths through JASPTools::setPkgOption()")
+    (2) set the absolute paths through JASPTools::setPkgOption()
+
+    Setup will continue; please follow the steps above to ensure correct functioning of JASPTools."
+    ))
   }
 
   pathsToResources <- FALSE
