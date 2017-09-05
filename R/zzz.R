@@ -91,6 +91,10 @@
           pathToPackages <- findDirPackages(file.path(".."), c("jasp", "32"))
         }
 
+      } else if (os == "Linux") {
+
+        message("Identified OS as Linux. Assuming R packages required for JASP were installed manually.")
+
       }
 
     }
@@ -108,7 +112,7 @@
       }
     }
 
-    if (! libPathSet) {
+    if (! libPathSet && is.null(os)) {
       message("Unable to find the bundled R packages.
       Required packages will have to be installed manually.")
     }
