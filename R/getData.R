@@ -34,7 +34,7 @@
       stop(paste(x, "not found"))
     }
     fullPath <- file.path(root, x)
-    return(read.csv(fullPath, header = TRUE))
+    return(read.csv(fullPath, header = TRUE, check.names = FALSE))
   } else {
     return(x)
   }
