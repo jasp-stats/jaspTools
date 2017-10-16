@@ -5,7 +5,7 @@
   pkgPath <- file.path(libname, pkgname)
   if (endsWith(pkgPath, file.path("jasp-desktop", "Tools", "JASPTools"))) {
     foundJASP <- TRUE
-    message("Found the root location of JASPTools.")
+    message("Successfully found the root location of JASPTools.")
   } else {
     message(paste(
     "Error: Cannot find the install location of JASPTools.
@@ -60,20 +60,24 @@
     pathsToResources <- absolutePaths
 
     # set the libpath to JASP R packages so users do not need to install any additional packages
+    # retrieving os bit: http://conjugateprior.org/2015/06/identifying-the-os-from-r/
     pathToPackages <- NULL
     os <- NULL
     if (! is.null(Sys.info())) {
       os <- Sys.info()["sysname"]
       if (os == "Darwin")
-        os <- "OSX"
+        os <- "osx"
     } else {
       if (grepl("^darwin", R.version$os))
-        os <- "OSX"
+        os <- "osx"
+      if (grepl("linux-gnu", R.version$os))
+        os <- "linux"
     }
 
     if (! is.null(os)) {
-
-      if (os == "OSX") {
+      os <- tolower(os)
+      
+      if (os == "osx") {
 
         basePathPackages <- file.path("..", "Frameworks", "R.framework", "Versions")
         rVersions <- list.files(basePathPackages)
@@ -83,7 +87,7 @@
           pathToPackages <- file.path(basePathPackages, r, "Resources", "library")
         }
 
-      } else if (os == "Windows") {
+      } else if (os == "windows") {
 
         if (.Machine$sizeof.pointer == 8) { # 64 bits
           pathToPackages <- findDirPackages(file.path(".."), c("jasp", "64"))
@@ -91,7 +95,7 @@
           pathToPackages <- findDirPackages(file.path(".."), c("jasp", "32"))
         }
 
-      } else if (os == "Linux") {
+      } else if (os == "linux") {
 
         message("Identified OS as Linux. Assuming R packages required for JASP were installed manually.")
 
@@ -104,7 +108,7 @@
       for (path in pathToPackages) {
         packages <- list.files(path)
         if (! identical(packages, character(0)) && "base" %in% packages) {
-          message("Found the bundled R packages, redirecting the search path.")
+          message("Successfully found the bundled R packages, redirecting the package search path.")
           .libPaths(path)
           libPathSet <- TRUE
           break
@@ -112,7 +116,7 @@
       }
     }
 
-    if (! libPathSet && is.null(os)) {
+    if (! libPathSet && is.null(os) || os != "linux") {
       message("Unable to find the bundled R packages.
       Required packages will have to be installed manually.")
     }
@@ -123,7 +127,7 @@
   pathToHtml <- file.path(tempdir(), "JASPTools", "html")
   if (! dir.exists(pathToHtml)) {
     dir.create(pathToHtml, recursive = TRUE)
-    message(paste("Created temporary html output folder at", pathToHtml))
+    message(paste("Note: created a temporary html output folder at", pathToHtml))
   }
 
   # create globals for setup / JASP to find
