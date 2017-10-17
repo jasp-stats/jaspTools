@@ -40,6 +40,8 @@ view <- function(results) {
     results = results
   )
   content <- try(rjson::toJSON(content))
+  content <- .parseUnicode(content)
+
   if (class(content) == "try-error") {
     content <- paste0("{ \"status\" : \"error\", \"results\" : { \"error\" : 1, \"errorMessage\" : \"Unable to jsonify\" } }")
   }

@@ -76,7 +76,7 @@
 
     if (! is.null(os)) {
       os <- tolower(os)
-      
+
       if (os == "osx") {
 
         basePathPackages <- file.path("..", "Frameworks", "R.framework", "Versions")
@@ -116,7 +116,7 @@
       }
     }
 
-    if (! libPathSet && is.null(os) || os != "linux") {
+    if (! libPathSet && (is.null(os) || os != "linux")) {
       message("Unable to find the bundled R packages.
       Required packages will have to be installed manually.")
     }
