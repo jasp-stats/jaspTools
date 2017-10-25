@@ -124,10 +124,10 @@
   }
 
   # create the temp html directory for the output
-  pathToHtml <- file.path(tempdir(), "JASPTools", "html")
+  pathToHtml <- file.path(tempdir(), "JASPTools", "html", "plots")
   if (! dir.exists(pathToHtml)) {
     dir.create(pathToHtml, recursive = TRUE)
-    message(paste("Note: created a temporary html output folder at", pathToHtml))
+    message(paste("Note: temp output files may be found at", file.path(tempdir(), "JASPTools")))
   }
 
   # create globals for setup / JASP to find

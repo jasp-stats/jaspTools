@@ -82,9 +82,10 @@ setPkgOption <- function(name, value) {
 
 .requestTempFileNameNative <- function(...) {
   root <- file.path(tempdir(), "JASPTools", "html")
+  numPlots <- length(list.files(file.path(root, "plots")))
   list(
     root = root,
-    relativePath = paste0(length(list.files(root)), ".png")
+    relativePath = file.path("plots", paste0(numPlots + 1, ".png"))
   )
 }
 
