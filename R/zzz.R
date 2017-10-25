@@ -132,6 +132,7 @@
 
   # create globals for setup / JASP to find
   assign("pathsToResources", pathsToResources, envir = as.environment("package:JASPTools"))
+  assign("envir", .GlobalEnv, envir = as.environment("package:JASPTools"))
   assign("dataset", NULL, envir = as.environment("package:JASPTools"))
   assign("perform", NULL, envir = as.environment("package:JASPTools"))
   assign(".ppi", NULL, envir = as.environment("package:JASPTools"))

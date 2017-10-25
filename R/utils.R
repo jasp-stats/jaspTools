@@ -56,9 +56,11 @@ setPkgOption <- function(name, value) {
   assign("pathsToResources", NULL, envir = as.environment("package:JASPTools"))
 }
 
-.initRunEnvironment <- function(...) {
-  do.call(.setRCPPMasks, list(...))
-  .sourceDir(.getPkgOption("r.dir"))
+.initRunEnvironment <- function(envir, ...) {
+  unlockBinding("envir", env = as.environment("package:JASPTools"))
+  assign("envir", envir, envir = as.environment("package:JASPTools"))
+  .sourceDir(.getPkgOption("r.dir"), envir)
+  .setRCPPMasks(...)
 }
 
 .setRCPPMasks <- function(...) {
@@ -74,9 +76,9 @@ setPkgOption <- function(name, value) {
   }
 }
 
-.sourceDir <- function(path, ...) {
+.sourceDir <- function(path, envir) {
   for (nm in list.files(path, pattern = "\\.[RrSsQq]$")) {
-    source(file.path(path, nm), ...)
+    source(file.path(path, nm), local=envir)
   }
 }
 

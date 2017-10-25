@@ -4,7 +4,8 @@
   dataset <- get("dataset", envir = as.environment("package:JASPTools"))
   dataset <- .loadCorrectDataset(dataset)
 
-  dataset <- .vdf(dataset, columns, columns.as.numeric, columns.as.ordinal,
+  envir <- get("envir", envir = as.environment("package:JASPTools"))
+  dataset <- envir$.vdf(dataset, columns, columns.as.numeric, columns.as.ordinal,
                   columns.as.factor, all.columns, exclude.na.listwise = c())
 
   return(dataset)

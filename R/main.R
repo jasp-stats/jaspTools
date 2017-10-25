@@ -68,14 +68,15 @@ view <- function(results) {
 
 run <- function(name, dataset, options, perform = "run", returnResults = FALSE, view = TRUE) {
 
-  .initRunEnvironment(dataset = dataset, perform = perform)
-  analysis <- eval(parse(text = name))
+  envir <- new.env()
+  .initRunEnvironment(envir = envir, dataset = dataset, perform = perform)
+  analysis <- eval(parse(text = name), envir = envir)
 
-  results <- tryCatch(expr = {
+  results <- evalq(tryCatch(expr = {
     analysis(dataset = NULL, options = options, perform = perform,
              callback = function(...) list(status = "ok"), state = NULL)
   },
-  error = function(e) e)
+  error = function(e) e), envir)
 
   if (inherits(results, "expectedError")) {
 
@@ -104,13 +105,13 @@ run <- function(name, dataset, options, perform = "run", returnResults = FALSE, 
 
     if ("results" %in% names(results)) {
 
-      results <- .imgToResults(results)
-      results$results <- .addCitationToResults(results$results)
+      results <- envir$.imgToResults(results)
+      results$results <- envir$.addCitationToResults(results$results)
       results$state <- NULL
 
     } else {
 
-      results <- .addCitationToResults(results)
+      results <- envir$.addCitationToResults(results)
       results <- list(results = results)
     }
 
