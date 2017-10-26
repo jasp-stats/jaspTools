@@ -68,8 +68,11 @@ view <- function(results) {
 
 run <- function(name, dataset, options, perform = "run", returnResults = FALSE, view = TRUE) {
 
+  opts <- options()
+  on.exit(.restoreOptions(opts))
   envir <- new.env()
   .initRunEnvironment(envir = envir, dataset = dataset, perform = perform)
+
   analysis <- eval(parse(text = name), envir = envir)
 
   results <- evalq(tryCatch(expr = {
@@ -93,7 +96,7 @@ run <- function(name, dataset, options, perform = "run", returnResults = FALSE, 
     stackTrace <- gsub("\\\\", "", stackTrace)
     stackTrace <- paste(stackTrace, collapse="<br><br>")
 
-    errorMessage <- .generateErrorMessage(type='exception', error=error, stackTrace=stackTrace)
+    errorMessage <- envir$.generateErrorMessage(type='exception', error=error, stackTrace=stackTrace)
     errorResponse <- paste0("{ \"status\" : \"exception\", \"results\" : { \"title\" : \"error\", \"error\" : 1, \"errorMessage\" : \"", errorMessage, "\" } }")
     if (view) view(errorResponse)
 

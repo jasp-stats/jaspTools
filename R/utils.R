@@ -135,3 +135,9 @@ setPkgOption <- function(name, value) {
 
   return(str)
 }
+
+.restoreOptions <- function(opts) {
+  options(opts) # overwrite changed options
+  addedOpts <- setdiff(names(options()), names(opts))
+  options(Map(function(x) NULL, addedOpts)) # remove added options
+}
