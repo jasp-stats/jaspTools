@@ -1,5 +1,12 @@
 .onAttach <- function(libname, pkgname) {
 
+  # install dependencies (JASPTools comes pre-installed with JASP so tough luck for the description file)
+  pkgs <- c("jsonlite", "rjson")
+  for (pkg in pkgs) {
+    if (! pkg %in% installed.packages())
+      try(install.packages(pkg), silent=TRUE)
+  }
+
   # attempt to find the JASP install on the disk
   foundJASP <- FALSE
   pkgPath <- file.path(libname, pkgname)
