@@ -3,6 +3,7 @@
   html.dir = file.path("..", "JASP-Desktop", "html"),
   json.dir = file.path("..", "Resources", "Library"),
   data.dir = file.path("..", "Resources", "Data Sets"),
+  pkgs.dir = "",
   .ppi = 96
 ))
 
@@ -29,7 +30,7 @@ setPkgOption <- function(name, value) {
       If the paths are relative, your working directory must be correctly specified.")
     } else {
       warning("JASPTools is not configured correctly. It will not find the needed resources.
-      Please set your working directory to %path%/to%jasp%jasp-desktop/Tools or specify absolute paths to the resources.")
+      Please set your working directory to %path%/to%jasp%jasp-desktop/Tools.")
     }
   }
   return(get(name, envir = .pkgOptions))
@@ -59,6 +60,7 @@ setPkgOption <- function(name, value) {
 .initRunEnvironment <- function(envir, ...) {
   unlockBinding("envir", env = as.environment("package:JASPTools"))
   assign("envir", envir, envir = as.environment("package:JASPTools"))
+  .libPaths(.getPkgOption("pkgs.dir"))
   .sourceDir(.getPkgOption("r.dir"), envir)
   .setRCPPMasks(...)
 }
@@ -139,5 +141,17 @@ setPkgOption <- function(name, value) {
 .restoreOptions <- function(opts) {
   options(opts) # overwrite changed options
   addedOpts <- setdiff(names(options()), names(opts))
-  options(Map(function(x) NULL, addedOpts)) # remove added options
+  if (length(addedOpts) > 0) {
+    options(Map(function(x) NULL, addedOpts)) # remove added options
+  }
+}
+
+.restoreNamespaces <- function(nms) {
+  addedNamespaces <- setdiff(loadedNamespaces(), nms)
+  if (length(addedNamespaces) > 0) {
+    addedNamespaces <- rev(addedNamespaces) # assuming new pkgs (i.e. dependents) get added later
+    for (namespace in addedNamespaces) {
+      try(unloadNamespace(namespace), silent=TRUE) # this will fail if the pkg is a dependent
+    }
+  }
 }

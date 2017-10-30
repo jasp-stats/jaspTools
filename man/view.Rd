@@ -20,7 +20,7 @@ This function may be called directly, but it is more convenient to use \code{JAS
 }
 \examples{
 options <- JASPTools::analysisOptions("BinomialTest")
-results <- JASPTools::run("BinomialTest", "debug", options, returnResults=TRUE, view=FALSE)
+results <- JASPTools::run("BinomialTest", "debug", options, view=FALSE)
 JASPTools::view(results)
 
 # Above and below are identical (below is taken from the Qt terminal)

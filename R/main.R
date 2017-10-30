@@ -1,7 +1,5 @@
 # TODO
 # fix click actions in browser
-# add way of easily creating options
-# see if the unicode to html conversion is possible
 # create standard options for each analysis
 
 view <- function(results) {
@@ -66,25 +64,48 @@ view <- function(results) {
 
 }
 
-run <- function(name, dataset, options, perform = "run", returnResults = FALSE, view = TRUE) {
+run <- function(name, dataset, options, perform = "run", view = TRUE, sideEffects = FALSE) {
 
-  opts <- options()
-  on.exit(.restoreOptions(opts))
-  envir <- new.env()
+  envir <- .GlobalEnv
+  if (! isTRUE(sideEffects)) {
+    if (! is.logical(sideEffects))
+      sideEffects <- tolower(sideEffects)
+    if (! "globalenv" %in% sideEffects || identical(sideEffects, FALSE))
+      envir <- new.env()
+
+    loadedPkgs <- loadedNamespaces()
+    opts <- options()
+    libPaths <- .libPaths()
+    on.exit({
+      if (! "pkgloading" %in% sideEffects || identical(sideEffects, FALSE))
+        .restoreNamespaces(loadedPkgs)
+      if (! "options" %in% sideEffects || identical(sideEffects, FALSE))
+        .restoreOptions(opts)
+      if (! "libpaths" %in% sideEffects || identical(sideEffects, FALSE))
+        .libPaths(libPaths)
+    })
+  }
+
   .initRunEnvironment(envir = envir, dataset = dataset, perform = perform)
 
   analysis <- eval(parse(text = name), envir = envir)
+
+  fnEnvir <- envir
+  if (identical(envir, .GlobalEnv)) {
+    fnEnvir <- environment() # analysis does not exist in the global envir
+  }
 
   results <- evalq(tryCatch(expr = {
     analysis(dataset = NULL, options = options, perform = perform,
              callback = function(...) list(status = "ok"), state = NULL)
   },
-  error = function(e) e), envir)
+  error = function(e) e), fnEnvir)
 
   if (inherits(results, "expectedError")) {
 
     errorResponse <- paste0("{ \"status\" : \"error\", \"results\" : { \"title\" : \"error\", \"error\" : 1, \"errorMessage\" : \"", results$message, "\" } }")
-    if (view) view(errorResponse)
+    if (view)
+      view(errorResponse)
 
   } else if (inherits(results, "error")) {
 
@@ -102,7 +123,8 @@ run <- function(name, dataset, options, perform = "run", returnResults = FALSE, 
 
   } else if (is.null(results)) {
 
-    if (view) view("null")
+    if (view)
+      view("null")
 
   } else {
 
@@ -118,11 +140,9 @@ run <- function(name, dataset, options, perform = "run", returnResults = FALSE, 
       results <- list(results = results)
     }
 
-    if (view) view(results)
+    if (view)
+      view(results)
   }
 
-  if (returnResults) {
-    return(results)
-  }
-
+  return(invisible(results))
 }

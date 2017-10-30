@@ -4,7 +4,7 @@
 \alias{run}
 \title{Run a JASP analysis in R.}
 \usage{
-run(name, dataset, options, perform = "run", returnResults = FALSE, view = TRUE)
+run(name, dataset, options, perform = "run", view = TRUE, sideEffects = FALSE)
 }
 \arguments{
 \item{name}{String indicating the name of the analysis to run.
@@ -16,9 +16,12 @@ This name is identical to that of the main function in a JASP analysis.}
 
 \item{perform}{String containing either "run" (default) or "init".}
 
-\item{returnResults}{Boolean. Should \code{run} return the analysis results?}
-
 \item{view}{Boolean indicating whether to view the results in a webbrowser.}
+
+\item{sideEffects}{Boolean or character vector indicating which side effects are allowed. 
+Side effects are persistent changes made by JASPTools or analyses run in JASPTools, they include loading of packages ("pkgLoading"), setting of .libPaths ("libPaths"), modifying of global options() ("options") and 
+altering the global environment ("globalEnv"). Supply the desired side effects in a character vector (or simply TRUE for all).
+JASPTools will make an effort to prevent any side effect not included in the vector (or all if set to FALSE)}
 
 }
 \description{
@@ -26,7 +29,7 @@ This name is identical to that of the main function in a JASP analysis.}
 Usually this process is a bit cumbersome as there are a number of objects unique to the JASP environment.
 Think .ppi, data-reading, etc. These (rcpp) objects are replaced in the JASPTools so you do not have to deal with them.
 Note that \code{run} sources JASP analyses every time it runs, so any change in analysis code between calls is incorporated.
-The output of the analysis is shown automatically through a call to \code{JASPTools::view}.
+The output of the analysis is shown automatically through a call to \code{JASPTools::view} and returned invisibly.
 }
 \examples{
 options <- JASPTools::analysisOptions("BinomialTest")
@@ -57,4 +60,10 @@ options <- JASPTools::analysisOptions('{
    }
 }')
 JASPTools::run("BinomialTest", "debug", options)
+
+# If we want R functions sourced to the global env
+JASPTools::run("BinomialTest", "debug", options, sideEffects="globalEnv")
+
+# Or additionally have the .libPaths() set to JASP’s R packages
+JASPTools::run("BinomialTest", "debug", options, sideEffects=c("globalEnv", "libPaths"))
 }

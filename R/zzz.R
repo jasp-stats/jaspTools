@@ -1,6 +1,6 @@
 .onAttach <- function(libname, pkgname) {
 
-  # install dependencies (JASPTools comes pre-installed with JASP so tough luck for the description file)
+  # install dependencies (JASPTools comes pre-installed with JASP so install.packages() is never called)
   pkgs <- c("jsonlite", "rjson")
   for (pkg in pkgs) {
     if (! pkg %in% installed.packages())
@@ -9,8 +9,8 @@
 
   # attempt to find the JASP install on the disk
   foundJASP <- FALSE
-  pkgPath <- file.path(libname, pkgname)
-  if (endsWith(pkgPath, file.path("jasp-desktop", "Tools", "JASPTools"))) {
+  jasptoolsPath <- file.path(libname, pkgname)
+  if (endsWith(jasptoolsPath, file.path("jasp-desktop", "Tools", "JASPTools"))) {
     foundJASP <- TRUE
     message("Successfully found the root location of JASPTools.")
   } else {
@@ -48,7 +48,7 @@
     }
 
     # get location of jasp-desktop
-    explode <- unlist(strsplit(pkgPath, .Platform$file.sep)) # php habits..
+    explode <- unlist(strsplit(jasptoolsPath, .Platform$file.sep)) # php habits..
     basePath <- paste(head(explode, length(explode) - 2), collapse = .Platform$file.sep)
 
     # temporarily change wd
@@ -56,19 +56,9 @@
     setwd(basePath)
     on.exit(setwd(oldwd))
 
-    # get locations of required resources (json, analyses, html)
-    relativePaths <- list(
-      r.dir = file.path("JASP-Engine", "JASP", "R"),
-      html.dir = file.path("JASP-Desktop", "html"),
-      json.dir = file.path("Resources", "Library"),
-      data.dir = file.path("Resources", "Data Sets")
-    )
-    absolutePaths <- lapply(relativePaths, normalizePath)
-    pathsToResources <- absolutePaths
-
-    # set the libpath to JASP R packages so users do not need to install any additional packages
+    # get the path to JASP R packages so users do not need to install any additional packages
     # retrieving os bit: http://conjugateprior.org/2015/06/identifying-the-os-from-r/
-    pathToPackages <- NULL
+    pathsToPackages <- NULL
     os <- NULL
     if (! is.null(Sys.info())) {
       os <- Sys.info()["sysname"]
@@ -91,15 +81,15 @@
         if (! identical(rVersions, character(0))) {
           rVersions <- suppressWarnings(as.numeric(rVersions))
           r <- sort(rVersions, decreasing = TRUE)[1]
-          pathToPackages <- file.path(basePathPackages, r, "Resources", "library")
+          pathsToPackages <- file.path(basePathPackages, r, "Resources", "library")
         }
 
       } else if (os == "windows") {
 
         if (.Machine$sizeof.pointer == 8) { # 64 bits
-          pathToPackages <- findDirPackages(file.path(".."), c("jasp", "64"))
+          pathsToPackages <- findDirPackages(file.path(".."), c("jasp", "64"))
         } else { # 32 bits
-          pathToPackages <- findDirPackages(file.path(".."), c("jasp", "32"))
+          pathsToPackages <- findDirPackages(file.path(".."), c("jasp", "32"))
         }
 
       } else if (os == "linux") {
@@ -110,24 +100,37 @@
 
     }
 
-    libPathSet <- FALSE
-    if (! is.null(pathToPackages)) {
-      for (path in pathToPackages) {
+    pathToPackages <- NULL
+    if (! is.null(pathsToPackages)) {
+      for (path in pathsToPackages) {
         packages <- list.files(path)
         if (! identical(packages, character(0)) && "base" %in% packages) {
-          message("Successfully found the bundled R packages, redirecting the package search path.")
-          .libPaths(path)
-          libPathSet <- TRUE
+          message("Successfully found the bundled R packages.")
+          pathToPackages <- path
           break
         }
       }
     }
 
-    if (! libPathSet && (is.null(os) || os != "linux")) {
+    if (is.null(pathToPackages) && (is.null(os) || os != "linux")) {
       message("Unable to find the bundled R packages.
       Required packages will have to be installed manually.")
     }
 
+    # set locations of all required resources (json, analyses, html, packages)
+    relativePaths <- list(
+      r.dir = file.path("JASP-Engine", "JASP", "R"),
+      html.dir = file.path("JASP-Desktop", "html"),
+      json.dir = file.path("Resources", "Library"),
+      data.dir = file.path("Resources", "Data Sets")
+    )
+
+    if (! is.null(pathToPackages)) {
+      relativePaths[["pkgs.dir"]] <- pathToPackages
+    }
+
+    absolutePaths <- lapply(relativePaths, normalizePath)
+    pathsToResources <- absolutePaths
   }
 
   # create the temp html directory for the output
