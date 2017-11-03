@@ -3,7 +3,6 @@
 # create standard options for each analysis
 
 view <- function(results) {
-
   content <- NULL
   if (is.character(results) && jsonlite::validate(results) == TRUE) { # assuming a json string
 
@@ -65,7 +64,6 @@ view <- function(results) {
 }
 
 run <- function(name, dataset, options, perform = "run", view = TRUE, sideEffects = FALSE) {
-
   envir <- .GlobalEnv
   if (! isTRUE(sideEffects)) {
     if (! is.logical(sideEffects))
@@ -128,11 +126,24 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, sideEffect
 
   } else {
 
+    state <- NULL
+
+    if ("state" %in% names(results)) {
+
+      state <- results$state
+      results$state <- NULL
+
+      if (! is.null(names(state))) {
+        state[["figures"]] <- c(state[["figures"]], envir$.imgToState(results$results))
+      }
+
+    }
+
     if ("results" %in% names(results)) {
 
       results <- envir$.imgToResults(results)
       results$results <- envir$.addCitationToResults(results$results)
-      results$state <- NULL
+      results$state <- state
 
     } else {
 
