@@ -61,7 +61,7 @@ setPkgOption <- function(name, value) {
 .initRunEnvironment <- function(envir, ...) {
   unlockBinding("envir", env = as.environment("package:JASPTools"))
   assign("envir", envir, envir = as.environment("package:JASPTools"))
-  .libPaths(.getPkgOption("pkgs.dir"))
+  .libPaths(c(.getPkgOption("pkgs.dir"), .libPaths()))
   .sourceDir(.getPkgOption("r.dir"), envir)
   .setRCPPMasks(...)
 }
