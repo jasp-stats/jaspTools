@@ -19,6 +19,7 @@ inspectTestPlots <- function(analysis = NULL) {
     analysis <- paste0("^", analysis, "$")
   }
   testDir <- .getPkgOption("tests.dir")
+  on.exit(unloadNamespace("SomePkg")) # unload fake pkg needed to run vdiffr
   vdiffr::manage_cases(testDir, analysis)
 }
 
