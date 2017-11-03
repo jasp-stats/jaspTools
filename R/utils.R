@@ -4,6 +4,7 @@
   json.dir = file.path("..", "Resources", "Library"),
   data.dir = file.path("..", "Resources", "Data Sets"),
   pkgs.dir = "",
+  tests.dir = file.path("..", "JASP-Tests", "R", "tests", "testthat"),
   .ppi = 96
 ))
 
@@ -97,7 +98,7 @@ setPkgOption <- function(name, value) {
   if (! is.character(str) || length(str) == 0)
     stop(paste("Invalid str provided, received", str))
 
-  # used unicode chars in JASP as of 17/10/17.
+  # used unicode chars in JASP as of 3/11/17.
   # unfortunately I have not found a way to do this more elegantly.
   lookup <- list(
     "\\u002a" = "*",
@@ -154,4 +155,46 @@ setPkgOption <- function(name, value) {
       try(unloadNamespace(namespace), silent=TRUE) # this will fail if the pkg is a dependent
     }
   }
+}
+
+.charVec2MixedList <- function(x) {
+  x <- stringi::stri_escape_unicode(x)
+  x <- gsub("\\\\u.{4}", "<unicode>", x)
+  x <- stringi::stri_unescape_unicode(x)
+  lapply(x, function(element) {
+    res <- element
+    if (is.character(element)) {
+      num <- suppressWarnings(as.numeric(element))
+      if (! is.na(num)) {
+        res <- num
+      }
+    }
+    return(res)
+  })
+}
+
+collapseTable <- function(rows) {
+  if (! is.list(rows) || length(rows) == 0) {
+    stop("expecting input to be a list with table rows")
+  }
+
+  x <- unname(unlist(rows))
+  x <- .charVec2MixedList(x)
+
+  return(x)
+}
+
+.validateAnalysis <- function(analysis) {
+  if (! is.character(analysis) || length(analysis) != 1) {
+    stop("expecting non-vectorized character input")
+  }
+
+  analysis <- tolower(analysis)
+  analyses <- list.files(.getPkgOption("r.dir"), pattern = "\\.[RrSsQq]$")
+  analyses <- gsub("\\.[RrSsQq]$", "", analyses)
+  if (! analysis %in% analyses) {
+    stop("Could not find the analysis. Please ensure that its name matches the main R function/file name.")
+  }
+
+  return(analysis)
 }

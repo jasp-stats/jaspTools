@@ -1,5 +1,4 @@
 analysisOptions <- function(source, hint = FALSE) {
-
   if (! is.character(source) || length(source) > 1) {
     stop("Expecting a character input of length 1 as source,
     either a json string or analysis name.")
@@ -22,12 +21,12 @@ analysisOptions <- function(source, hint = FALSE) {
 }
 
 .analysisOptionsFromFile <- function(analysis) {
-
+  analysis <- .validateAnalysis(analysis)
   file <- file.path(.getPkgOption("json.dir"), paste0(analysis, ".json"))
   analysisOpts <- try(rjson::fromJSON(file = file), silent = TRUE)
 
   if (inherits(analysisOpts, "try-error")) {
-    stop("The analysis you supplied could not be found.
+    stop("The JSON file for the analysis you supplied could not be found.
     Please ensure that (1) its name matches the main R function
     and (2) your working directory is set properly.")
   }
@@ -35,13 +34,12 @@ analysisOptions <- function(source, hint = FALSE) {
   if ("options" %in% names(analysisOpts)) {
     return(analysisOpts[["options"]])
   } else {
-    stop("The json file was found, but it appears to be invalid")
+    stop("The JSON file was found, but it appears to be invalid")
   }
 
 }
 
 .analysisOptionsFromQt <- function(x) {
-
   json <- try(rjson::fromJSON(x), silent = TRUE)
 
   if (inherits(json, "try-error")) {
@@ -55,7 +53,6 @@ analysisOptions <- function(source, hint = FALSE) {
 }
 
 .fillOptions <- function(options, hint = FALSE) {
-
   output <- list()
   for (i in 1:length(options)) {
     option <- options[[i]]

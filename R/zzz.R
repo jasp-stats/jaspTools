@@ -1,12 +1,4 @@
 .onAttach <- function(libname, pkgname) {
-
-  # install dependencies (JASPTools comes pre-installed with JASP so install.packages() is never called)
-  pkgs <- c("jsonlite", "rjson")
-  for (pkg in pkgs) {
-    if (! pkg %in% installed.packages())
-      try(install.packages(pkg), silent=TRUE)
-  }
-
   # attempt to find the JASP install on the disk
   foundJASP <- FALSE
   jasptoolsPath <- file.path(libname, pkgname)
@@ -31,6 +23,14 @@
 
   pathsToResources <- FALSE
   if (foundJASP) {
+    # install dependencies (JASPTools comes pre-installed with JASP so install.packages() is never called)
+    pkgDescr <- packageDescription("JASPTools", lib.loc = libname)
+    imports <- gsub("\\s", "", pkgDescr$Imports)
+    pkgs <- unlist(strsplit(imports, ",", fixed = TRUE))
+    for (pkg in pkgs) {
+      if (! pkg %in% installed.packages())
+        try(install.packages(pkg, repos = "https://cloud.r-project.org", dependencies = NA), silent = TRUE)
+    }
 
     findDirPackages <- function(pathToBuild, needle) {
       dirs <- list.files(pathToBuild)
@@ -122,7 +122,8 @@
       r.dir = file.path("JASP-Engine", "JASP", "R"),
       html.dir = file.path("JASP-Desktop", "html"),
       json.dir = file.path("Resources", "Library"),
-      data.dir = file.path("Resources", "Data Sets")
+      data.dir = file.path("Resources", "Data Sets"),
+      tests.dir = file.path("JASP-Tests", "R", "tests", "testthat")
     )
 
     if (! is.null(pathToPackages)) {
@@ -148,5 +149,4 @@
   assign(".ppi", NULL, envir = as.environment("package:JASPTools"))
   assign(".baseCitation", "x", envir = as.environment("package:JASPTools"))
   assign(".masks", c("dataset", "perform", ".ppi"), envir = as.environment("package:JASPTools"))
-
 }
