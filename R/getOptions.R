@@ -21,7 +21,6 @@ analysisOptions <- function(source, hint = FALSE) {
 }
 
 .analysisOptionsFromFile <- function(analysis) {
-  analysis <- .validateAnalysis(analysis)
   file <- file.path(.getPkgOption("json.dir"), paste0(analysis, ".json"))
   analysisOpts <- try(rjson::fromJSON(file = file), silent = TRUE)
 

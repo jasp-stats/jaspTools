@@ -1,6 +1,3 @@
-# make documentation (R analyses and on github)
-# experiment with runLast = TRUE
-
 testAnalysis <- function(analysis) {
   analysis <- .validateAnalysis(analysis)
   root <- .getPkgOption("tests.dir")

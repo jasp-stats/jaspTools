@@ -193,7 +193,7 @@ collapseTable <- function(rows) {
   analyses <- list.files(.getPkgOption("r.dir"), pattern = "\\.[RrSsQq]$")
   analyses <- gsub("\\.[RrSsQq]$", "", analyses)
   if (! analysis %in% analyses) {
-    stop("Could not find the analysis. Please ensure that its name matches the main R function/file name.")
+    stop("Could not find the analysis. Please ensure that its name matches the main R function.")
   }
 
   return(analysis)
