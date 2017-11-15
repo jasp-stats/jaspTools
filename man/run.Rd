@@ -2,7 +2,7 @@
 \alias{run}
 \title{Run a JASP analysis in R.}
 \usage{
-run(name, dataset, options, perform = "run", view = TRUE, sideEffects = FALSE)
+run(name, dataset, options, perform = "run", view = TRUE, quiet = FALSE, sideEffects = FALSE)
 }
 \arguments{
 \item{name}{String indicating the name of the analysis to run.
@@ -15,6 +15,8 @@ This name is identical to that of the main function in a JASP analysis.}
 \item{perform}{String containing either "run" (default) or "init".}
 
 \item{view}{Boolean indicating whether to view the results in a webbrowser.}
+
+\item{quiet}{Boolean indicating whether to suppress messages from the analysis.}
 
 \item{sideEffects}{Boolean or character vector indicating which side effects are allowed. 
 Side effects are persistent changes made by JASPTools or analyses run in JASPTools, they include loading of packages ("pkgLoading"), setting of .libPaths ("libPaths"), modifying of global options() ("options") and 

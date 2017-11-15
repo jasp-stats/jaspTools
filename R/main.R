@@ -1,7 +1,3 @@
-# TODO
-# fix click actions in browser
-# create standard options for each analysis
-
 view <- function(results) {
   content <- NULL
   if (is.character(results) && jsonlite::validate(results) == TRUE) { # assuming a json string
@@ -63,7 +59,7 @@ view <- function(results) {
 
 }
 
-run <- function(name, dataset, options, perform = "run", view = TRUE, sideEffects = FALSE) {
+run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FALSE, sideEffects = FALSE) {
   envir <- .GlobalEnv
   if (! isTRUE(sideEffects)) {
     if (! is.logical(sideEffects))
@@ -93,11 +89,17 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, sideEffect
     fnEnvir <- environment() # analysis does not exist in the global envir
   }
 
+  if (quiet)
+    sink(tempfile())
+
   results <- evalq(tryCatch(expr = {
     analysis(dataset = NULL, options = options, perform = perform,
              callback = function(...) list(status = "ok"), state = NULL)
   },
   error = function(e) e), fnEnvir)
+
+  if (quiet)
+    sink()
 
   if (inherits(results, "expectedError")) {
 
