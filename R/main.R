@@ -77,7 +77,12 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
         .restoreOptions(opts)
       if (! "libpaths" %in% sideEffects || identical(sideEffects, FALSE))
         .libPaths(libPaths)
+      if (quiet)
+        suppressWarnings(sink(NULL))
     })
+  } else { # no side effects, but we still need on.exit
+    if (quiet)
+      on.exit(suppressWarnings(sink(NULL)))
   }
 
   .initRunEnvironment(envir = envir, dataset = dataset, perform = perform)
@@ -99,7 +104,7 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
   error = function(e) e), fnEnvir)
 
   if (quiet)
-    sink()
+    sink(NULL)
 
   if (inherits(results, "expectedError")) {
 
