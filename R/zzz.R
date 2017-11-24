@@ -2,7 +2,7 @@
   # attempt to find the JASP install on the disk
   foundJASP <- FALSE
   jasptoolsPath <- file.path(libname, pkgname)
-  if (endsWith(jasptoolsPath, file.path("jasp-desktop", "Tools", "JASPTools"))) {
+  if (endsWith(jasptoolsPath, file.path("Tools", "JASPTools"))) {
     foundJASP <- TRUE
     message("Successfully found the root location of JASPTools.")
   } else {
