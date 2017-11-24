@@ -92,6 +92,10 @@
           pathsToPackages <- findDirPackages(file.path(".."), c("jasp", "32"))
         }
 
+        if (is.null(pathsToPackages)) {
+          pathsToPackages <- findDirPackages(file.path(".."), c("build", "jasp"))
+        }
+
       } else if (os == "linux") {
 
         message("Identified OS as Linux. Assuming R packages required for JASP were installed manually.")
@@ -114,7 +118,7 @@
 
     if (is.null(pathToPackages) && (is.null(os) || os != "linux")) {
       message("Unable to find the bundled R packages.
-      Required packages will have to be installed manually.")
+      Required packages will have to be installed manually, or 'pkgs.dir' must be set.")
     }
 
     # set locations of all required resources (json, analyses, html, packages)
