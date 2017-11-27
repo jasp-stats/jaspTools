@@ -101,6 +101,35 @@ setPkgOption <- function(name, value) {
   }
 }
 
+.getJSON <- function(analysis, ...) {
+  file <- file.path(.getPkgOption("json.dir"), paste0(analysis, ".json"))
+  analysisJSON <- try(readLines(file), silent=TRUE)
+  if (inherits(analysisJSON, "try-error")) {
+    stop("The JSON file for the analysis you supplied could not be found.
+         Please ensure that (1) its name matches the main R function
+         and (2) your working directory is set properly.")
+  }
+
+  args <- list(...)
+  if (length(args) == 0)
+   return(analysisJSON)
+
+  result <- list()
+  optsList <- rjson::fromJSON(file=file)
+  for (arg in args) {
+    keys <- unlist(strsplit(arg, "=>", fixed=TRUE))
+    value <- optsList
+    for (key in keys) {
+      value <- value[[key]]
+    }
+    if (is.null(value))
+      result[[key]] <- "null"
+    else
+      result[[key]] <- rjson::toJSON(value)
+  }
+  return(result)
+}
+
 .requestTempFileNameNative <- function(...) {
   root <- file.path(tempdir(), "JASPTools", "html")
   numPlots <- length(list.files(file.path(root, "plots")))

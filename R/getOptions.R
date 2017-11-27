@@ -32,6 +32,8 @@ analysisOptions <- function(source, hint = FALSE) {
 
   if ("options" %in% names(analysisOpts)) {
     return(analysisOpts[["options"]])
+  } else if ("options" %in% names(analysisOpts[["input"]])) {
+    return(analysisOpts[["input"]][["options"]])
   } else {
     stop("The JSON file was found, but it appears to be invalid")
   }
@@ -45,8 +47,14 @@ analysisOptions <- function(source, hint = FALSE) {
     stop("Your json is invalid, please copy the entire message
     including the outer braces { } that was send to R in the Qt terminal.
     Remember to use single quotes around the message.")
-  } else {
+  }
+
+  if ("options" %in% names(json)) {
     return(json[["options"]])
+  } else if ("options" %in% names(json[["input"]])) {
+    return(json[["input"]][["options"]])
+  } else {
+    stop("The JSON file appears to be invalid")
   }
 
 }

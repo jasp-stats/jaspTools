@@ -91,10 +91,22 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
 
   .initRunEnvironment(envir = envir, dataset = dataset, perform = perform)
 
+  config <- .getJSON(name, "input=>dataset", "output")
+  possibleArgs <- list(
+    name = name,
+    options.as.json.string = rjson::toJSON(options),
+    dataset.cols = config[["dataset"]],
+    output.description = config[["output"]],
+    perform = perform
+  )
+  runArgs <- formals(envir$run)
+  argNames <- intersect(names(possibleArgs), names(runArgs))
+  args <- possibleArgs[argNames]
+
   if (quiet)
     sink(tempfile())
 
-  results <- evalq(envir$run(name, rjson::toJSON(options), perform), envir=envir)
+  results <- do.call(envir$run, args, envir=envir)
 
   if (quiet)
     sink(NULL)
