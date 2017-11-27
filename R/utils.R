@@ -37,14 +37,31 @@ setPkgOption <- function(name, value) {
   return(get(name, envir = .pkgOptions))
 }
 
+.setInternal <- function(name, value) {
+  .internal <- get(".internal", envir = as.environment("package:JASPTools"))
+  .internal[[name]] <- value
+}
+
+.getInternal <- function(name) {
+  .internal <- get(".internal", envir = as.environment("package:JASPTools"))
+  if (! name %in% names(.internal))
+    stop(paste("Could not locate internal variable", name))
+  return(.internal[[name]])
+}
+
+.resetInternals <- function() {
+  .setInternal("state", NULL)
+  .setInternal("dataset", NULL)
+}
+
 .JASPToolsReady <- function() {
-  pathsToSet <- get("pathsToResources", envir = as.environment("package:JASPTools"))
-  if (is.null(pathsToSet)) { # paths were initialized previously and emptied
+  initPaths <- .getInternal("initPaths")
+  if (is.list(initPaths)) { # paths specified during .onAttach and still need to be inited
+    .initResourcePaths(initPaths)
     return(TRUE)
-  } else if (is.list(pathsToSet)) { # paths were specified during .onAttach
-    .initResourcePaths(pathsToSet)
+  } else if (initPaths == TRUE) { # paths were initialized previously
     return(TRUE)
-  } else if (pathsToSet == FALSE && endsWith(getwd(), file.path("jasp-desktop", "Tools"))) { # user manually set wd
+  } else if (endsWith(getwd(), file.path("Tools"))) { # user manually set wd
     return(TRUE)
   }
   return(FALSE) # paths were not found during initialization
@@ -54,13 +71,12 @@ setPkgOption <- function(name, value) {
   for (pathName in names(paths)) {
     setPkgOption(pathName, paths[[pathName]])
   }
-  unlockBinding("pathsToResources", env = as.environment("package:JASPTools"))
-  assign("pathsToResources", NULL, envir = as.environment("package:JASPTools"))
+  .setInternal("initPaths", TRUE)
 }
 
-.initRunEnvironment <- function(envir, ...) {
-  unlockBinding("envir", env = as.environment("package:JASPTools"))
-  assign("envir", envir, envir = as.environment("package:JASPTools"))
+.initRunEnvironment <- function(envir, dataset, ...) {
+  .setInternal("envir", envir)
+  .setInternal("dataset", dataset)
   .libPaths(c(.getPkgOption("pkgs.dir"), .libPaths()))
   .sourceDir(.getPkgOption("r.dir"), envir)
   .setRCPPMasks(...)
@@ -92,6 +108,19 @@ setPkgOption <- function(name, value) {
     root = root,
     relativePath = file.path("plots", paste0(numPlots + 1, ".png"))
   )
+}
+
+.requestStateFileNameNative <- function() {
+  root <- file.path(tempdir(), "JASPTools", "state")
+  name <- "state"
+  list(
+    root = root,
+    relativePath = name
+  )
+}
+
+.callbackNative <- function(...) {
+  list(status="ok")
 }
 
 .parseUnicode <- function(str) {

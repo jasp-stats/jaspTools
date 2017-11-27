@@ -138,19 +138,28 @@
     pathsToResources <- absolutePaths
   }
 
-  # create the temp html directory for the output
-  pathToHtml <- file.path(tempdir(), "JASPTools", "html", "plots")
-  if (! dir.exists(pathToHtml)) {
-    dir.create(pathToHtml, recursive = TRUE)
-    message(paste("Note: temp output files may be found at", file.path(tempdir(), "JASPTools")))
+  # create the temp (html) directory for the output
+  pathToTools <- file.path(tempdir(), "JASPTools")
+  if (! dir.exists(pathToTools)) {
+    dir.create(file.path(pathToTools, "html", "plots"), recursive = TRUE)
+    dir.create(file.path(pathToTools, "state"))
+    message(paste("Note: temp output files may be found at", pathToTools))
   }
 
+  initPaths <- FALSE
+  if (! is.null(pathsToResources))
+    initPaths <- pathsToResources
+
+  .internal <- list2env(list(
+    initPaths=initPaths,
+    envir = .GlobalEnv,
+    dataset = NULL,
+    state = NULL
+  ))
   # create globals for setup / JASP to find
-  assign("pathsToResources", pathsToResources, envir = as.environment("package:JASPTools"))
-  assign("envir", .GlobalEnv, envir = as.environment("package:JASPTools"))
-  assign("dataset", NULL, envir = as.environment("package:JASPTools"))
+  assign(".internal", .internal, envir = as.environment("package:JASPTools"))
   assign("perform", NULL, envir = as.environment("package:JASPTools"))
   assign(".ppi", NULL, envir = as.environment("package:JASPTools"))
   assign(".baseCitation", "x", envir = as.environment("package:JASPTools"))
-  assign(".masks", c("dataset", "perform", ".ppi"), envir = as.environment("package:JASPTools"))
+  assign(".masks", c("perform", ".ppi"), envir = as.environment("package:JASPTools"))
 }

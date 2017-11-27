@@ -1,10 +1,10 @@
 .readDatasetToEndNative <- function(columns = c(), columns.as.numeric = c(), columns.as.ordinal = c(),
                                     columns.as.factor = c(), all.columns = FALSE) {
 
-  dataset <- get("dataset", envir = as.environment("package:JASPTools"))
+  dataset <- .getInternal("dataset")
   dataset <- .loadCorrectDataset(dataset)
 
-  envir <- get("envir", envir = as.environment("package:JASPTools"))
+  envir <- .getInternal("envir")
   dataset <- envir$.vdf(dataset, columns, columns.as.numeric, columns.as.ordinal,
                   columns.as.factor, all.columns, exclude.na.listwise = c())
 

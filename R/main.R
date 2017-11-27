@@ -71,6 +71,7 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
     opts <- options()
     libPaths <- .libPaths()
     on.exit({
+      .resetInternals()
       if (! "pkgloading" %in% sideEffects || identical(sideEffects, FALSE))
         .restoreNamespaces(loadedPkgs)
       if (! "options" %in% sideEffects || identical(sideEffects, FALSE))
@@ -81,86 +82,30 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
         suppressWarnings(sink(NULL))
     })
   } else { # no side effects, but we still need on.exit
-    if (quiet)
-      on.exit(suppressWarnings(sink(NULL)))
+    on.exit({
+      .resetInternals()
+      if (quiet)
+        suppressWarnings(sink(NULL))
+    })
   }
 
   .initRunEnvironment(envir = envir, dataset = dataset, perform = perform)
 
-  analysis <- eval(parse(text = name), envir = envir)
-
-  fnEnvir <- envir
-  if (identical(envir, .GlobalEnv)) {
-    fnEnvir <- environment() # analysis does not exist in the global envir
-  }
-
   if (quiet)
     sink(tempfile())
 
-  results <- evalq(tryCatch(expr = {
-    analysis(dataset = NULL, options = options, perform = perform,
-             callback = function(...) list(status = "ok"), state = NULL)
-  },
-  error = function(e) e), fnEnvir)
+  results <- evalq(envir$run(name, rjson::toJSON(options), perform), envir=envir)
 
   if (quiet)
     sink(NULL)
 
-  if (inherits(results, "expectedError")) {
+  if (view)
+    view(results)
 
-    errorResponse <- paste0("{ \"status\" : \"error\", \"results\" : { \"title\" : \"error\", \"error\" : 1, \"errorMessage\" : \"", results$message, "\" } }")
-    if (view)
-      view(errorResponse)
+  if (jsonlite::validate(results))
+    results <- rjson::fromJSON(results)
 
-  } else if (inherits(results, "error")) {
-
-    error <- gsub("\"", "'", as.character(results), fixed=TRUE)
-    error <- gsub("\\\n", " ", error)
-
-    stackTrace <- as.character(results$stackTrace)
-    stackTrace <- gsub("\"", "'", stackTrace, fixed=TRUE)
-    stackTrace <- gsub("\\\\", "", stackTrace)
-    stackTrace <- paste(stackTrace, collapse="<br><br>")
-
-    errorMessage <- envir$.generateErrorMessage(type='exception', error=error, stackTrace=stackTrace)
-    errorResponse <- paste0("{ \"status\" : \"exception\", \"results\" : { \"title\" : \"error\", \"error\" : 1, \"errorMessage\" : \"", errorMessage, "\" } }")
-    if (view) view(errorResponse)
-
-  } else if (is.null(results)) {
-
-    if (view)
-      view("null")
-
-  } else {
-
-    state <- NULL
-
-    if ("state" %in% names(results)) {
-
-      state <- results$state
-      results$state <- NULL
-
-      if (! is.null(names(state))) {
-        state[["figures"]] <- c(state[["figures"]], envir$.imgToState(results$results))
-      }
-
-    }
-
-    if ("results" %in% names(results)) {
-
-      results <- envir$.imgToResults(results)
-      results$results <- envir$.addCitationToResults(results$results)
-      results$state <- state
-
-    } else {
-
-      results <- envir$.addCitationToResults(results)
-      results <- list(results = results)
-    }
-
-    if (view)
-      view(results)
-  }
+  results[["state"]] <- .getInternal("state")
 
   return(invisible(results))
 }
