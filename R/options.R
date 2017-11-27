@@ -1,3 +1,51 @@
+#' Obtain options to run JASP analyses with.
+#' 
+#' \code{analysisOptions} provides an easy way to create analysis options. You
+#' may use the json from the Qt terminal or from the json files found in
+#' resources. The former you have to provide yourself, for the latter you only
+#' have to specify the name of the analysis.
+#' 
+#' 
+#' @param source String containing valid json, or the name of a JASP analysis.
+#' If you provide json, be sure to use single quotes.
+#' @param hint Boolean. Should additional hints be placed in the output so you
+#' know how to give values to differents types of options? Only works if
+#' \code{source} is set to the name of an analysis.
+#' @return A list containing options you can supply to \code{JASPTools::run}.
+#' If \code{source} is an analysis name then all default options have been
+#' filled in and booleans set to FALSE. The options that have no default are
+#' left empty. If \code{hint} is set to TRUE then hints are set for these empty
+#' options; they are placed between \%'s.
+#' @examples
+#' 
+#' options <- JASPTools::analysisOptions("BinomialTest")
+#' options[["variables"]] <- "contBinom"
+#' 
+#' # Above and below are identical (below is taken from the Qt terminal)
+#' 
+#' options <- JASPTools::analysisOptions('{
+#' "id" : 0,
+#' "name" : "BinomialTest",
+#' "options" : {
+#'   "VovkSellkeMPR" : false,
+#'   "confidenceInterval" : false,
+#'   "confidenceIntervalInterval" : 0.950,
+#'   "descriptivesPlots" : false,
+#'   "descriptivesPlotsConfidenceInterval" : 0.950,
+#'   "hypothesis" : "notEqualToTestValue",
+#'   "plotHeight" : 300,
+#'   "plotWidth" : 160,
+#'   "testValue" : 0.50,
+#'   "variables" : [ "contBinom" ]
+#' },
+#' "perform" : "run",
+#' "revision" : 0,
+#' "settings" : {
+#'   "ppi" : 192
+#' }
+#' }')
+#' 
+#' @export analysisOptions
 analysisOptions <- function(source, hint = FALSE) {
   if (! is.character(source) || length(source) > 1) {
     stop("Expecting a character input of length 1 as source,

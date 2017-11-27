@@ -1,3 +1,15 @@
+#' Test a specific JASP analysis.
+#' 
+#' Tests a specific R analysis found under JASP-Tests. Useful to perform before
+#' making a pull request, to prevent failing builds.
+#' 
+#' 
+#' @param analysis String name of the analysis to test.
+#' @examples
+#' 
+#' JASPTools::testAnalysis("AnovaBayesian")
+#' 
+#' @export testAnalysis
 testAnalysis <- function(analysis) {
   analysis <- .validateAnalysis(analysis)
   root <- .getPkgOption("tests.dir")
@@ -5,11 +17,40 @@ testAnalysis <- function(analysis) {
   testthat::test_file(file)
 }
 
+
+
+#' Test all JASP analyses.
+#' 
+#' Tests all R analyses found under JASP-Tests. Useful to perform before making
+#' a pull request, to prevent failing builds.
+#' 
+#' 
+#' @export testAll
 testAll <- function() {
   testDir <- .getPkgOption("tests.dir")
   testthat::test_dir(testDir)
 }
 
+
+
+#' Visually inspect new/failed test plots.
+#' 
+#' This function is a wrapper around \code{vdiffr::manage_cases()}. It allows
+#' visual inspection of the plots in the unit tests that were newly added or
+#' produced an error. If no analysis is specified it will iterate over all test
+#' cases.
+#' 
+#' 
+#' @param analysis Optional string name of the analysis whose plots should be
+#' tested.
+#' @return A Shiny app that shows all new/failed/orphaned cases. The app allows
+#' test plots to be validated, at which point they are placed in the figs
+#' folder and used as a reference for future tests.
+#' @examples
+#' 
+#' JASPTools::inspectTestPlots("Anova")
+#' 
+#' @export inspectTestPlots
 inspectTestPlots <- function(analysis = NULL) {
   if (! is.null(analysis)) {
     analysis <- .validateAnalysis(analysis)
@@ -20,6 +61,27 @@ inspectTestPlots <- function(analysis = NULL) {
   vdiffr::manage_cases(testDir, analysis)
 }
 
+
+
+#' Aids in the creation of tests for tables.
+#' 
+#' This function is designed to make it easier to create unit tests for tables.
+#' It strips off attributes and flattens the structure until a list remains
+#' with dimension 1. Output is then produced which can be immediately placed in
+#' the test file.
+#' 
+#' 
+#' @param rows A list with lists of rows (i.e., a JASP table).
+#' @return Copy-paste ready output which may serve as the reference to test
+#' tables against.
+#' @examples
+#' 
+#' options <- JASPTools::analysisOptions("BinomialTest")
+#' options[["variables"]] <- "contBinom"
+#' results <- JASPTools::run("BinomialTest", "debug", options, view=FALSE)
+#' JASPTools::makeTestTable(results[["results"]][["binomial"]][["data"]])
+#' 
+#' @export makeTestTable
 makeTestTable <- function(rows) {
   x <- collapseTable(rows)
   result <- ""
