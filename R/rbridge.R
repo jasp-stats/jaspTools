@@ -1,3 +1,5 @@
+# functions to replace JASP's rcpp functions
+
 .readDatasetToEndNative <- function(columns = c(), columns.as.numeric = c(), columns.as.ordinal = c(),
                                     columns.as.factor = c(), all.columns = FALSE) {
 
@@ -6,7 +8,7 @@
 
   envir <- .getInternal("envir")
   dataset <- envir$.vdf(dataset, columns, columns.as.numeric, columns.as.ordinal,
-                  columns.as.factor, all.columns, exclude.na.listwise = c())
+                        columns.as.factor, all.columns, exclude.na.listwise = c())
 
   return(dataset)
 }
@@ -21,22 +23,24 @@
   return(dataset)
 }
 
-.loadCorrectDataset <- function(x) {
-  if (is.character(x)) {
-    if (! endsWith(x, ".csv")) {
-      x <- paste0(x, ".csv")
-    }
-    root <- .getPkgOption("data.dir")
-    datasets <- list.files(root)
-    datasets <- datasets[endsWith(datasets, ".csv")]
-    if (! x %in% datasets) {
-      cat("Files in data directory:\n")
-      cat(paste(datasets, collapse = "\n"))
-      stop(paste(x, "not found"))
-    }
-    fullPath <- file.path(root, x)
-    return(read.csv(fullPath, header = TRUE, check.names = FALSE))
-  } else {
-    return(x)
-  }
+.requestTempFileNameNative <- function(...) {
+  root <- file.path(tempdir(), "JASPTools", "html")
+  numPlots <- length(list.files(file.path(root, "plots")))
+  list(
+    root = root,
+    relativePath = file.path("plots", paste0(numPlots + 1, ".png"))
+  )
+}
+
+.requestStateFileNameNative <- function() {
+  root <- file.path(tempdir(), "JASPTools", "state")
+  name <- "state"
+  list(
+    root = root,
+    relativePath = name
+  )
+}
+
+.callbackNative <- function(...) {
+  list(status="ok")
 }
