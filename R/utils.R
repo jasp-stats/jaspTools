@@ -137,6 +137,27 @@
   }
 }
 
+# not used. Could possibly make pkg unloading more targeted, but does not include pkgs used in other (linked) analyses
+.getAnalysisPkgs <- function(analysis, base=FALSE) {
+  analysis <- .validateAnalysis(analysis)
+  file <- file.path(.getPkgOption("r.dir"), paste0(analysis, ".R"))
+  content <- suppressWarnings(readLines(file))
+  content <- gsub('#.*', "", content) # remove comments
+  matches <- stringr::str_match_all(content, '([a-zA-Z0-9.]{2,}(?<![.]))(?:::|:::)[a-zA-Z0-9._]+')
+  analysisPkgs <- unique(unlist(lapply(matches, function(match) match[, 2])))
+
+  if (! base) {
+    basePkgs <- installed.packages(priority="high")
+    basePkgs <- basePkgs[basePkgs[, "Priority"] == "base", 1]
+    if (length(analysisPkgs) > 0)
+      analysisPkgs <- analysisPkgs[! analysisPkgs %in% basePkgs]
+  }
+
+  if (length(analysisPkgs) > 0)
+    return(analysisPkgs)
+  return(NULL)
+}
+
 .charVec2MixedList <- function(x) {
   x <- stringi::stri_escape_unicode(x)
   x <- gsub("\\\\u.{4}", "<unicode>", x)
