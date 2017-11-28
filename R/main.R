@@ -1,21 +1,21 @@
 #' View the tables and plots in a results object.
-#' 
+#'
 #' \code{view} allows you to view output independently of Qt. It uses the same
 #' javascript/css/html and should generate identical output. This function may
 #' be called directly, but it is more convenient to use \code{JASPTools::run}.
-#' 
-#' 
+#'
+#'
 #' @param results A named R list returned from a JASP analysis, or a json
 #' results string copied from the Qt terminal.
 #' @return A html page is generated and placed in a temp folder.
 #' @examples
-#' 
+#'
 #' options <- JASPTools::analysisOptions("BinomialTest")
 #' results <- JASPTools::run("BinomialTest", "debug", options, view=FALSE)
 #' JASPTools::view(results)
-#' 
+#'
 #' # Above and below are identical (below is taken from the Qt terminal)
-#' 
+#'
 #' JASPTools::view('{
 #'    "id" : 6,
 #'    "name" : "BinomialTest",
@@ -95,9 +95,10 @@
 #'    "revision" : 2,
 #'    "status" : "complete"
 #' }')
-#' 
+#'
 #' @export view
 view <- function(results) {
+
   content <- NULL
   if (is.character(results) && jsonlite::validate(results) == TRUE) { # assuming a json string
 
@@ -132,11 +133,11 @@ view <- function(results) {
     results = results
   )
   content <- try(rjson::toJSON(content))
-  content <- .parseUnicode(content)
-
   if (class(content) == "try-error") {
     content <- paste0("{ \"status\" : \"error\", \"results\" : { \"error\" : 1, \"errorMessage\" : \"Unable to jsonify\" } }")
   }
+  content <- .parseUnicode(content)
+  content <- gsub("<div class=stack-trace>", "<div>", content, fixed=TRUE)
 
   html <- readChar(file.path(.getPkgOption("html.dir"), "index.html"), 1000000)
   insertedJS <- paste0(
@@ -161,7 +162,7 @@ view <- function(results) {
 
 
 #' Run a JASP analysis in R.
-#' 
+#'
 #' \code{run} makes it possible to execute a JASP analysis in R. Usually this
 #' process is a bit cumbersome as there are a number of objects unique to the
 #' JASP environment. Think .ppi, data-reading, etc. These (rcpp) objects are
@@ -170,8 +171,8 @@ view <- function(results) {
 #' analysis code between calls is incorporated. The output of the analysis is
 #' shown automatically through a call to \code{JASPTools::view} and returned
 #' invisibly.
-#' 
-#' 
+#'
+#'
 #' @param name String indicating the name of the analysis to run. This name is
 #' identical to that of the main function in a JASP analysis.
 #' @param dataset Data.frame or string; if it's a string it must match one of
@@ -191,13 +192,13 @@ view <- function(results) {
 #' an effort to prevent any side effect not included in the vector (or all if
 #' set to FALSE)
 #' @examples
-#' 
+#'
 #' options <- JASPTools::analysisOptions("BinomialTest")
 #' options[["variables"]] <- "contBinom"
 #' JASPTools::run("BinomialTest", "debug", options)
-#' 
+#'
 #' # Above and below are identical (below is taken from the Qt terminal)
-#' 
+#'
 #' options <- JASPTools::analysisOptions('{
 #'    "id" : 6,
 #'    "name" : "BinomialTest",
@@ -220,13 +221,13 @@ view <- function(results) {
 #'    }
 #' }')
 #' JASPTools::run("BinomialTest", "debug", options)
-#' 
+#'
 #' # If we want R functions sourced to the global env
 #' JASPTools::run("BinomialTest", "debug", options, sideEffects="globalEnv")
-#' 
+#'
 #' # Or additionally have the .libPaths() set to JASP<e2><80><99>s R packages
 #' JASPTools::run("BinomialTest", "debug", options, sideEffects=c("globalEnv", "libPaths"))
-#' 
+#'
 #' @export run
 run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FALSE, sideEffects = FALSE) {
   envir <- .GlobalEnv
