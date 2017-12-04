@@ -8,5 +8,5 @@ Description: This package assists JASP developers when writing R code. It remove
 License: GNU General Public License
 Encoding: UTF-8
 LazyData: true
-Imports: rjson, jsonlite, stringi, vdiffr, testthat
+Imports: jsonlite, stringi, vdiffr, testthat
 RoxygenNote: 6.0.1

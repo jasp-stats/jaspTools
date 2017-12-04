@@ -102,7 +102,7 @@ view <- function(results) {
   content <- NULL
   if (is.character(results) && jsonlite::validate(results) == TRUE) { # assuming a json string
 
-    unjsonified <- rjson::fromJSON(results)
+    unjsonified <- jsonlite::fromJSON(results, simplifyVector=FALSE)
     if ("results" %in% names(unjsonified)) {
       results <- unjsonified[["results"]]
       id <- ifelse(is.null(unjsonified[["id"]]), 0, unjsonified[["id"]])
@@ -132,7 +132,7 @@ view <- function(results) {
     status = status,
     results = results
   )
-  content <- try(rjson::toJSON(content))
+  content <- try(jsonlite::toJSON(content, null="null", auto_unbox=TRUE, digits=NA))
   if (class(content) == "try-error") {
     content <- paste0("{ \"status\" : \"error\", \"results\" : { \"error\" : 1, \"errorMessage\" : \"Unable to jsonify\" } }")
   }
@@ -264,7 +264,7 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
   config <- .getJSON(name, "input=>dataset", "output")
   possibleArgs <- list(
     name = name,
-    options.as.json.string = rjson::toJSON(options),
+    options.as.json.string = jsonlite::toJSON(options),
     dataset.cols = config[["dataset"]],
     output.description = config[["output"]],
     perform = perform
@@ -285,7 +285,7 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
     view(results)
 
   if (jsonlite::validate(results))
-    results <- rjson::fromJSON(results)
+    results <- jsonlite::fromJSON(results, simplifyVector=FALSE)
 
   results[["state"]] <- .getInternal("state")
 

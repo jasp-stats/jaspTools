@@ -59,7 +59,7 @@
    return(analysisJSON)
 
   result <- list()
-  optsList <- rjson::fromJSON(file=file)
+  optsList <- jsonlite::read_json(file)
   for (arg in args) {
     keys <- unlist(strsplit(arg, "=>", fixed=TRUE))
     value <- optsList
@@ -69,7 +69,7 @@
     if (is.null(value))
       result[[key]] <- "null"
     else
-      result[[key]] <- rjson::toJSON(value)
+      result[[key]] <- jsonlite::toJSON(value)
   }
   return(result)
 }

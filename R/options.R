@@ -1,11 +1,11 @@
 #' Obtain options to run JASP analyses with.
-#' 
+#'
 #' \code{analysisOptions} provides an easy way to create analysis options. You
 #' may use the json from the Qt terminal or from the json files found in
 #' resources. The former you have to provide yourself, for the latter you only
 #' have to specify the name of the analysis.
-#' 
-#' 
+#'
+#'
 #' @param source String containing valid json, or the name of a JASP analysis.
 #' If you provide json, be sure to use single quotes.
 #' @param hint Boolean. Should additional hints be placed in the output so you
@@ -17,12 +17,12 @@
 #' left empty. If \code{hint} is set to TRUE then hints are set for these empty
 #' options; they are placed between \%'s.
 #' @examples
-#' 
+#'
 #' options <- JASPTools::analysisOptions("BinomialTest")
 #' options[["variables"]] <- "contBinom"
-#' 
+#'
 #' # Above and below are identical (below is taken from the Qt terminal)
-#' 
+#'
 #' options <- JASPTools::analysisOptions('{
 #' "id" : 0,
 #' "name" : "BinomialTest",
@@ -44,7 +44,7 @@
 #'   "ppi" : 192
 #' }
 #' }')
-#' 
+#'
 #' @export analysisOptions
 analysisOptions <- function(source, hint = FALSE) {
   if (! is.character(source) || length(source) > 1) {
@@ -70,7 +70,7 @@ analysisOptions <- function(source, hint = FALSE) {
 
 .analysisOptionsFromFile <- function(analysis) {
   file <- file.path(.getPkgOption("json.dir"), paste0(analysis, ".json"))
-  analysisOpts <- try(rjson::fromJSON(file = file), silent = TRUE)
+  analysisOpts <- try(jsonlite::read_json(file), silent = TRUE)
 
   if (inherits(analysisOpts, "try-error")) {
     stop("The JSON file for the analysis you supplied could not be found.
@@ -89,7 +89,7 @@ analysisOptions <- function(source, hint = FALSE) {
 }
 
 .analysisOptionsFromQt <- function(x) {
-  json <- try(rjson::fromJSON(x), silent = TRUE)
+  json <- try(jsonlite::fromJSON(x, simplifyVector=FALSE), silent = TRUE)
 
   if (inherits(json, "try-error")) {
     stop("Your json is invalid, please copy the entire message
