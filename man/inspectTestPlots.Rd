@@ -23,6 +23,6 @@ cases.
 }
 \examples{
 
-JASPTools::inspectTestPlots("Anova")
+jasptools::inspectTestPlots("Anova")
 
 }

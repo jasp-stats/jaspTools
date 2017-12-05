@@ -1,4 +1,4 @@
-.JASPToolsReady <- function() {
+.jasptoolsReady <- function() {
   initPaths <- .getInternal("initPaths")
   if (is.list(initPaths)) { # paths specified during .onAttach and still need to be inited
     .initResourcePaths(initPaths)
@@ -29,13 +29,13 @@
 .setRCPPMasks <- function(...) {
   setFromRun <- list(...)
   for (mask in .masks) {
-    unlockBinding(mask, env = as.environment("package:JASPTools"))
+    unlockBinding(mask, env = as.environment("package:jasptools"))
     if (mask %in% names(setFromRun)) {
       value <- setFromRun[[mask]]
     } else {
       value <- .getPkgOption(mask)
     }
-    assign(mask, value, envir = as.environment("package:JASPTools"))
+    assign(mask, value, envir = as.environment("package:jasptools"))
   }
 }
 

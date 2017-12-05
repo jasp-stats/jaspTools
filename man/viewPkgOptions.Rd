@@ -2,7 +2,7 @@
 % Please edit documentation in R/pkg-settings.R
 \name{viewPkgOptions}
 \alias{viewPkgOptions}
-\title{View the configuration of JASPTools.}
+\title{View the configuration of jasptools.}
 \usage{
 viewPkgOptions()
 }
@@ -15,5 +15,5 @@ you call \code{viewPkgOptions}. Most options are paths to resources, which
 should be configured automatically. If the configuration is correct (you
 will be notified if it is not) then the only option you should ever change
 is .ppi. Setting .ppi to a higher value (through
-\code{JASPTools::setPkgOption}) results in higher resolution images.
+\code{jasptools::setPkgOption}) results in higher resolution images.
 }

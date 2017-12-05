@@ -15,6 +15,6 @@ making a pull request, to prevent failing builds.
 }
 \examples{
 
-JASPTools::testAnalysis("AnovaBayesian")
+jasptools::testAnalysis("AnovaBayesian")
 
 }

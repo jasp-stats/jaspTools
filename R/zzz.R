@@ -2,29 +2,29 @@
   # attempt to find the JASP install on the disk
   foundJASP <- FALSE
   jasptoolsPath <- file.path(libname, pkgname)
-  if (endsWith(jasptoolsPath, file.path("Tools", "JASPTools"))) {
+  if (endsWith(jasptoolsPath, file.path("Tools", "jasptools"))) {
     foundJASP <- TRUE
-    message("Successfully found the root location of JASPTools.")
+    message("Successfully found the root location of jasptools.")
   } else {
     message(paste(
-    "Error: Cannot find the install location of JASPTools.
+    "Error: Cannot find the install location of jasptools.
     Location provided:", libname, "
     Did you set the argument lib.loc to %path%/%to%/%jasp%/jasp-desktop/Tools?
-    If you did, please execute unloadNamespace('JASPTools') and try again.
+    If you did, please execute unloadNamespace('jasptools') and try again.
 
     If the problem persists you will have to either:
     (1) set your working directory to %path%/%to%/%jasp%/jasp-desktop/Tools
     or
-    (2) set the absolute paths through JASPTools::setPkgOption()
+    (2) set the absolute paths through jasptools::setPkgOption()
 
-    Setup will continue; please follow the steps above to ensure correct functioning of JASPTools."
+    Setup will continue; please follow the steps above to ensure correct functioning of jasptools."
     ))
   }
 
   pathsToResources <- FALSE
   if (foundJASP) {
-    # install dependencies (JASPTools comes pre-installed with JASP so install.packages() is never called)
-    pkgDescr <- packageDescription("JASPTools", lib.loc = libname)
+    # install dependencies (jasptools comes pre-installed with JASP so install.packages() is never called)
+    pkgDescr <- packageDescription("jasptools", lib.loc = libname)
     imports <- gsub("\\s", "", pkgDescr$Imports)
     pkgs <- unlist(strsplit(imports, ",", fixed = TRUE))
     for (pkg in pkgs) {
@@ -139,7 +139,7 @@
   }
 
   # create the temp (html) directory for the output
-  pathToTools <- file.path(tempdir(), "JASPTools")
+  pathToTools <- file.path(tempdir(), "jasptools")
   if (! dir.exists(pathToTools)) {
     dir.create(file.path(pathToTools, "html", "plots"), recursive = TRUE)
     dir.create(file.path(pathToTools, "state"))
@@ -157,9 +157,9 @@
     state = NULL
   ))
   # create globals for setup / JASP to find
-  assign(".internal", .internal, envir = as.environment("package:JASPTools"))
-  assign("perform", NULL, envir = as.environment("package:JASPTools"))
-  assign(".ppi", NULL, envir = as.environment("package:JASPTools"))
-  assign(".baseCitation", "x", envir = as.environment("package:JASPTools"))
-  assign(".masks", c("perform", ".ppi"), envir = as.environment("package:JASPTools"))
+  assign(".internal", .internal, envir = as.environment("package:jasptools"))
+  assign("perform", NULL, envir = as.environment("package:jasptools"))
+  assign(".ppi", NULL, envir = as.environment("package:jasptools"))
+  assign(".baseCitation", "x", envir = as.environment("package:jasptools"))
+  assign(".masks", c("perform", ".ppi"), envir = as.environment("package:jasptools"))
 }

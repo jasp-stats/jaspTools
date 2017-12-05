@@ -2,7 +2,7 @@
 % Please edit documentation in R/pkg-settings.R
 \name{setPkgOption}
 \alias{setPkgOption}
-\title{Change the value of an option in JASPTools.}
+\title{Change the value of an option in jasptools.}
 \usage{
 setPkgOption(name, value)
 }
@@ -13,11 +13,11 @@ setPkgOption(name, value)
 }
 \description{
 Sets a package option to a new value (to see what is available use
-\code{JASPTools::viewPkgOptions}). Value changes are automatically
-incorporated when any JASPTools function is called.
+\code{jasptools::viewPkgOptions}). Value changes are automatically
+incorporated when any jasptools function is called.
 }
 \examples{
 
-JASPTools::setPkgOption(".ppi", 196)
+jasptools::setPkgOption(".ppi", 196)
 
 }

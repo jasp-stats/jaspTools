@@ -15,7 +15,7 @@ identical to that of the main function in a JASP analysis.}
 the JASP datasets (e.g., "debug").}
 
 \item{options}{List of options to supply to the analysis (see also
-\code{JASPTools::analysisOptions}).}
+\code{jasptools::analysisOptions}).}
 
 \item{perform}{String containing either "run" (default) or "init".}
 
@@ -25,11 +25,11 @@ the JASP datasets (e.g., "debug").}
 analysis.}
 
 \item{sideEffects}{Boolean or character vector indicating which side effects
-are allowed.  Side effects are persistent changes made by JASPTools or
-analyses run in JASPTools, they include loading of packages ("pkgLoading"),
+are allowed.  Side effects are persistent changes made by jasptools or
+analyses run in jasptools, they include loading of packages ("pkgLoading"),
 setting of .libPaths ("libPaths"), modifying of global options() ("options")
 and altering the global environment ("globalEnv"). Supply the desired side
-effects in a character vector (or simply TRUE for all). JASPTools will make
+effects in a character vector (or simply TRUE for all). jasptools will make
 an effort to prevent any side effect not included in the vector (or all if
 set to FALSE)}
 }
@@ -37,21 +37,21 @@ set to FALSE)}
 \code{run} makes it possible to execute a JASP analysis in R. Usually this
 process is a bit cumbersome as there are a number of objects unique to the
 JASP environment. Think .ppi, data-reading, etc. These (rcpp) objects are
-replaced in the JASPTools so you do not have to deal with them. Note that
+replaced in the jasptools so you do not have to deal with them. Note that
 \code{run} sources JASP analyses every time it runs, so any change in
 analysis code between calls is incorporated. The output of the analysis is
-shown automatically through a call to \code{JASPTools::view} and returned
+shown automatically through a call to \code{jasptools::view} and returned
 invisibly.
 }
 \examples{
 
-options <- JASPTools::analysisOptions("BinomialTest")
+options <- jasptools::analysisOptions("BinomialTest")
 options[["variables"]] <- "contBinom"
-JASPTools::run("BinomialTest", "debug", options)
+jasptools::run("BinomialTest", "debug", options)
 
 # Above and below are identical (below is taken from the Qt terminal)
 
-options <- JASPTools::analysisOptions('{
+options <- jasptools::analysisOptions('{
    "id" : 6,
    "name" : "BinomialTest",
    "options" : {
@@ -72,12 +72,12 @@ options <- JASPTools::analysisOptions('{
       "ppi" : 192
    }
 }')
-JASPTools::run("BinomialTest", "debug", options)
+jasptools::run("BinomialTest", "debug", options)
 
 # If we want R functions sourced to the global env
-JASPTools::run("BinomialTest", "debug", options, sideEffects="globalEnv")
+jasptools::run("BinomialTest", "debug", options, sideEffects="globalEnv")
 
 # Or additionally have the .libPaths() set to JASP<e2><80><99>s R packages
-JASPTools::run("BinomialTest", "debug", options, sideEffects=c("globalEnv", "libPaths"))
+jasptools::run("BinomialTest", "debug", options, sideEffects=c("globalEnv", "libPaths"))
 
 }

@@ -7,7 +7,7 @@
 #' @param analysis String name of the analysis to test.
 #' @examples
 #' 
-#' JASPTools::testAnalysis("AnovaBayesian")
+#' jasptools::testAnalysis("AnovaBayesian")
 #' 
 #' @export testAnalysis
 testAnalysis <- function(analysis) {
@@ -48,7 +48,7 @@ testAll <- function() {
 #' folder and used as a reference for future tests.
 #' @examples
 #' 
-#' JASPTools::inspectTestPlots("Anova")
+#' jasptools::inspectTestPlots("Anova")
 #' 
 #' @export inspectTestPlots
 inspectTestPlots <- function(analysis = NULL) {
@@ -76,10 +76,10 @@ inspectTestPlots <- function(analysis = NULL) {
 #' tables against.
 #' @examples
 #' 
-#' options <- JASPTools::analysisOptions("BinomialTest")
+#' options <- jasptools::analysisOptions("BinomialTest")
 #' options[["variables"]] <- "contBinom"
-#' results <- JASPTools::run("BinomialTest", "debug", options, view=FALSE)
-#' JASPTools::makeTestTable(results[["results"]][["binomial"]][["data"]])
+#' results <- jasptools::run("BinomialTest", "debug", options, view=FALSE)
+#' jasptools::makeTestTable(results[["results"]][["binomial"]][["data"]])
 #' 
 #' @export makeTestTable
 makeTestTable <- function(rows) {

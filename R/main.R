@@ -2,7 +2,7 @@
 #'
 #' \code{view} allows you to view output independently of Qt. It uses the same
 #' javascript/css/html and should generate identical output. This function may
-#' be called directly, but it is more convenient to use \code{JASPTools::run}.
+#' be called directly, but it is more convenient to use \code{jasptools::run}.
 #'
 #'
 #' @param results A named R list returned from a JASP analysis, or a json
@@ -10,13 +10,13 @@
 #' @return A html page is generated and placed in a temp folder.
 #' @examples
 #'
-#' options <- JASPTools::analysisOptions("BinomialTest")
-#' results <- JASPTools::run("BinomialTest", "debug", options, view=FALSE)
-#' JASPTools::view(results)
+#' options <- jasptools::analysisOptions("BinomialTest")
+#' results <- jasptools::run("BinomialTest", "debug", options, view=FALSE)
+#' jasptools::view(results)
 #'
 #' # Above and below are identical (below is taken from the Qt terminal)
 #'
-#' JASPTools::view('{
+#' jasptools::view('{
 #'    "id" : 6,
 #'    "name" : "BinomialTest",
 #'    "results" : {
@@ -148,12 +148,12 @@ view <- function(results) {
     </script></body>")
   html <- gsub("</body>", insertedJS, html)
 
-  outputFolder <- file.path(tempdir(), "JASPTools", "html")
+  outputFolder <- file.path(tempdir(), "jasptools", "html")
   if (! "js" %in% list.files(outputFolder)) {
-    file.copy(.getPkgOption("html.dir"), file.path(tempdir(), "JASPTools"), recursive = TRUE)
+    file.copy(.getPkgOption("html.dir"), file.path(tempdir(), "jasptools"), recursive = TRUE)
   }
 
-  file <- file.path(tempdir(), "JASPTools", "html", "tmp-index.html")
+  file <- file.path(tempdir(), "jasptools", "html", "tmp-index.html")
   writeChar(html, file)
   browseURL(file)
 
@@ -166,10 +166,10 @@ view <- function(results) {
 #' \code{run} makes it possible to execute a JASP analysis in R. Usually this
 #' process is a bit cumbersome as there are a number of objects unique to the
 #' JASP environment. Think .ppi, data-reading, etc. These (rcpp) objects are
-#' replaced in the JASPTools so you do not have to deal with them. Note that
+#' replaced in the jasptools so you do not have to deal with them. Note that
 #' \code{run} sources JASP analyses every time it runs, so any change in
 #' analysis code between calls is incorporated. The output of the analysis is
-#' shown automatically through a call to \code{JASPTools::view} and returned
+#' shown automatically through a call to \code{jasptools::view} and returned
 #' invisibly.
 #'
 #'
@@ -178,28 +178,28 @@ view <- function(results) {
 #' @param dataset Data.frame or string; if it's a string it must match one of
 #' the JASP datasets (e.g., "debug").
 #' @param options List of options to supply to the analysis (see also
-#' \code{JASPTools::analysisOptions}).
+#' \code{jasptools::analysisOptions}).
 #' @param perform String containing either "run" (default) or "init".
 #' @param view Boolean indicating whether to view the results in a webbrowser.
 #' @param quiet Boolean indicating whether to suppress messages from the
 #' analysis.
 #' @param sideEffects Boolean or character vector indicating which side effects
-#' are allowed.  Side effects are persistent changes made by JASPTools or
-#' analyses run in JASPTools, they include loading of packages ("pkgLoading"),
+#' are allowed.  Side effects are persistent changes made by jasptools or
+#' analyses run in jasptools, they include loading of packages ("pkgLoading"),
 #' setting of .libPaths ("libPaths"), modifying of global options() ("options")
 #' and altering the global environment ("globalEnv"). Supply the desired side
-#' effects in a character vector (or simply TRUE for all). JASPTools will make
+#' effects in a character vector (or simply TRUE for all). jasptools will make
 #' an effort to prevent any side effect not included in the vector (or all if
 #' set to FALSE)
 #' @examples
 #'
-#' options <- JASPTools::analysisOptions("BinomialTest")
+#' options <- jasptools::analysisOptions("BinomialTest")
 #' options[["variables"]] <- "contBinom"
-#' JASPTools::run("BinomialTest", "debug", options)
+#' jasptools::run("BinomialTest", "debug", options)
 #'
 #' # Above and below are identical (below is taken from the Qt terminal)
 #'
-#' options <- JASPTools::analysisOptions('{
+#' options <- jasptools::analysisOptions('{
 #'    "id" : 6,
 #'    "name" : "BinomialTest",
 #'    "options" : {
@@ -220,13 +220,13 @@ view <- function(results) {
 #'       "ppi" : 192
 #'    }
 #' }')
-#' JASPTools::run("BinomialTest", "debug", options)
+#' jasptools::run("BinomialTest", "debug", options)
 #'
 #' # If we want R functions sourced to the global env
-#' JASPTools::run("BinomialTest", "debug", options, sideEffects="globalEnv")
+#' jasptools::run("BinomialTest", "debug", options, sideEffects="globalEnv")
 #'
 #' # Or additionally have the .libPaths() set to JASP<e2><80><99>s R packages
-#' JASPTools::run("BinomialTest", "debug", options, sideEffects=c("globalEnv", "libPaths"))
+#' jasptools::run("BinomialTest", "debug", options, sideEffects=c("globalEnv", "libPaths"))
 #'
 #' @export run
 run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FALSE, sideEffects = FALSE) {

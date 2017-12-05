@@ -1,4 +1,4 @@
-Package: JASPTools
+Package: jasptools
 Type: Package
 Title: Helps preview and debug JASP analyses
 Version: 0.5.0

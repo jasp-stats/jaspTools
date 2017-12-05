@@ -16,17 +16,17 @@ A html page is generated and placed in a temp folder.
 \description{
 \code{view} allows you to view output independently of Qt. It uses the same
 javascript/css/html and should generate identical output. This function may
-be called directly, but it is more convenient to use \code{JASPTools::run}.
+be called directly, but it is more convenient to use \code{jasptools::run}.
 }
 \examples{
 
-options <- JASPTools::analysisOptions("BinomialTest")
-results <- JASPTools::run("BinomialTest", "debug", options, view=FALSE)
-JASPTools::view(results)
+options <- jasptools::analysisOptions("BinomialTest")
+results <- jasptools::run("BinomialTest", "debug", options, view=FALSE)
+jasptools::view(results)
 
 # Above and below are identical (below is taken from the Qt terminal)
 
-JASPTools::view('{
+jasptools::view('{
    "id" : 6,
    "name" : "BinomialTest",
    "results" : {

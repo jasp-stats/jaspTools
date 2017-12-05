@@ -11,19 +11,19 @@
 #' @param hint Boolean. Should additional hints be placed in the output so you
 #' know how to give values to differents types of options? Only works if
 #' \code{source} is set to the name of an analysis.
-#' @return A list containing options you can supply to \code{JASPTools::run}.
+#' @return A list containing options you can supply to \code{jasptools::run}.
 #' If \code{source} is an analysis name then all default options have been
 #' filled in and booleans set to FALSE. The options that have no default are
 #' left empty. If \code{hint} is set to TRUE then hints are set for these empty
 #' options; they are placed between \%'s.
 #' @examples
 #'
-#' options <- JASPTools::analysisOptions("BinomialTest")
+#' options <- jasptools::analysisOptions("BinomialTest")
 #' options[["variables"]] <- "contBinom"
 #'
 #' # Above and below are identical (below is taken from the Qt terminal)
 #'
-#' options <- JASPTools::analysisOptions('{
+#' options <- jasptools::analysisOptions('{
 #' "id" : 0,
 #' "name" : "BinomialTest",
 #' "options" : {
