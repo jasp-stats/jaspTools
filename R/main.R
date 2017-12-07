@@ -175,8 +175,9 @@ view <- function(results) {
 #'
 #' @param name String indicating the name of the analysis to run. This name is
 #' identical to that of the main function in a JASP analysis.
-#' @param dataset Data.frame or string; if it's a string it must match one of
-#' the JASP datasets (e.g., "debug").
+#' @param dataset Data.frame, matrix, string name or string path; if it's a string then jasptools
+#' first checks if it's valid path and if it isn't if the string matches one of the JASP datasets (e.g., "debug.csv").
+#' By default the folder in Resources is checked first, unless called within a testthat environment, in which case tests/datasets is checked first.
 #' @param options List of options to supply to the analysis (see also
 #' \code{jasptools::analysisOptions}).
 #' @param perform String containing either "run" (default) or "init".
@@ -220,13 +221,13 @@ view <- function(results) {
 #'       "ppi" : 192
 #'    }
 #' }')
-#' jasptools::run("BinomialTest", "debug", options)
+#' jasptools::run("BinomialTest", "debug.csv", options)
 #'
 #' # If we want R functions sourced to the global env
-#' jasptools::run("BinomialTest", "debug", options, sideEffects="globalEnv")
+#' jasptools::run("BinomialTest", "debug.csv", options, sideEffects="globalEnv")
 #'
 #' # Or additionally have the .libPaths() set to JASP<e2><80><99>s R packages
-#' jasptools::run("BinomialTest", "debug", options, sideEffects=c("globalEnv", "libPaths"))
+#' jasptools::run("BinomialTest", "debug.csv", options, sideEffects=c("globalEnv", "libPaths"))
 #'
 #' @export run
 run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FALSE, sideEffects = FALSE) {
