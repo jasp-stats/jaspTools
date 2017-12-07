@@ -6,21 +6,22 @@
   data.dir = file.path("..", "Resources", "Data Sets"),
   pkgs.dir = "",
   tests.dir = file.path("..", "JASP-Tests", "R", "tests", "testthat"),
+  tests.data.dir = file.path("..", "JASP-Tests", "R", "tests", "datasets"),
   .ppi = 96
 ))
 
 
 
 #' View the configuration of jasptools.
-#' 
+#'
 #' There are a number of package options you can adjust. These are printed when
 #' you call \code{viewPkgOptions}. Most options are paths to resources, which
 #' should be configured automatically. If the configuration is correct (you
 #' will be notified if it is not) then the only option you should ever change
 #' is .ppi. Setting .ppi to a higher value (through
 #' \code{jasptools::setPkgOption}) results in higher resolution images.
-#' 
-#' 
+#'
+#'
 #' @return A print of the configurable options.
 #' @export viewPkgOptions
 viewPkgOptions <- function() {
@@ -38,18 +39,18 @@ viewPkgOptions <- function() {
 
 
 #' Change the value of an option in jasptools.
-#' 
+#'
 #' Sets a package option to a new value (to see what is available use
 #' \code{jasptools::viewPkgOptions}). Value changes are automatically
 #' incorporated when any jasptools function is called.
-#' 
-#' 
+#'
+#'
 #' @param name String name of the option.
 #' @param value Value the option should be set to.
 #' @examples
-#' 
+#'
 #' jasptools::setPkgOption(".ppi", 196)
-#' 
+#'
 #' @export setPkgOption
 setPkgOption <- function(name, value) {
   assign(name, value, envir = .pkgOptions)

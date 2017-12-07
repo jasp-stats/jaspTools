@@ -1,19 +1,40 @@
 .loadCorrectDataset <- function(x) {
-  if (is.character(x)) {
+  if (is.matrix(x) || is.data.frame(x)) {
+    return(x)
+  } else if (is.character(x)) {
     if (! endsWith(x, ".csv")) {
       x <- paste0(x, ".csv")
     }
-    root <- .getPkgOption("data.dir")
-    datasets <- list.files(root)
-    datasets <- datasets[endsWith(datasets, ".csv")]
-    if (! x %in% datasets) {
-      cat("Files in data directory:\n")
-      cat(paste(datasets, collapse = "\n"))
-      stop(paste(x, "not found"))
+
+    # check if it's a path to a file
+    if (file.exists(x)) {
+      return(read.csv(x, header = TRUE, check.names = FALSE))
     }
-    fullPath <- file.path(root, x)
-    return(read.csv(fullPath, header = TRUE, check.names = FALSE))
-  } else {
-    return(x)
+
+    # check if it's a name of a JASP dataset
+    locations <- .datasetLocations()
+    files <- c()
+    for (location in locations) {
+      datasets <- list.files(location)
+      datasets <- datasets[endsWith(datasets, ".csv")]
+      if (x %in% datasets) {
+        fullPath <- file.path(location, x)
+        return(read.csv(fullPath, header = TRUE, check.names = FALSE))
+      }
+      files <- c(files, datasets)
+    }
+    cat("It appears", x, "could not be found. Please supply either a full filepath or the name of one of the following datasets:\n",
+        paste(files, collapse = '\n'), "\n")
+    stop(paste(x, "not found"))
   }
+  stop(paste("Cannot handle data of type", mode(x)))
+}
+
+.datasetLocations <- function() {
+  locOrder <- c(.getPkgOption("data.dir"), .getPkgOption("tests.data.dir"))
+  testthat <- vapply(sys.frames(), function(frame) getPackageName(frame) == "testthat", logical(1))
+  if (any(testthat)) {
+    locOrder <- rev(locOrder)
+  }
+  return(locOrder)
 }

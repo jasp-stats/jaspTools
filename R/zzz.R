@@ -12,10 +12,7 @@
     Did you set the argument lib.loc to %path%/%to%/%jasp%/jasp-desktop/Tools?
     If you did, please execute unloadNamespace('jasptools') and try again.
 
-    If the problem persists you will have to either:
-    (1) set your working directory to %path%/%to%/%jasp%/jasp-desktop/Tools
-    or
-    (2) set the absolute paths through jasptools::setPkgOption()
+    If the problem persists you will have to set your working directory to %path%/%to%/%jasp%/jasp-desktop/Tools
 
     Setup will continue; please follow the steps above to ensure correct functioning of jasptools."
     ))
@@ -127,7 +124,8 @@
       html.dir = file.path("JASP-Desktop", "html"),
       json.dir = file.path("Resources", "Library"),
       data.dir = file.path("Resources", "Data Sets"),
-      tests.dir = file.path("JASP-Tests", "R", "tests", "testthat")
+      tests.dir = file.path("JASP-Tests", "R", "tests", "testthat"),
+      tests.data.dir = file.path("JASP-Tests", "R", "tests", "datasets")
     )
 
     if (! is.null(pathToPackages)) {
