@@ -99,8 +99,6 @@ analysisOptions <- function(source, hint = FALSE) {
 
   if ("options" %in% names(json)) {
     return(json[["options"]])
-  } else if ("options" %in% names(json[["input"]])) {
-    return(json[["input"]][["options"]])
   } else {
     stop("The JSON file appears to be invalid")
   }

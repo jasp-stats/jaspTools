@@ -261,12 +261,17 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
 
   .initRunEnvironment(envir = envir, dataset = dataset, perform = perform)
 
-  config <- .getJSON(name, "input=>dataset", "output")
+  config <- .getJSON(name, "title", "dataset", "results", "state", "init") # use => for nested objects
+  options <- jsonlite::toJSON(options)
   possibleArgs <- list(
     name = name,
-    options.as.json.string = jsonlite::toJSON(options),
-    dataset.cols = config[["dataset"]],
-    output.description = config[["output"]],
+    title = jsonlite::fromJSON(config[["title"]]),
+    requiresInit <- config[["init"]],
+    options.as.json.string = options, # backwards compatibility
+    options = options,
+    dataKey = config[["dataset"]],
+    resultsMeta = config[["results"]],
+    stateKey = config[["state"]],
     perform = perform
   )
   runArgs <- formals(envir$run)
