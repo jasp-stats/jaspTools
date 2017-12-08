@@ -47,7 +47,7 @@
 
 .getJSON <- function(analysis, ...) {
   file <- file.path(.getPkgOption("json.dir"), paste0(analysis, ".json"))
-  analysisJSON <- try(readLines(file), silent=TRUE)
+  analysisJSON <- try(readLines(file, warn=FALSE), silent=TRUE)
   if (inherits(analysisJSON, "try-error")) {
     stop("The JSON file for the analysis you supplied could not be found.
          Please ensure that (1) its name matches the main R function
@@ -141,7 +141,7 @@
 .getAnalysisPkgs <- function(analysis, base=FALSE) {
   analysis <- .validateAnalysis(analysis)
   file <- file.path(.getPkgOption("r.dir"), paste0(analysis, ".R"))
-  content <- suppressWarnings(readLines(file))
+  content <- readLines(file, warn=FALSE)
   content <- gsub('#.*', "", content) # remove comments
   matches <- stringr::str_match_all(content, '([a-zA-Z0-9.]{2,}(?<![.]))(?:::|:::)[a-zA-Z0-9._]+')
   analysisPkgs <- unique(unlist(lapply(matches, function(match) match[, 2])))
