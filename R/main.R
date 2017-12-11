@@ -242,6 +242,7 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
     opts <- options()
     libPaths <- .libPaths()
     on.exit({
+      .removeS3Methods()
       .resetInternals()
       if (! "pkgloading" %in% sideEffects || identical(sideEffects, FALSE))
         .restoreNamespaces(loadedPkgs)
@@ -254,6 +255,7 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
     })
   } else { # no side effects, but we still need on.exit
     on.exit({
+      .removeS3Methods()
       .resetInternals()
       if (quiet)
         suppressWarnings(sink(NULL))

@@ -23,7 +23,30 @@
   .setInternal("dataset", dataset)
   .libPaths(c(.getPkgOption("pkgs.dir"), .libPaths()))
   .sourceDir(.getPkgOption("r.dir"), envir)
+  .exportS3Methods(envir)
   .setRCPPMasks(...)
+}
+
+.exportS3Methods <- function(env) {
+  if (identical(env, .GlobalEnv))
+    return(invisible(NULL))
+
+  objs <- ls(env, all.names=FALSE)
+  s3 <- vapply(objs, isS3method, envir=env, FUN.VALUE=logical(1))
+  objs <- objs[s3]
+  objsUserEnv <- ls(.GlobalEnv, all.names=FALSE)
+  objs <- objs[! objs %in% objsUserEnv] # prevent overwriting and removing objects from the user's workspace
+  for (method in objs)
+    assign(method, get(method, envir=env), envir=.GlobalEnv)
+
+  .setInternal("s3Methods", objs)
+}
+
+.removeS3Methods <- function() {
+  objs <- .getInternal("s3Methods")
+  if (is.null(objs))
+    return(invisible(NULL))
+  rm(list=objs, envir=.GlobalEnv)
 }
 
 .setRCPPMasks <- function(...) {
