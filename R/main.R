@@ -266,10 +266,11 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
 
   config <- .getJSON(name, "title", "dataset", "results", "state", "init") # use => for nested objects
   options <- jsonlite::toJSON(options)
+  requiresInit <- jsonlite::fromJSON(config[["init"]])
   possibleArgs <- list(
     name = name,
     title = jsonlite::fromJSON(config[["title"]]),
-    requiresInit <- config[["init"]],
+    requiresInit = ifelse(is.null(requiresInit) || requiresInit, TRUE, FALSE),
     options.as.json.string = options, # backwards compatibility
     options = options,
     dataKey = config[["dataset"]],
