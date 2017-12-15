@@ -19,14 +19,15 @@
 }
 
 .initRunEnvironment <- function(envir, dataset, ...) {
-  .setInternal("envir", envir)
-  .setInternal("dataset", dataset)
-  .libPaths(c(.getPkgOption("pkgs.dir"), .libPaths()))
-  .sourceDir(.getPkgOption("r.dir"), envir)
-  .exportS3Methods(envir)
-  .setRCPPMasks(...)
+  .setInternal("envir", envir) # envir in which the analysis is executed
+  .setInternal("dataset", dataset) # dataset to be found later when it needs to be read
+  .libPaths(c(.getPkgOption("pkgs.dir"), .libPaths())) # location of JASP's R packages
+  .sourceDir(.getPkgOption("r.dir"), envir) # source all the R analysis files
+  .exportS3Methods(envir) # ensure S3 methods can be registered to the associated generic functions
+  .setRCPPMasks(...) # set the rbridge globals to the value run is called with
 }
 
+# it is necessary to export custom S3 methods to the global envir as otherwise they are not registered
 .exportS3Methods <- function(env) {
   if (identical(env, .GlobalEnv))
     return(invisible(NULL))
@@ -51,7 +52,7 @@
 
 .setRCPPMasks <- function(...) {
   setFromRun <- list(...)
-  for (mask in .masks) {
+  for (mask in .masks) { # .masks is a global
     unlockBinding(mask, env = as.environment("package:jasptools"))
     if (mask %in% names(setFromRun)) {
       value <- setFromRun[[mask]]

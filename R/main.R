@@ -137,7 +137,7 @@ view <- function(results) {
     content <- paste0("{ \"status\" : \"error\", \"results\" : { \"error\" : 1, \"errorMessage\" : \"Unable to jsonify\" } }")
   }
   content <- .parseUnicode(content)
-  content <- gsub("<div class=stack-trace>", "<div>", content, fixed=TRUE)
+  content <- gsub("<div class=stack-trace>", "<div>", content, fixed=TRUE) # this makes sure the stacktrace is not hidden
 
   html <- readChar(file.path(.getPkgOption("html.dir"), "index.html"), 1000000)
   insertedJS <- paste0(
@@ -233,7 +233,7 @@ view <- function(results) {
 run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FALSE, sideEffects = FALSE) {
   envir <- .GlobalEnv
   if (! isTRUE(sideEffects)) {
-    if (! is.logical(sideEffects))
+    if (! is.logical(sideEffects)) # users can supply a character vector
       sideEffects <- tolower(sideEffects)
     if (! "globalenv" %in% sideEffects || identical(sideEffects, FALSE))
       envir <- new.env()
@@ -264,12 +264,13 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
 
   .initRunEnvironment(envir = envir, dataset = dataset, perform = perform)
 
-  config <- .getJSON(name, "title", "dataset", "results", "state", "init") # use => for nested objects
+  config <- .getJSON(name, "title", "dataset", "results", "state", "init") # use '=>' for nested objects
+  title <- jsonlite::fromJSON(config[["title"]])
   options <- jsonlite::toJSON(options)
   requiresInit <- jsonlite::fromJSON(config[["init"]])
   possibleArgs <- list(
     name = name,
-    title = jsonlite::fromJSON(config[["title"]]),
+    title = title,
     requiresInit = ifelse(is.null(requiresInit) || requiresInit, TRUE, FALSE),
     options.as.json.string = options, # backwards compatibility
     options = options,

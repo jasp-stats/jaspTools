@@ -1,14 +1,14 @@
 #' Test a specific JASP analysis.
-#' 
+#'
 #' Tests a specific R analysis found under JASP-Tests. Useful to perform before
 #' making a pull request, to prevent failing builds.
-#' 
-#' 
+#'
+#'
 #' @param analysis String name of the analysis to test.
 #' @examples
-#' 
+#'
 #' jasptools::testAnalysis("AnovaBayesian")
-#' 
+#'
 #' @export testAnalysis
 testAnalysis <- function(analysis) {
   analysis <- .validateAnalysis(analysis)
@@ -20,11 +20,11 @@ testAnalysis <- function(analysis) {
 
 
 #' Test all JASP analyses.
-#' 
+#'
 #' Tests all R analyses found under JASP-Tests. Useful to perform before making
 #' a pull request, to prevent failing builds.
-#' 
-#' 
+#'
+#'
 #' @export testAll
 testAll <- function() {
   testDir <- .getPkgOption("tests.dir")
@@ -34,22 +34,22 @@ testAll <- function() {
 
 
 #' Visually inspect new/failed test plots.
-#' 
+#'
 #' This function is a wrapper around \code{vdiffr::manage_cases()}. It allows
 #' visual inspection of the plots in the unit tests that were newly added or
 #' produced an error. If no analysis is specified it will iterate over all test
 #' cases.
-#' 
-#' 
+#'
+#'
 #' @param analysis Optional string name of the analysis whose plots should be
 #' tested.
 #' @return A Shiny app that shows all new/failed/orphaned cases. The app allows
 #' test plots to be validated, at which point they are placed in the figs
 #' folder and used as a reference for future tests.
 #' @examples
-#' 
+#'
 #' jasptools::inspectTestPlots("Anova")
-#' 
+#'
 #' @export inspectTestPlots
 inspectTestPlots <- function(analysis = NULL) {
   if (! is.null(analysis)) {
@@ -57,30 +57,30 @@ inspectTestPlots <- function(analysis = NULL) {
     analysis <- paste0("^", analysis, "$")
   }
   testDir <- .getPkgOption("tests.dir")
-  on.exit(unloadNamespace("SomePkg")) # unload fake pkg needed to run vdiffr
+  on.exit(unloadNamespace("SomePkg")) # unload fake pkg in JASP unit tests, which is needed to run vdiffr
   vdiffr::manage_cases(testDir, analysis)
 }
 
 
 
 #' Aids in the creation of tests for tables.
-#' 
+#'
 #' This function is designed to make it easier to create unit tests for tables.
 #' It strips off attributes and flattens the structure until a list remains
 #' with dimension 1. Output is then produced which can be immediately placed in
 #' the test file.
-#' 
-#' 
+#'
+#'
 #' @param rows A list with lists of rows (i.e., a JASP table).
 #' @return Copy-paste ready output which may serve as the reference to test
 #' tables against.
 #' @examples
-#' 
+#'
 #' options <- jasptools::analysisOptions("BinomialTest")
 #' options[["variables"]] <- "contBinom"
 #' results <- jasptools::run("BinomialTest", "debug", options, view=FALSE)
 #' jasptools::makeTestTable(results[["results"]][["binomial"]][["data"]])
-#' 
+#'
 #' @export makeTestTable
 makeTestTable <- function(rows) {
   x <- collapseTable(rows)

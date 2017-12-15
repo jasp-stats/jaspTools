@@ -1,4 +1,4 @@
-# externally accessible options
+# first the externally accessible options
 .pkgOptions <- list2env(list(
   r.dir = file.path("..", "JASP-Engine", "JASP", "R"),
   html.dir = file.path("..", "JASP-Desktop", "html"),
@@ -69,7 +69,7 @@ setPkgOption <- function(name, value) {
   return(get(name, envir = .pkgOptions))
 }
 
-# internally accessible options
+# ... and the internally accessible options
 .setInternal <- function(name, value) {
   .internal <- get(".internal", envir = as.environment("package:jasptools"))
   .internal[[name]] <- value
