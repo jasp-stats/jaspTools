@@ -59,12 +59,14 @@ analysisOptions <- function(source, hint = FALSE) {
 
   options <- NULL
   if (type == "qt") {
+    analysisName <- stringr::str_match(source, '\\"name\\" : \\"(.*?)\\"')[2L]
     options <- .analysisOptionsFromQt(source)
   } else {
+    analysisName <- source
     rawOptions <- .analysisOptionsFromFile(source)
     options <- .fillOptions(rawOptions, hint)
   }
-
+  attr(options, "analysisName") <- analysisName
   return(options)
 }
 

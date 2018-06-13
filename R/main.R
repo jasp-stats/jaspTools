@@ -230,7 +230,14 @@ view <- function(results) {
 #' jasptools::run("BinomialTest", "debug.csv", options, sideEffects=c("globalEnv", "libPaths"))
 #'
 #' @export run
-run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FALSE, sideEffects = FALSE) {
+run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FALSE, sideEffects = FALSE, debug = FALSE) {
+  if (debug)
+    browser()
+  if (missing(name)) {
+    name <- attr(options, "analysisName")
+    if (is.null(name))
+      stop("please supply an analysis name")
+  }
   envir <- .GlobalEnv
   if (! isTRUE(sideEffects)) {
     if (! is.logical(sideEffects)) # users can supply a character vector
@@ -264,7 +271,7 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
 
   .initRunEnvironment(envir = envir, dataset = dataset, perform = perform)
 
-  config <- .getJSON(name, "title", "dataset", "results", "state", "init") # use '=>' for nested objects
+  config <- .getJSON(name, "title", "dataset", "results", "state", "init", "jaspResults") # use '=>' for nested objects
   title <- jsonlite::fromJSON(config[["title"]])
   options <- jsonlite::toJSON(options)
   requiresInit <- jsonlite::fromJSON(config[["init"]])
@@ -279,14 +286,28 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
     stateKey = config[["state"]],
     perform = perform
   )
-  runArgs <- formals(envir$run)
+
+  if (identical(config[["jaspResults"]], structure("[true]", class = "json"))) {
+    loadNamespace("jaspResults")
+    runFun <- "runJaspResults"
+    jaspResults::initJaspResults()
+    envir$jaspResultsModule <- list(
+      create_jaspResults = function(name) get("jaspResults", envir = .GlobalEnv)#,
+      # create_jaspTable
+    )
+  } else {
+    runFun <- "run"
+  }
+  runArgs <- formals(envir[[runFun]])
   argNames <- intersect(names(possibleArgs), names(runArgs))
   args <- possibleArgs[argNames]
 
   if (quiet)
     sink(tempfile())
 
-  results <- do.call(envir$run, args, envir=envir)
+  if (debug)
+    browser()
+  results <- do.call(envir[[runFun]], args, envir=envir)
 
   if (quiet)
     sink(NULL)
