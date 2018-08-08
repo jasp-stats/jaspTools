@@ -155,6 +155,7 @@
   addedNamespaces <- setdiff(loadedNamespaces(), nms)
   if (length(addedNamespaces) > 0) {
     addedNamespaces <- rev(addedNamespaces) # assuming new pkgs (i.e. dependents) get added later
+    addedNamespaces <- addedNamespaces[addedNamespaces != "jaspResults"]
     for (namespace in addedNamespaces) {
       try(unloadNamespace(namespace), silent=TRUE) # this will fail if the pkg is a dependent
     }

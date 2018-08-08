@@ -251,8 +251,6 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
     on.exit({
       .removeS3Methods()
       .resetInternals()
-      if (! "pkgloading" %in% sideEffects || identical(sideEffects, FALSE))
-        .restoreNamespaces(loadedPkgs)
       if (! "options" %in% sideEffects || identical(sideEffects, FALSE))
         .restoreOptions(opts)
       if (! "libpaths" %in% sideEffects || identical(sideEffects, FALSE))
@@ -287,14 +285,24 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
     perform = perform
   )
 
-  if (identical(config[["jaspResults"]], structure("[true]", class = "json"))) {
+  usesJaspResults <- identical(config[["jaspResults"]], structure("[true]", class = "json"))
+  if (usesJaspResults) {
     loadNamespace("jaspResults")
     runFun <- "runJaspResults"
-    jaspResults::initJaspResults()
-    envir$jaspResultsModule <- list(
-      create_jaspResults = function(name) get("jaspResults", envir = .GlobalEnv)#,
-      # create_jaspTable
+    utils::capture.output(jaspResults::initJaspResults())
+
+    # this list is a stand in for the 'jaspResultsModule' inside runJaspResults()
+    envir[["jaspResultsModule"]] <- list(
+      create_cpp_jaspResults   = function(name) get("jaspResults", envir = .GlobalEnv)
     )
+
+    # overwrite these from common --- remove them from common and put in a separate file?
+    envir[["createJaspPlot"]] <- jaspResults::createJaspPlot
+    envir[["createJaspContainer"]] <- jaspResults::createJaspContainer
+    envir[["createJaspTable"]] <- jaspResults::createJaspTable
+    envir[["createJaspHtml"]] <- jaspResults::createJaspHtml
+    envir[["createJaspState"]] <- jaspResults::createJaspState
+
   } else {
     runFun <- "run"
   }
@@ -304,13 +312,18 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
 
   if (quiet)
     sink(tempfile())
-
   if (debug)
     browser()
+
   results <- do.call(envir[[runFun]], args, envir=envir)
+
+  if (usesJaspResults)
+    results <- jaspResults$getResults()
 
   if (quiet)
     sink(NULL)
+  if (debug)
+    browser()
 
   if (view)
     view(results)
