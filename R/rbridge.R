@@ -7,6 +7,10 @@
   dataset <- .loadCorrectDataset(dataset)
 
   envir <- .getInternal("envir")
+  if (all.columns) {
+    columns <- colnames(dataset)
+    columns <- columns[columns != ""]
+  }
   dataset <- envir$.vdf(dataset, columns, columns.as.numeric, columns.as.ordinal,
                         columns.as.factor, all.columns, exclude.na.listwise = c())
 

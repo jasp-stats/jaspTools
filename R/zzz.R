@@ -1,4 +1,6 @@
 .onAttach <- function(libname, pkgname) {
+  message(sprintf("jasptools version: %s", packageVersion("jasptools")))
+
   # attempt to find the JASP install on the disk
   foundJASP <- FALSE
   jasptoolsPath <- file.path(libname, pkgname)
