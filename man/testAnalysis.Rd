@@ -4,17 +4,17 @@
 \alias{testAnalysis}
 \title{Test a specific JASP analysis.}
 \usage{
-testAnalysis(analysis)
+testAnalysis(name)
 }
 \arguments{
-\item{analysis}{String name of the analysis to test.}
+\item{name}{String name of the analysis to test.}
 }
 \description{
-Tests a specific R analysis found under JASP-Tests. Useful to perform before
+Tests a specific R analysis found under module/tests/testthat. Useful to perform before
 making a pull request, to prevent failing builds.
 }
 \examples{
 
-jasptools::testAnalysis("AnovaBayesian")
+testAnalysis("AnovaBayesian")
 
 }

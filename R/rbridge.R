@@ -14,14 +14,13 @@
                                     columns.as.factor = c(), all.columns = FALSE) {
 
   dataset <- .getInternal("dataset")
-  dataset <- .loadCorrectDataset(dataset)
+  dataset <- loadCorrectDataset(dataset)
 
-  envir <- .getInternal("envir")
   if (all.columns) {
     columns <- colnames(dataset)
     columns <- columns[columns != ""]
   }
-  dataset <- envir$.vdf(dataset, columns, columns.as.numeric, columns.as.ordinal,
+  dataset <- JASP:::.vdf(dataset, columns, columns.as.numeric, columns.as.ordinal,
                         columns.as.factor, all.columns, exclude.na.listwise = c())
 
   return(dataset)
@@ -38,7 +37,7 @@
 }
 
 .requestTempFileNameNative <- function(...) {
-  root <- file.path(tempdir(), "jasptools", "html")
+  root <- file.path(tempdir(), "jaspTools", "html")
   numPlots <- length(list.files(file.path(root, "plots")))
   list(
     root = root,
@@ -47,7 +46,7 @@
 }
 
 .requestStateFileNameNative <- function() {
-  root <- file.path(tempdir(), "jasptools", "state")
+  root <- file.path(tempdir(), "jaspTools", "state")
   name <- "state"
   list(
     root = root,
