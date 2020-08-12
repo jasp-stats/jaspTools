@@ -66,6 +66,16 @@ setPkgOption <- function(name, value) {
   if (!name %in% names(.pkgOptions))
     stop(name, " is not a valid option to set")
 
+  # set relative paths to absolute paths to ensure they will work if the wd changes
+  if (endsWith(name, ".dir") || endsWith(name, ".dirs")) {
+    for (i in seq_along(value)) {
+      if (!dir.exists(value[i]))
+        stop("Folder ", value[i], " does not exist")
+
+      value[i] <- normalizePath(value[i])
+    }
+  }
+
   assign(name, value, envir = .pkgOptions)
   message("`", name, "` -> ", paste(value, collapse = ", "))
 }
