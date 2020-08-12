@@ -1,5 +1,15 @@
 # functions to replace JASP's rcpp functions
 
+.encodeColNamesStrict <- function(x) return(x)
+.decodeColNamesStrict <- function(x) return(x)
+.encodeColNamesLax <- function(x) return(x)
+.decodeColNamesLax <- function(x) return(x)
+
+.setColumnDataAsScale <- function(...) return(TRUE)
+.setColumnDataAsOrdinal <- function(...) return(TRUE)
+.setColumnDataAsNominal <- function(...) return(TRUE)
+.setColumnDataAsNominalText <- function(...) return(TRUE)
+
 .readDatasetToEndNative <- function(columns = c(), columns.as.numeric = c(), columns.as.ordinal = c(),
                                     columns.as.factor = c(), all.columns = FALSE) {
 
@@ -7,6 +17,10 @@
   dataset <- .loadCorrectDataset(dataset)
 
   envir <- .getInternal("envir")
+  if (all.columns) {
+    columns <- colnames(dataset)
+    columns <- columns[columns != ""]
+  }
   dataset <- envir$.vdf(dataset, columns, columns.as.numeric, columns.as.ordinal,
                         columns.as.factor, all.columns, exclude.na.listwise = c())
 
@@ -44,3 +58,5 @@
 .callbackNative <- function(...) {
   list(status="ok")
 }
+
+.imageBackground <- function(...) return("white")

@@ -1,163 +1,62 @@
 .onAttach <- function(libname, pkgname) {
-  # attempt to find the JASP install on the disk
-  foundJASP <- FALSE
-  jasptoolsPath <- file.path(libname, pkgname)
-  if (endsWith(jasptoolsPath, file.path("Tools", "jasptools"))) {
-    foundJASP <- TRUE
-    message("Successfully found the root location of jasptools.")
-  } else {
-    message(paste(
-    "Error: Cannot find the install location of jasptools.
-    Location provided:", libname, "
-    Did you set the argument lib.loc to %path%/%to%/%jasp%/jasp-desktop/Tools?
-    If you did, please execute unloadNamespace('jasptools') and try again.
-
-    If the problem persists you will have to set your working directory to %path%/%to%/%jasp%/jasp-desktop/Tools
-
-    Setup will continue; please follow the steps above to ensure correct functioning of jasptools."
-    ))
-  }
-
-  pathsToResources <- FALSE
-  if (foundJASP) {
-    # install dependencies (jasptools comes pre-installed with JASP so install.packages() is never called)
-    pkgDescr <- packageDescription("jasptools", lib.loc = libname)
-    imports <- gsub("\\s", "", pkgDescr$Imports)
-    pkgs <- unlist(strsplit(imports, ",", fixed = TRUE))
-    for (pkg in pkgs) {
-      if (! pkg %in% installed.packages())
-        try(install.packages(pkg, repos = "https://cloud.r-project.org", dependencies = NA), silent = TRUE)
-    }
-
-    findDirPackages <- function(pathToBuild, needle) {
-      dirs <- list.files(pathToBuild)
-      locations <- NULL
-      if (! identical(dirs, character(0))) {
-        for (dirName in dirs) {
-          name <- unlist(strsplit(dirName, "[\\W_]", perl = TRUE))
-          if (all(needle %in% tolower(name))) {
-            location <- file.path(pathToBuild, dirName, "R", "library")
-            locations <- c(locations, location)
-          }
-        }
-      }
-      return(locations)
-    }
-
-    # get location of jasp-desktop
-    explode <- unlist(strsplit(jasptoolsPath, .Platform$file.sep)) # php habits..
-    basePath <- paste(head(explode, length(explode) - 2), collapse = .Platform$file.sep)
-
-    # temporarily change wd
-    oldwd <- getwd()
-    setwd(basePath)
-    on.exit(setwd(oldwd))
-
-    # get the path to JASP R packages so users do not need to install any additional packages
-    # retrieving os bit: http://conjugateprior.org/2015/06/identifying-the-os-from-r/
-    pathsToPackages <- NULL
-    os <- NULL
-    if (! is.null(Sys.info())) {
-      os <- Sys.info()["sysname"]
-      if (os == "Darwin")
-        os <- "osx"
+  file <- file.path(libname, pkgname, "jasp-desktop_Location.txt")
+  if (file.exists(file)) {
+    path <- readLines(file)
+    if (isJaspDesktopDir(path)) {
+      packageStartupMessage(sprintf("Using jasp-desktop at %s", path))
+      .jasptoolsInit(path)
+      .checkJaspDependencies(path)
+      return(NULL)
     } else {
-      if (grepl("^darwin", R.version$os))
-        os <- "osx"
-      if (grepl("linux-gnu", R.version$os))
-        os <- "linux"
+      packageStartupMessage("Path of jasp-desktop is corrupted! Please use develop(path_to_jasp_desktop).")
     }
-
-    if (! is.null(os)) {
-      os <- tolower(os)
-
-      if (os == "osx") {
-
-        basePathPackages <- file.path("..", "Frameworks", "R.framework", "Versions")
-        rVersions <- list.files(basePathPackages)
-        if (! identical(rVersions, character(0))) {
-          rVersions <- suppressWarnings(as.numeric(rVersions))
-          r <- sort(rVersions, decreasing = TRUE)[1]
-          pathsToPackages <- file.path(basePathPackages, r, "Resources", "library")
-        }
-
-      } else if (os == "windows") {
-
-        if (.Machine$sizeof.pointer == 8) { # 64 bits
-          pathsToPackages <- findDirPackages(file.path(".."), c("jasp", "64"))
-        } else { # 32 bits
-          pathsToPackages <- findDirPackages(file.path(".."), c("jasp", "32"))
-        }
-
-        if (is.null(pathsToPackages)) {
-          pathsToPackages <- findDirPackages(file.path(".."), c("build", "jasp"))
-        }
-
-      } else if (os == "linux") {
-
-        message("Identified OS as Linux. Assuming R packages required for JASP were installed manually.")
-
-      }
-
-    }
-
-    pathToPackages <- NULL
-    if (! is.null(pathsToPackages)) {
-      for (path in pathsToPackages) {
-        packages <- list.files(path)
-        if (! identical(packages, character(0)) && "base" %in% packages) {
-          message("Successfully found the bundled R packages.")
-          pathToPackages <- path
-          break
-        }
-      }
-    }
-
-    if (is.null(pathToPackages) && (is.null(os) || os != "linux")) {
-      message("Unable to find the bundled R packages.
-      Required packages will have to be installed manually, or 'pkgs.dir' must be set.")
-    }
-
-    # set locations of all required resources (json, analyses, html, packages)
-    relativePaths <- list(
-      r.dir = file.path("JASP-Engine", "JASP", "R"),
-      html.dir = file.path("JASP-Desktop", "html"),
-      json.dir = file.path("Resources", "Library"),
-      data.dir = file.path("Resources", "Data Sets"),
-      tests.dir = file.path("JASP-Tests", "R", "tests", "testthat"),
-      tests.data.dir = file.path("JASP-Tests", "R", "tests", "datasets")
-    )
-
-    if (! is.null(pathToPackages)) {
-      relativePaths[["pkgs.dir"]] <- pathToPackages
-    }
-
-    absolutePaths <- lapply(relativePaths, normalizePath)
-    pathsToResources <- absolutePaths
+  } else {
+    packageStartupMessage("Set jasptools path using develop(path_to_jasp_desktop).")
   }
+  .jasptoolsInit(NULL)
+  invisible()
+}
 
-  # create the temp (html) directory for the output
-  pathToTools <- file.path(tempdir(), "jasptools")
-  if (! dir.exists(pathToTools)) {
-    dir.create(file.path(pathToTools, "html", "plots"), recursive = TRUE)
-    dir.create(file.path(pathToTools, "state"))
-    message(paste("Note: temp output files may be found at", pathToTools))
+.checkJaspDependencies <- function(jaspDir) {
+  #.checkDuplicates() I need to fix this dependency mess across different libs first
+  .checkVersions(jaspDir)
+}
+
+.checkDuplicates <- function() {
+  libs <- c(.getPkgOption("pkgs.dir"), .libPaths())
+  deps <- c("jasptools", "JASPgraphs", "jaspResults")
+  libsPerPkg <- setNames(vector("list", length(deps)), deps)
+  
+  for (lib in libs)
+    for (dep in deps)
+      if (dep %in% list.dirs(lib, full.names = FALSE, recursive = FALSE))
+        libsPerPkg[[dep]] <- c(libsPerPkg[[dep]], lib)
+  
+  duplicates <- which(unlist(lapply(libsPerPkg, length)) > 1)
+  for (duplicate in duplicates)
+    packageStartupMessage(paste0("Warning: ", deps[[duplicate]], " exists in multiple libraries (", paste0(libsPerPkg[[duplicate]], collapse=", "), ")"))
+
+}
+
+.checkVersions <- function(jaspDir) {
+  deps <- c("jasptools", "JASPgraphs", "jaspResults")
+  dirs <- setNames(c(file.path(jaspDir, "Tools"), file.path(jaspDir, "JASP-Engine"), file.path(jaspDir, "JASP-R-Interface")), deps)
+  
+  for (dep in deps) {
+    devVersion <- try(silent=TRUE, { utils::packageVersion(dep, lib.loc=dirs[dep]) })
+    if (inherits(devVersion, "try-error") || .getInstalledVersion(dep) >= devVersion)
+      next
+    
+    installPath <- file.path(dirs[dep], dep)
+    msg <- paste0("*** There is a newer version available of ", dep, " (", devVersion,"). To update run")
+    if (dep == "jaspResults")
+      packageStartupMessage(paste0(msg, " `remove.packages(\"jaspResults\"); install.packages(\"", installPath, "\", type=\"source\", repos=NULL)`"))
+    else
+      packageStartupMessage(paste0(msg, " `devtools::install(\"", installPath, "\")`"))
   }
+}
 
-  initPaths <- FALSE
-  if (! is.null(pathsToResources))
-    initPaths <- pathsToResources
-
-  .internal <- list2env(list(
-    initPaths=initPaths,
-    envir = .GlobalEnv,
-    dataset = NULL,
-    state = NULL
-  ))
-  # create globals for setup / JASP to find
-  assign(".internal", .internal, envir = as.environment("package:jasptools"))
-  assign("perform", NULL, envir = as.environment("package:jasptools"))
-  assign(".ppi", NULL, envir = as.environment("package:jasptools"))
-  assign(".baseCitation", "x", envir = as.environment("package:jasptools"))
-  assign(".masks", c("perform", ".ppi"), envir = as.environment("package:jasptools"))
+.getInstalledVersion <- function(pkg) {
+  libs <- c(.getPkgOption("pkgs.dir"), .libPaths())
+  utils::packageVersion(pkg, lib.loc = libs)
 }

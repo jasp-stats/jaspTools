@@ -2,20 +2,34 @@
 R package which aids developers with writing JASP analyses.
 
 ## Installation
-It is not necessary to install the package; it comes bundled with the fork from [jasp-desktop](https://github.com/jasp-stats/jasp-desktop/).  
-To run it in R, simply attach it by calling:
+It is necessary to install some packages:
 
-`library(jasptools, lib.loc="/%path%/jasp-desktop/Tools/")`
+- Rcpp, BH, R6, devtools
+- jaspResults
 
-Where `/%path%/` refers to the location of jasp-desktop on your pc.  
-For example
+This can be done as follows:
 
-`library(jasptools, lib.loc="/Users/tdjong/JASP/Develop/jasp-desktop/Tools")`
+`install.packages(c("Rcpp", "BH", "R6", "devtools"))`
 
-It is important that jasptools is not installed along with your other packages, as it needs resources from the jasp-desktop environment.
+and
+
+`install.packages("/%path%/jasp-desktop/JASP-R-Interface/jaspResults/", repos = NULL, type = "source", dependencies = TRUE)`
+
+To install jasptools itself use:
+
+`devtools::install("/%path%/jasp-desktop/Tools/jasptools/")`
+
+or
+
+`install.packages("/%path%/jasp-desktop/Tools/jasptools/", repos = NULL, type = "source")`.
+
+`devtools::install` can be useful because it will automatically install the dependencies of jasptools, whereas `install.packages` cannot do this. Note: On some macs, it seems to be hard to build the dependency "data.table" from source resulting in the error message "clang: error: unsupported option '-fopenmp'". One hack to get around this is to select no when asked to install the package from source. This will install an older version of data.table without openmp support, which suffices for jasptools. Alternatively, you might want to upgrade [clang](https://cran.r-project.org/bin/macosx/tools/). 
+
+After loading jasptools with `library(jasptools)`, you need to call `develop(%path_to_jasp-desktop%)`. This is
+required once after every reinstall of jasptools.
 
 ## Functionality
-At the moment jasptools has three classes of functions.
+At the moment jasptools has four classes of functions.
 Each of these functions has documentation you may view by the usual syntax, e.g., `?run`.
 
 The general classes are:
@@ -68,7 +82,8 @@ options <- jasptools::analysisOptions('{
 jasptools::run("BinomialTest", dataset="debug.csv", options=options)
 ```
 
-It is not necessary to use a JASP dataset (such as the debug.csv file we showed in the examples), you may provide any data.frame to the dataset argument of the run function.
+It is not necessary to use a JASP dataset (such as the debug.csv file we showed in the examples), you may provide any
+data.frame to the dataset argument of the run function.
 
 ### 2. Testing JASP analyses
 - `testAll`: test all analyses
@@ -81,8 +96,19 @@ These tests check if all tables still produce the same results, plots can be mad
 If an analysis is changed, it's a good idea to check that no unit test returns an error.
 To this purpose jasptools offers convenience functions for testing.
 
-### 3. Modifying jasptools' setup
-- `viewPkgOptions`: views settings in the package 
+### 3. Linting and Styling analyses
+
+- `lintAnalysis`: test if an R file complies with the JASP syntax standards. For example, check if `<-` is used rather
+than `=`. In addition, this function performs some check for code correctness. For example, it will give a warning if
+an object is created but never used. Some of these correctness checks may give false positives that can be safely
+ignored.
+- `styleAnalysis`: apply a bunch of JASP syntax standards to an analysis. A safety copy is made before modifying a file.
+This function will change tabs into spaces, change `=` into `<-` where appropriate, etc.
+
+All changes that `styleAnalysis` can automatically apply to code are mandatory for R analyses.
+
+### 4. Modifying jasptools' setup
+- `viewPkgOptions`: views settings in the package
 - `setPkgOption`: change a setting in the package (e.g., paths and ppi)
 
 On startup jasptools will attempt to find all the resources it requires.
