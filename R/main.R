@@ -98,65 +98,28 @@
 #'
 #' @export view
 view <- function(results) {
-
-  content <- NULL
   if (is.character(results) && jsonlite::validate(results) == TRUE) { # assuming a json string
-
-    unjsonified <- jsonlite::fromJSON(results, simplifyVector=FALSE)
-    if ("results" %in% names(unjsonified)) {
-      results <- unjsonified[["results"]]
-      id <- ifelse(is.null(unjsonified[["id"]]), 0, unjsonified[["id"]])
-      name <- ifelse(is.null(unjsonified[["name"]]), "analysis", unjsonified[["name"]])
-      status <- ifelse(is.null(unjsonified[["status"]]), "complete", unjsonified[["status"]])
-    } else {
+    results <- jsonlite::fromJSON(results, simplifyVector=FALSE)
+    if (!"results" %in% names(results))
       stop("Incorrect json provided. Could not locate required field 'results'")
-    }
-
-  } else if (is.list(results) && "results" %in% names(results)) {
-
-    id <- ifelse(is.null(results[["id"]]), 0, results[["id"]])
-    name <- ifelse(is.null(results[["name"]]), "analysis", results[["name"]])
-    status <- ifelse(is.null(results[["status"]]), "complete", results[["status"]])
-    results <- results[["results"]]
-
-  } else {
-
+  } else if (!is.list(results) || !"results" %in% names(results)) {
     stop("Incorrect object provided in results,
     please enter a valid json string or a named results list.")
-
   }
 
   content <- list(
-    id = id,
-    name = name,
-    status = status,
-    results = results
+    id = ifelse(is.null(results[["id"]]), 0, results[["id"]]),
+    name = ifelse(is.null(results[["name"]]), "analysis", results[["name"]]),
+    status = ifelse(is.null(results[["status"]]), "complete", results[["status"]]),
+    results = results[["results"]]
   )
-  content <- try(jsonlite::toJSON(content, null="null", auto_unbox=TRUE, digits=NA))
-  if (class(content) == "try-error") {
-    content <- paste0("{ \"status\" : \"error\", \"results\" : { \"error\" : 1, \"errorMessage\" : \"Unable to jsonify\" } }")
-  }
-  content <- .parseUnicode(content)
-  content <- gsub("<div class=stack-trace>", "<div>", content, fixed=TRUE) # this makes sure the stacktrace is not hidden
-
-  html <- readChar(file.path(.getPkgOption("html.dir"), "index.html"), 1000000)
-  insertedJS <- paste0(
-    "<script>
-      $(document).ready(function() {
-        window.analysisChanged(", content, ")
-      })
-    </script></body>")
-  html <- gsub("</body>", insertedJS, html)
-
-  outputFolder <- file.path(tempdir(), "jasptools", "html")
-  if (! "js" %in% list.files(outputFolder)) {
-    file.copy(.getPkgOption("html.dir"), file.path(tempdir(), "jasptools"), recursive = TRUE)
-  }
-
-  file <- file.path(tempdir(), "jasptools", "html", "tmp-index.html")
-  writeChar(html, file)
-  browseURL(file)
-
+  json <- .convertResultsListToJson(content)
+  
+  .initializeOutputFolder(file.path(tempdir(), "jasptools", "html"))
+  
+  htmlFile <- file.path(tempdir(), "jasptools", "html", "tmp-index.html")
+  .insertJsonInHtml(json, htmlFile)
+  utils::browseURL(htmlFile)
 }
 
 
@@ -184,6 +147,7 @@ view <- function(results) {
 #' @param view Boolean indicating whether to view the results in a webbrowser.
 #' @param quiet Boolean indicating whether to suppress messages from the
 #' analysis.
+#' @param makeTests Boolean indicating whether to create testthat unit tests and print them to the terminal.
 #' @param sideEffects Boolean or character vector indicating which side effects
 #' are allowed.  Side effects are persistent changes made by jasptools or
 #' analyses run in jasptools, they include loading of packages ("pkgLoading"),
@@ -226,11 +190,25 @@ view <- function(results) {
 #' # If we want R functions sourced to the global env
 #' jasptools::run("BinomialTest", "debug.csv", options, sideEffects="globalEnv")
 #'
-#' # Or additionally have the .libPaths() set to JASP<e2><80><99>s R packages
+#' # Or additionally have the .libPaths() set to the JASP R packages
 #' jasptools::run("BinomialTest", "debug.csv", options, sideEffects=c("globalEnv", "libPaths"))
 #'
 #' @export run
-run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FALSE, sideEffects = FALSE) {
+run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FALSE, makeTests = FALSE, sideEffects = FALSE) {
+  if (missing(name)) {
+    name <- attr(options, "analysisName")
+    if (is.null(name))
+      stop("please supply an analysis name")
+  }
+  
+  if (!is.null(names(options)) && ".meta" %in% names(options))
+    options[[".meta"]] <- NULL
+  
+  if (.insideTestEnvironment()) {
+    view <- FALSE
+    quiet <- TRUE
+  }
+  
   envir <- .GlobalEnv
   if (! isTRUE(sideEffects)) {
     if (! is.logical(sideEffects)) # users can supply a character vector
@@ -242,54 +220,77 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
     opts <- options()
     libPaths <- .libPaths()
     on.exit({
-      .removeS3Methods()
-      .resetInternals()
-      if (! "pkgloading" %in% sideEffects || identical(sideEffects, FALSE))
-        .restoreNamespaces(loadedPkgs)
       if (! "options" %in% sideEffects || identical(sideEffects, FALSE))
         .restoreOptions(opts)
       if (! "libpaths" %in% sideEffects || identical(sideEffects, FALSE))
         .libPaths(libPaths)
-      if (quiet)
-        suppressWarnings(sink(NULL))
-    })
-  } else { # no side effects, but we still need on.exit
-    on.exit({
-      .removeS3Methods()
-      .resetInternals()
-      if (quiet)
-        suppressWarnings(sink(NULL))
     })
   }
-
+  
+  on.exit({
+    .removeS3Methods()
+    .resetRunTimeInternals()
+    if (quiet)
+      suppressWarnings(sink(NULL))
+    if (!identical(envir, .GlobalEnv))
+      rm(envir)
+  }, add = TRUE)
+  
   .initRunEnvironment(envir = envir, dataset = dataset, perform = perform)
 
-  config <- .getJSON(name, "title", "dataset", "results", "state", "init") # use '=>' for nested objects
-  title <- jsonlite::fromJSON(config[["title"]])
-  options <- jsonlite::toJSON(options)
-  requiresInit <- jsonlite::fromJSON(config[["init"]])
+  if (! tolower(name) %in% tolower(names(envir)))
+    stop("Could not find the R analysis function ", name, ".\n",
+         "If you're trying to run the R script of an analysis from a module you have to set the module directory with setPkgOption(\"module.dir\", dir/to/module)")
+  
+  name <- .getCasedNameMatchWithFunction(name, envir)
+  
   possibleArgs <- list(
     name = name,
-    title = title,
-    requiresInit = ifelse(is.null(requiresInit) || requiresInit, TRUE, FALSE),
-    options.as.json.string = options, # backwards compatibility
-    options = options,
-    dataKey = config[["dataset"]],
-    resultsMeta = config[["results"]],
-    stateKey = config[["state"]],
+    title = "",
+    requiresInit = TRUE,
+    options = jsonlite::toJSON(options),
+    dataKey = "null",
+    resultsMeta = "null",
+    stateKey = "null",
     perform = perform
   )
-  runArgs <- formals(envir$run)
+
+  usesJaspResults <- .usesJaspResults(name)
+  if (usesJaspResults) {
+    runFun <- "runJaspResults"
+    
+    jaspResults::initJaspResults()
+    
+    # this list is a stand in for the 'jaspResultsModule' inside runJaspResults()
+    envir[["jaspResultsModule"]] <- list(
+      create_cpp_jaspResults   = function(name, state) get("jaspResults", envir = .GlobalEnv)$.__enclos_env__$private$jaspObject
+    )
+
+  } else {
+    runFun <- "run"
+  }
+  runArgs <- formals(envir[[runFun]])
   argNames <- intersect(names(possibleArgs), names(runArgs))
   args <- possibleArgs[argNames]
 
-  if (quiet)
+  if (makeTests)
+    set.seed(1)
+  
+  if (quiet) {
     sink(tempfile())
-
-  results <- do.call(envir$run, args, envir=envir)
-
-  if (quiet)
+    results <- suppressWarnings(do.call(envir[[runFun]], args, envir=envir))
     sink(NULL)
+  } else {
+    results <- do.call(envir[[runFun]], args, envir=envir)
+  }
+
+  if (usesJaspResults) {
+    results <- jaspResults$.__enclos_env__$private$getResults()
+    .transferPlotsFromjaspResults()
+  }
+  
+  if (.insideTestEnvironment())
+    .setInternal("lastResults", results)
 
   if (view)
     view(results)
@@ -298,6 +299,13 @@ run <- function(name, dataset, options, perform = "run", view = TRUE, quiet = FA
     results <- jsonlite::fromJSON(results, simplifyVector=FALSE)
 
   results[["state"]] <- .getInternal("state")
+
+  figures <- results$state$figures
+  if (length(figures) > 1 && !is.null(names(figures)))
+    results$state$figures <- figures[order(as.numeric(tools::file_path_sans_ext(names(figures))))]
+  
+  if (makeTests)
+    .makeUnitTestsFromResults(results, name, dataset, options, usesJaspResults)
 
   return(invisible(results))
 }
