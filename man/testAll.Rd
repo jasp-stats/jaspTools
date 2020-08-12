@@ -2,11 +2,11 @@
 % Please edit documentation in R/test.R
 \name{testAll}
 \alias{testAll}
-\title{Test all JASP analyses.}
+\title{Test all analyses in the currently monitored modules.}
 \usage{
 testAll()
 }
 \description{
-Tests all R analyses found under JASP-Tests. Useful to perform before making
+Tests all R analyses found under modules/tests/testthat. Useful to perform before making
 a pull request, to prevent failing builds.
 }

@@ -4,10 +4,10 @@
 \alias{manageTestPlots}
 \title{Visually inspect new/failed test plots.}
 \usage{
-manageTestPlots(analysis = NULL)
+manageTestPlots(name = NULL)
 }
 \arguments{
-\item{analysis}{Optional string name of the analysis whose plots should be
+\item{name}{Optional string name of the analysis whose plots should be
 tested.}
 }
 \value{
@@ -23,6 +23,6 @@ cases.
 }
 \examples{
 
-# jasptools::manageTestPlots("Anova")
+# manageTestPlots("Anova")
 
 }

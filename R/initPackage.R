@@ -1,107 +1,174 @@
-develop <- function(path, makePersistent = TRUE) {
-  # path: ~/Github/jasp-desktop
-  # file: ~/R/library/jasptools/
-  
-  path <- normalizePath(path)
-  if (!isJaspDesktopDir(path))
-    stop(paste("incorrect path.\n\nPath should point to the github location of jasp-desktop.",
-               "JASP-Common and JASP-Desktop should be subdirectories."))
-  
-  if (makePersistent) {
-    jasptoolsDir <- path.package("jasptools", quiet = FALSE)
-    file <- file.path(jasptoolsDir, "jasp-desktop_Location.txt")
-    if (file.exists(file))
-      message(sprintf("Overwriting existing path at %s.", file))
-    else message(sprintf("Creating %s", file))
-    
-    fileConn <- file(file)
-    writeLines(path, fileConn)
-    close(fileConn)
+#' Initialize the jaspTools package in an interactive manner.
+#'
+#' This is a wrapper around \code{initJaspTools} that asks a few questions to determine the desired setup procedure.
+#' Ensures that analyses can be run, tested and debugged locally by fetching all of the basic dependencies.
+#' This includes fetching the data library and html files, installing jaspBase and jaspGraphs and adding the required-files.
+#'
+#' @export initJaspToolsInteractive
+initJaspToolsInteractive <- function() {
+  if (interactive()) {
+
+    if (isSetupComplete()) {
+      continue <- menu(c("Yes", "No"), title = "You have previously completed the setup procedure, are you sure you want to do it again?")
+      if (continue == 1)
+        removeCompletedSetupFiles()
+      else
+        return(message("Setup aborted."))
+    }
+
+    message("Three questions will follow to correctly fetch dependencies required by jaspTools.\n")
+
+    wantsInstallJaspPkgs  <- menu(c("Yes", "No"), title = "1. Would you like jaspTools to install the JASP modules, JASPgraphs and JASP located at github.com/jasp-stats?")
+    if (wantsInstallJaspPkgs == 0) return(message("Setup aborted."))
+
+    hasJaspRequiredPkgs <- menu(c("Yes", "No"), title = "2. Do you have a clone of jasp-stats/jasp-required-files on your system?")
+    if (hasJaspRequiredPkgs == 0) return(message("Setup aborted."))
+
+    pathJaspRequiredPkgs <- NULL
+    if (hasJaspRequiredPkgs == 1)
+      pathJaspRequiredPkgs <- validateJaspResourceDir(readline(prompt = "Please provide path/to/jasp-required-files: \n"), isJaspRequiredFilesDir, "jasp-required-files")
+
+    hasJaspdesktop <- menu(c("Yes", "No"), title = "3. Do you have a clone of jasp-stats/jasp-desktop on your system?")
+    if (hasJaspdesktop == 0) return(message("Setup aborted."))
+
+    pathJaspDesktop <- NULL
+    if (hasJaspdesktop == 1)
+      pathJaspDesktop <- validateJaspResourceDir(readline(prompt = "Please provide path/to/jasp-desktop: \n"), isJaspDesktopDir, "jasp-desktop")
+
+    installJaspPkgs <- wantsInstallJaspPkgs == 1
+
+    initJaspTools(installJaspPkgs, pathJaspRequiredPkgs, pathJaspDesktop)
+
+    showInitArgsForFutureReference(installJaspPkgs, pathJaspRequiredPkgs, pathJaspDesktop)
   }
-  .jasptoolsInit(path)
-  
-  return(invisible(TRUE))
 }
 
-undevelop <- function() {
-  message("Not working yet!")
+#' Initialize the jaspTools package.
+#'
+#' Ensures that analyses can be run, tested and debugged locally by fetching all of the basic dependencies.
+#' This includes fetching the data library and html files, installing jaspBase and jaspGraphs and adding the required-files.
+#'
+#'
+#' @param installJaspPkgs Boolean. Should jaspTools install all the JASP modules, jaspBase and jaspGraphs?
+#' @param pathJaspRequiredPkgs Character path to the root of jasp-required-files if present on the system.
+#' @param pathJaspDesktop Character path to the root of jasp-desktop if present on the system.
+#' @param quiet Boolean. Should the installation produce output?
+#'
+#' @export initJaspTools
+initJaspTools <- function(installJaspPkgs = TRUE, pathJaspRequiredPkgs = NULL, pathJaspDesktop = NULL, quiet = FALSE) {
+  pathJaspRequiredPkgs <- validateJaspResourceDir(pathJaspRequiredPkgs, isJaspRequiredFilesDir, "jasp-required-files")
+  pathJaspDesktop <- validateJaspResourceDir(pathJaspDesktop, isJaspDesktopDir, "jasp-desktop")
+
+  message("Fetching resources...\n")
+
+  depsOK <- fetchJaspDesktopDependencies(pathJaspDesktop, quiet = quiet)
+
+  if (is.character(pathJaspRequiredPkgs))
+    setLocationJaspRequiredFiles(pathJaspRequiredPkgs)
+  else if (is.null(pathJaspRequiredPkgs) && isJaspRequiredFilesLocationSet())
+    removeJaspRequiredFilesLocationFile()
+
+  if (isTRUE(installJaspPkgs))
+    installAllJaspPkgs()
+
+  if (!depsOK) {
+    message("jaspTools setup could not be completed. Reason: could not fetch the jasp-stats/jasp-desktop repo and as a result the required dependencies are not installed.\n
+            If this problem persists clone jasp-stats/jasp-desktop manually and provide the path to `initJaspTools()` in `pathJaspDesktop`.")
+  } else {
+    setSetupComplete()
+    setupJaspToolsInternals(TRUE)
+  }
+}
+
+showInitArgsForFutureReference <- function(installJaspPkgs, pathJaspRequiredPkgs, pathJaspDesktop) {
+  if (is.character(pathJaspRequiredPkgs))
+    showPathPkgs <- paste0("\"", pathJaspRequiredPkgs, "\"")
+  else
+    showPathPkgs <- "NULL"
+
+  if (is.character(pathJaspDesktop))
+    showPathJasp <- paste0("\"", pathJaspDesktop, "\"")
+  else
+    showPathJasp <- "NULL"
+
+  message("\nIn the future you can skip these questions by calling `initJaspTools(", installJaspPkgs, ", ", showPathPkgs, ", ", showPathJasp, ")`")
+}
+
+validateJaspResourceDir <- function(path, validationFn, title) {
+  if (!is.null(path)) {
+    if (is.character(path))
+      path <- normalizePath(gsub("[\"']", "", path))
+
+    if (!is.character(path) || !do.call(validationFn, list(path = path)))
+      stop("Invalid path provided for ", title, "; could not find the correct resources within: ", path)
+  }
+  return(path)
+}
+
+isJaspRequiredFilesDir <- function(path) {
+  dirs <- dir(path)
+  if (getOS() == "windows")
+    return("R" %in% dirs && dir.exists(file.path(path, "R", "library")))
+  else if (getOS() == "osx")
+    return("Frameworks" %in% dirs && dir.exists(file.path(path, "Frameworks", "R.framework")))
+  else if (getOS() == "linux")
+    stop("jasp-required-files are not used on Linux")
 }
 
 isJaspDesktopDir <- function(path) {
-
-  # check if path is the location of github/jasp-desktop
   dirs <- dir(path, pattern = "JASP-*")
   return(all(c("JASP-Common", "JASP-Desktop", "JASP-Engine", "JASP-R-Interface") %in% dirs))
 }
 
-.getDirOSXFramework <- function(pathJaspBuildEnvir) {
-  basePathPkgs <- file.path(pathJaspBuildEnvir, "Frameworks", "R.framework", "Versions")
+findRequiredPkgs <- function(pathToRequiredFiles) {
+  result <- ""
+  if (isJaspRequiredFilesDir(pathToRequiredFiles)) {
+    if (getOS() == "windows")
+      result <- getPkgDirWindows(pathToRequiredFiles)
+    else if (getOS() == "osx")
+      result <- getPkgDirOSX(pathToRequiredFiles)
+  }
+  return(result)
+}
+
+getPkgDirWindows <- function(pathToRequiredFiles) {
+  potentialPkgDir <- file.path(pathToRequiredFiles, "R", "library")
+
+  if (dirHasBundledPackages(potentialPkgDir, hasPkg="Rcpp"))
+    return(potentialPkgDir)
+
+  return("")
+}
+
+getPkgDirOSX <- function(pathToRequiredFiles) {
+  basePathPkgs <- file.path(pathToRequiredFiles, "Frameworks", "R.framework", "Versions")
   rVersions <- list.files(basePathPkgs)
   if (identical(rVersions, character(0)))
-    return(NULL)
+    return("")
 
   rVersions <- suppressWarnings(as.numeric(rVersions))
   r <- sort(rVersions, decreasing = TRUE)[1]
   potentialPkgDir <- file.path(basePathPkgs, r, "Resources", "library")
-  
-  if (.dirHasBundledPackages(potentialPkgDir, hasPkg="Rcpp"))
+
+  if (dirHasBundledPackages(potentialPkgDir, hasPkg="Rcpp"))
     return(potentialPkgDir)
-    
-  return(NULL)
+
+  return("")
 }
 
-.getDirPackagesInBuildEnvir <- function(pathJaspBuildEnvir, os) {
-  potentialPkgDirs <- .getPotentialPackageDirs(pathJaspBuildEnvir)
-  
-  if (os == "osx")
-    hasPkg <- "JASPgraphs"
-  else
-    hasPkg <- "Rcpp"
-    
-  for (potentialPkgDir in potentialPkgDirs) {
-    if (.dirHasBundledPackages(potentialPkgDir, hasPkg))
-      return(potentialPkgDir)
-  }
-  
-  return(NULL)
-}
-
-.dirHasBundledPackages <- function(dir, hasPkg) {
+dirHasBundledPackages <- function(dir, hasPkg) {
   if (!dir.exists(dir))
     return(FALSE)
-    
+
   pkgs <- list.files(dir)
   if (!identical(pkgs, character(0)) && hasPkg %in% pkgs) {
     return(TRUE)
   }
-  
+
   return(FALSE)
 }
 
-.getPotentialPackageDirs <- function(pathJaspBuildEnvir) {
-  dirs <- list.dirs(pathJaspBuildEnvir, recursive=FALSE)
-  if (identical(dirs, character(0)))
-    return(NULL)
-  
-  # order by date; we want to use the library that was most recently updated if we have a choice
-  dirs <- dirs[order(file.mtime(dirs), decreasing=TRUE)]
-  
-  # put folders that contain references to 32 bit last on 64 bit machines
-  if (.Machine$sizeof.pointer == 8) { # it's a 64 bit machine
-    dir32 <- grepl("(32)|(x86)", dirs)
-    if (any(dir32)) {
-      indices <- which(dir32)
-      for (index in indices)
-        dirs <- c(dirs[-index], dirs[index])
-    }
-  }
-  
-  potentialPackageDirs <- file.path(dirs, "R", "library")
-  
-  return(potentialPackageDirs)
-}
-
-.getOS <- function() {
+getOS <- function() {
   os <- NULL
   if (!is.null(Sys.info())) {
     os <- Sys.info()["sysname"]
@@ -116,116 +183,142 @@ isJaspDesktopDir <- function(path) {
   return(tolower(os))
 }
 
-.jasptoolsInit <- function(jaspPath) {
+setupJaspToolsInternals <- function(ready) {
+  .internal <- list2env(list(
+    dataset        = NULL,
+    state          = NULL,
+    modulesMd5Sums = NULL
+  ))
 
-  if (is.null(jaspPath)) {
-    .internal <- list2env(list(
-      initPaths = NULL,
-      envir     = .GlobalEnv,
-      dataset   = NULL,
-      state     = NULL
+  .pkgOptions <- list2env(list())
+
+  if (ready) {
+    .pkgOptions <- list2env(list(
+      module.dirs = NULL,
+      reinstall.modules     = TRUE,
+      html.dir              = getJavascriptLocation(),
+      data.dir              = getDatasetsLocation(),
+      pkgs.dir              = readJaspRequiredFilesLocation(),
+      locale                = "en_US.UTF-8",
+      .ppi                  = 96
     ))
-  } else {
-    # temporarily change wd
-    oldwd <- getwd()
-    setwd(jaspPath)
-    on.exit(setwd(oldwd), add = TRUE)
-
-    # get the path to JASP R packages so users do not need to install any additional packages
-    # retrieving os bit: http://conjugateprior.org/2015/06/identifying-the-os-from-r/
-    pathToPackages <- NULL
-
-    os <- .getOS()
-    if (!is.null(os)) {
-      if (os == "linux") {
-        message("Identified OS as Linux. Assuming R packages required for JASP were installed manually.")
-      } else {
-        pathToPackages <- .getDirPackagesInBuildEnvir(file.path(".."), os)
-        if (os == "osx") {
-          pathToFramework <- .getDirOSXFramework(file.path(".."))
-          pathToPackages <- c(pathToFramework, pathToPackages)
-        }
-        
-        if (!is.null(pathToPackages))
-          message("Successfully found the bundled R packages.")
-      }
-    }
-
-    if (is.null(pathToPackages) && (is.null(os) || os != "linux"))
-      message("Unable to find the bundled R packages.
-      Required packages will have to be installed manually, or 'pkgs.dir' must be set.")
-    
-    # set locations of all required resources (json, analyses, html, packages)
-    relativePaths <- list(
-      common.r.dir = file.path("JASP-Engine", "JASP", "R"),
-      html.dir = file.path("JASP-Desktop", "html"),
-      common.qml.dir = file.path("Resources"),
-      data.dir = file.path("Resources", "Data Sets"),
-      tests.dir = file.path("JASP-Tests", "R", "tests", "testthat"),
-      tests.figs.dir = file.path("JASP-Tests", "R", "tests", "figs"),
-      tests.data.dir = file.path("JASP-Tests", "R", "tests", "datasets")
-    )
-
-    if (!is.null(pathToPackages)) {
-      relativePaths[["pkgs.dir"]] <- pathToPackages
-    }
-
-    absolutePaths <- lapply(relativePaths, normalizePath)
-    pathsToResources <- absolutePaths
 
     # create the temp (html) directory for the output
-    pathToTools <- file.path(tempdir(), "jasptools")
+    pathToTools <- file.path(tempdir(), "jaspTools")
     if (!dir.exists(pathToTools)) {
       dir.create(file.path(pathToTools, "html", "plots"), recursive = TRUE)
       dir.create(file.path(pathToTools, "state"))
       message(paste("Note: temp output files may be found at", pathToTools))
     }
 
-    initPaths <- FALSE
-    if (!is.null(pathsToResources))
-      initPaths <- pathsToResources
-
-    .internal <- list2env(list(
-      initPaths = initPaths,
-      envir     = .GlobalEnv,
-      dataset   = NULL,
-      state     = NULL
-    ))
-
   }
 
   # create globals for setup / JASP to find
-  # env <- as.environment("package:jasptools")
-  env <- try(as.environment("package:jasptools"), silent = TRUE)
+  # env <- as.environment("package:jaspTools")
+  env <- try(as.environment("package:jaspTools"), silent = TRUE)
   if (inherits(env, "try-error"))
-    stop("please load jasptools first!")
+    stop("please load jaspTools first!")
   isLocked <- environmentIsLocked(env)
   if (isLocked) {
     try(silent = TRUE, {
+      unlockBinding(".pkgOptions",   env)
       unlockBinding(".internal",     env)
-      unlockBinding("perform",       env)
       unlockBinding(".ppi",          env)
       unlockBinding(".baseCitation", env)
       unlockBinding(".masks",        env)
     })
   }
 
+  assign(".pkgOptions",   .pkgOptions,          envir = env)
   assign(".internal",     .internal,            envir = env)
-  assign("perform",       NULL,                 envir = env)
   assign(".ppi",          NULL,                 envir = env)
   assign(".baseCitation", "x",                  envir = env)
-  assign(".masks",        c("perform", ".ppi"), envir = env)
+  assign(".masks",        ".ppi",               envir = env)
 
   if (isLocked) {
     try(silent = TRUE, {
+      lockBinding(".pkgOptions",   env)
       lockBinding(".internal",     env)
-      lockBinding("perform",       env)
       lockBinding(".ppi",          env)
       lockBinding(".baseCitation", env)
       lockBinding(".masks",        env)
     })
   }
-  
+
   # this is not used in combination with getAnywhere() in the code so it cannot be found
   assign(".automaticColumnEncDecoding", FALSE, envir = .GlobalEnv)
+}
+
+getJaspToolsDir <- function() {
+  require(jaspTools)
+  return(path.package("jaspTools", quiet = FALSE))
+}
+
+getSetupCompleteFileName <- function() {
+  jaspToolsDir <- getJaspToolsDir()
+  file <- file.path(jaspToolsDir, "setup_complete.txt")
+  return(file)
+}
+
+getJaspRequiredFilesLocationFileName <- function() {
+  jaspToolsDir <- getJaspToolsDir()
+  file <- file.path(jaspToolsDir, "jasp-required-files_location.txt")
+  return(file)
+}
+
+isSetupComplete <- function() {
+  return(file.exists(getSetupCompleteFileName()))
+}
+
+isJaspRequiredFilesLocationSet <- function() {
+  return(file.exists(getJaspRequiredFilesLocationFileName()))
+}
+
+readJaspRequiredFilesLocation <- function() {
+  loc <- NULL
+  if (isJaspRequiredFilesLocationSet())
+    loc <- readLines(getJaspRequiredFilesLocationFileName())
+
+  return(loc)
+}
+
+setSetupComplete <- function() {
+  file <- getSetupCompleteFileName()
+  fileConn <- file(file)
+  on.exit(close(fileConn))
+  writeLines("", fileConn)
+
+  message("jaspTools setup complete")
+}
+
+removeCompletedSetupFiles <- function() {
+  removeSetupCompleteFile()
+  removeJaspRequiredFilesLocationFile()
+}
+
+removeSetupCompleteFile <- function() {
+  if (isSetupComplete())
+    file.remove(getSetupCompleteFileName())
+}
+
+removeJaspRequiredFilesLocationFile <- function() {
+  if (isJaspRequiredFilesLocationSet())
+    file.remove(getJaspRequiredFilesLocationFileName())
+}
+
+setLocationJaspRequiredFiles <- function(pathToRequiredFiles) {
+  if (!dir.exists(pathToRequiredFiles))
+    stop("jasp-required-files folder does not exist at ", pathToRequiredFiles)
+
+  path <- normalizePath(pathToRequiredFiles)
+  libPath <- findRequiredPkgs(path)
+  if (libPath == "")
+    stop("Could not locate the R packages within ", pathToRequiredFiles)
+
+  file <- getJaspRequiredFilesLocationFileName()
+  fileConn <- file(file)
+  on.exit(close(fileConn))
+  writeLines(libPath, fileConn)
+
+  message(sprintf("Created %s", file))
 }

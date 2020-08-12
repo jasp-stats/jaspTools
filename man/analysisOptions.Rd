@@ -7,49 +7,54 @@
 analysisOptions(source)
 }
 \arguments{
-\item{source}{String containing valid json, or the name of a JASP analysis.
-If you provide json, be sure to use single quotes.}
+\item{source}{There are two types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools will attempt to read the .qml file for that analysis and create a set of default options.
+The preferable options is 2) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
+The logs can be found by clicking 'Show logs" in the "Logging options". Click on the file "*Engine*.log" that has "Engine::receiveAnalysisMessage:" (usually Engine 1), copy the content between the { and }.
+Be sure to use single quotes (') when supplying this string to JASP.}
 }
 \value{
-A list containing options you can supply to \code{jasptools::run}.
-If \code{source} is an analysis name then all default options have been
+A list containing options you can supply to \code{runAnalysis}.
+If \code{source} is the name of the R function of the analysis then all default options have been
 filled in and booleans set to FALSE. The options that have no default are
-left empty. If \code{hint} is set to TRUE then hints are set for these empty
-options; they are placed between \%'s.
+left empty.
 }
 \description{
-\code{analysisOptions} provides an easy way to create analysis options. You
-may use the json from the Qt terminal or from the json files found in
-resources. The former you have to provide yourself, for the latter you only
-have to specify the name of the analysis.
+\code{analysisOptions} provides an easy way to create analysis options that can be supplied to \code{runAnalysis}.
 }
 \examples{
 
-options <- jasptools::analysisOptions("BinomialTest")
+options <- analysisOptions("BinomialTest")
 options[["variables"]] <- "contBinom"
 
 # Above and below are identical (below is taken from the Qt terminal)
 
-options <- jasptools::analysisOptions('{
-"id" : 0,
+options <- analysisOptions('{
+"dynamicModuleCall" : "",
+"id" : 1,
+"jaspResults" : true,
 "name" : "BinomialTest",
 "options" : {
-  "VovkSellkeMPR" : false,
-  "confidenceInterval" : false,
-  "confidenceIntervalInterval" : 0.950,
-  "descriptivesPlots" : false,
-  "descriptivesPlotsConfidenceInterval" : 0.950,
-  "hypothesis" : "notEqualToTestValue",
-  "plotHeight" : 300,
-  "plotWidth" : 160,
-  "testValue" : 0.50,
-  "variables" : [ "contBinom" ]
+ ".meta" : {
+   "variables" : {
+     "containsColumn" : true
+   }
+ },
+ "VovkSellkeMPR" : false,
+ "confidenceInterval" : false,
+ "confidenceIntervalInterval" : 0.950,
+ "descriptivesPlots" : false,
+ "descriptivesPlotsConfidenceInterval" : 0.950,
+ "hypothesis" : "notEqualToTestValue",
+ "plotHeight" : 320,
+ "plotWidth" : 480,
+ "testValue" : "0.5",
+ "variables" : [ "contBinom" ]
 },
 "perform" : "run",
 "revision" : 0,
-"settings" : {
-  "ppi" : 192
-}
+"rfile" : "",
+"title" : "Binomial Test",
+"typeRequest" : "analysis"
 }')
 
 }

@@ -23,9 +23,9 @@ the test file.
 }
 \examples{
 
-options <- jasptools::analysisOptions("BinomialTest")
+options <- analysisOptions("BinomialTest")
 options[["variables"]] <- "contBinom"
-results <- jasptools::run("BinomialTest", "debug", options, view=FALSE)
-jasptools::makeTestTable(results[["results"]][["binomial"]][["data"]])
+results <- runAnalysis("BinomialTest", "debug", options, view=FALSE)
+makeTestTable(results[["results"]][["binomial"]][["data"]])
 
 }

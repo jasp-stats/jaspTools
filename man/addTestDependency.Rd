@@ -13,7 +13,7 @@ addTestDependency(dep)
 This function only has a side effect: updating figs/jasp-deps.txt
 }
 \description{
-Testing might fail if dependencies are not the same across platforms (e.g., different versions of JASPgraphs). 
+Testing might fail if dependencies are not the same across platforms (e.g., different versions of JASPgraphs).
 If this is the case then those dependencies should be monitored and errors given when they do not match.
 This function allows you to define "unit test breaking" dependencies for plots
 }

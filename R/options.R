@@ -1,45 +1,51 @@
 #' Obtain options to run JASP analyses with.
 #'
-#' \code{analysisOptions} provides an easy way to create analysis options. You
-#' may use the json from the Qt terminal or from the json files found in
-#' resources. The former you have to provide yourself, for the latter you only
-#' have to specify the name of the analysis.
+#' \code{analysisOptions} provides an easy way to create analysis options that can be supplied to \code{runAnalysis}.
 #'
 #'
-#' @param source String containing valid json, or the name of a JASP analysis.
-#' If you provide json, be sure to use single quotes.
-#' @return A list containing options you can supply to \code{jasptools::run}.
-#' If \code{source} is an analysis name then all default options have been
+#' @param source There are two types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools will attempt to read the .qml file for that analysis and create a set of default options.
+#' The preferable options is 2) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
+#' The logs can be found by clicking 'Show logs" in the "Logging options". Click on the file "*Engine*.log" that has "Engine::receiveAnalysisMessage:" (usually Engine 1), copy the content between the { and }.
+#' Be sure to use single quotes (') when supplying this string to JASP.
+#'
+#' @return A list containing options you can supply to \code{runAnalysis}.
+#' If \code{source} is the name of the R function of the analysis then all default options have been
 #' filled in and booleans set to FALSE. The options that have no default are
-#' left empty. If \code{hint} is set to TRUE then hints are set for these empty
-#' options; they are placed between \%'s.
+#' left empty.
 #' @examples
 #'
-#' options <- jasptools::analysisOptions("BinomialTest")
+#' options <- analysisOptions("BinomialTest")
 #' options[["variables"]] <- "contBinom"
 #'
 #' # Above and below are identical (below is taken from the Qt terminal)
 #'
-#' options <- jasptools::analysisOptions('{
-#' "id" : 0,
-#' "name" : "BinomialTest",
-#' "options" : {
-#'   "VovkSellkeMPR" : false,
-#'   "confidenceInterval" : false,
-#'   "confidenceIntervalInterval" : 0.950,
-#'   "descriptivesPlots" : false,
-#'   "descriptivesPlotsConfidenceInterval" : 0.950,
-#'   "hypothesis" : "notEqualToTestValue",
-#'   "plotHeight" : 300,
-#'   "plotWidth" : 160,
-#'   "testValue" : 0.50,
-#'   "variables" : [ "contBinom" ]
-#' },
-#' "perform" : "run",
-#' "revision" : 0,
-#' "settings" : {
-#'   "ppi" : 192
-#' }
+#' options <- analysisOptions('{
+#'"dynamicModuleCall" : "",
+#'"id" : 1,
+#'"jaspResults" : true,
+#'"name" : "BinomialTest",
+#'"options" : {
+#'  ".meta" : {
+#'    "variables" : {
+#'      "containsColumn" : true
+#'    }
+#'  },
+#'  "VovkSellkeMPR" : false,
+#'  "confidenceInterval" : false,
+#'  "confidenceIntervalInterval" : 0.950,
+#'  "descriptivesPlots" : false,
+#'  "descriptivesPlotsConfidenceInterval" : 0.950,
+#'  "hypothesis" : "notEqualToTestValue",
+#'  "plotHeight" : 320,
+#'  "plotWidth" : 480,
+#'  "testValue" : "0.5",
+#'  "variables" : [ "contBinom" ]
+#'},
+#'"perform" : "run",
+#'"revision" : 0,
+#'"rfile" : "",
+#'"title" : "Binomial Test",
+#'"typeRequest" : "analysis"
 #' }')
 #'
 #' @export analysisOptions
@@ -53,75 +59,54 @@ analysisOptions <- function(source) {
   source <- trimws(source)
   if (grepl("^\\{.*\\}$", source)) {
     analysisName <- stringr::str_match(source, '\\"name\\" : \\"(.*?)\\"')[2L]
-    options <- .analysisOptionsFromJSONString(source)
+    options <- analysisOptionsFromJSONString(source)
   } else if (grepl("[{}\":]", source)) {
       stop("Your json is invalid, please copy the entire message
            including the outer braces { } that was send to R in the Qt terminal.
            Remember to use single quotes around the message.", call.=FALSE)
   } else {
     analysisName <- source
-    options <- .analysisOptionsFromQMLFile(source)
+    options <- analysisOptionsFromQMLFile(source)
   }
   attr(options, "analysisName") <- analysisName
   return(options)
 }
 
-.analysisOptionsFromQMLFile <- function(analysis) {
-  file <- .getQMLFile(analysis)
-  if (is.null(file))
-    stop("Could not find the options file for analysis ", analysis, ".\n",
-         "If you're trying to obtain options for an analysis from a module you have to set the module directory with setPkgOption(\"module.dir\", dir/to/module)")
-  options <- .readQML(file)
+analysisOptionsFromQMLFile <- function(analysis) {
+  file <- getQMLFile(analysis)
+  options <- readQML(file)
   return(options)
 }
 
-.getQMLFile <- function(analysis) {
-  if (.isModule()) {
-    dir <- .getModuleQmlDir()
-    fileName <- tolower(.getModuleQmlFile(analysis))
-  } else {
-    dir <- .getPkgOption("common.qml.dir")
-    fileName <- tolower(paste0(analysis, ".qml"))
-  }
-  
-  pathsToFiles <- list.files(dir, pattern = ".qml$", recursive=TRUE, ignore.case=TRUE)
-  fileNames <- tolower(basename(pathsToFiles))
-  if (any(fileNames == fileName)) {
-    relativePath <- pathsToFiles[which(fileNames == fileName)]
-    absolutePath <- file.path(dir, relativePath)
-    return(absolutePath)
-  }
-}
+getQMLFile <- function(name) {
+  modulePath <- getModulePathFromRFunction(name)
+  if (is.null(modulePath))
+    stop("Could not locate the module location for ", name)
 
-.getModuleQmlDir <- function() {
-  qmldir <- file.path(.getPkgOption("module.dir"), "inst", "qml")
-  if (!dir.exists(qmldir))
-    stop("Could not locate a qml folder in `", .getPkgOption("module.dir"), "/inst/`")
-  
-  return(qmldir)
-}
+  possibleQmlFile <- file.path(modulePath, "inst", "qml", paste0(name, ".qml")) # it's optional to specify the qml file in description.qml, you can also just name it RFunc.qml
+  if (file.exists(possibleQmlFile))
+    return(possibleQmlFile)
 
+  descrFile <- file.path(modulePath, "inst", "description.qml")
+  if (!file.exists(descrFile))
+    stop("Could not locate description.qml in ", modulePath)
 
-.getModuleQmlFile <- function(analysis) {
-  analysis <- tolower(analysis)
-  descr <- .getModuleDescription()
-  funcToQml <- list()
-  for (i in seq_along(descr$menu)) {
-    analysisMeta <- descr$menu[[i]]
+  fileSize <- file.info(descrFile)$size
+  fileContents <- readChar(descrFile, nchars = fileSize)
+  fileContents <- gsub("[\"']", "", fileContents)
+  rFuncLocExpr <- paste0("\\{[^\\{\\}]*func:\\s*", name, "[^\\{\\}]*\\}")
+  if (!grepl(rFuncLocExpr, fileContents))
+    stop("Could not locate qml file for R function ", name, " in inst/qml folder and did not find the R function in inst/description.qml to look for an alternative name for the qml file")
 
-    # lookup default qml file, same as in c++, but with "???" replaced for a null check
-    if (!("qml" %in% names(analysisMeta)) && "function" %in% names(analysisMeta) && !is.null(analysisMeta[["function"]]))
-      analysisMeta[["qml"]] <- paste0(analysisMeta[["function"]], ".qml")
+  rLocMatch <- stringr::str_match(fileContents, rFuncLocExpr)[1]
+  qmlLocExpr <- "[a-zA-Z0-9_]+\\.qml"
+  if (!grepl(qmlLocExpr, rLocMatch))
+    stop("Could not locate qml file for R function ", name, " in inst/qml folder and did not find a qml entry in inst/description.qml that describes an alternative for the qml filename")
 
-    if (all(c("function", "qml") %in% names(analysisMeta)))
-      funcToQml[[tolower(analysisMeta[["function"]])]] <- analysisMeta[["qml"]]
-  }
-  
-  if (length(funcToQml) == 0)
-    stop("Could not find any qml or r function definitions in your description.json")
-  
-  if (!analysis %in% names(funcToQml))
-    stop("Could not find the options for ", analysis, ": it is not specified in description.json")
-  
-  return(funcToQml[[analysis]])
+  qmlFileName <- stringr::str_match(rLocMatch, qmlLocExpr)
+  qmlFilePath <- file.path(modulePath, "inst", "qml", qmlFileName)
+  if (!file.exists(qmlFilePath))
+    stop("Found a qml filename for the R function ", name, " but this qml file does not appear to exist in inst/qml/")
+
+  return(qmlFilePath)
 }
