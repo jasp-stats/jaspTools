@@ -226,7 +226,7 @@ matchCaseTestFileAnalysisName <- function(name, testsDir) {
 
 #' Allows users to add package dependencies to unit testing, specifically to plot testing
 #'
-#' Testing might fail if dependencies are not the same across platforms (e.g., different versions of JASPgraphs).
+#' Testing might fail if dependencies are not the same across platforms (e.g., different versions of jaspGraphs).
 #' If this is the case then those dependencies should be monitored and errors given when they do not match.
 #' This function allows you to define "unit test breaking" dependencies for plots
 #'
@@ -235,7 +235,7 @@ matchCaseTestFileAnalysisName <- function(name, testsDir) {
 #' @return This function only has a side effect: updating figs/jasp-deps.txt
 #' @examples
 #'
-#' addTestDependency("JASPgraphs")
+#' addTestDependency("jaspGraphs")
 #'
 #' @export addTestDependency
 addTestDependency <- function(dep) {
@@ -423,7 +423,7 @@ getDepsFromFile <- function(modulePath) {
   pathToDeps <- getDepsFileLocation(modulePath)
   if (!file.exists(pathToDeps)) {
     message("File with JASP dependencies does not exist yet. Creating ", pathToDeps)
-    writeDepsToFile(list(JASPgraphs = packageVersion("JASPgraphs")), modulePath, add = FALSE)
+    writeDepsToFile(list(jaspGraphs = packageVersion("jaspGraphs")), modulePath, add = FALSE)
   }
 
   depLines <- readLines(pathToDeps, warn=FALSE)

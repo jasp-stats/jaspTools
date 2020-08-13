@@ -18,7 +18,7 @@ initJaspToolsInteractive <- function() {
 
     message("Three questions will follow to correctly fetch dependencies required by jaspTools.\n")
 
-    wantsInstallJaspPkgs  <- menu(c("Yes", "No"), title = "1. Would you like jaspTools to install the JASP modules, JASPgraphs and JASP located at github.com/jasp-stats?")
+    wantsInstallJaspPkgs  <- menu(c("Yes", "No"), title = "1. Would you like jaspTools to install the JASP modules, jaspGraphs and jaspBase located at github.com/jasp-stats?")
     if (wantsInstallJaspPkgs == 0) return(message("Setup aborted."))
 
     hasJaspRequiredPkgs <- menu(c("Yes", "No"), title = "2. Do you have a clone of jasp-stats/jasp-required-files on your system?")
