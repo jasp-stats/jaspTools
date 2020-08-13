@@ -20,7 +20,7 @@
     columns <- colnames(dataset)
     columns <- columns[columns != ""]
   }
-  dataset <- JASP:::.vdf(dataset, columns, columns.as.numeric, columns.as.ordinal,
+  dataset <- jaspBase:::.vdf(dataset, columns, columns.as.numeric, columns.as.ordinal,
                         columns.as.factor, all.columns, exclude.na.listwise = c())
 
   return(dataset)

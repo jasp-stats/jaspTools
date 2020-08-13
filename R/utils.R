@@ -19,7 +19,7 @@ fetchRunArgs <- function(name, options) {
     stateKey = "null"
   )
 
-  runArgs <- formals(JASP::runJaspResults)
+  runArgs <- formals(jaspBase::runJaspResults)
   argNames <- intersect(names(possibleArgs), names(runArgs))
   return(possibleArgs[argNames])
 }
@@ -112,8 +112,8 @@ rFunctionExistsInModule <- function(name, modulePath) {
 
 
 reinstallChangedModules <- function() {
-  if (!"JASP" %in% installed.packages())
-      warning("Cannot find the basic module `JASP`; please run `installJaspPkg(\"jasp-r-pkg\")`")
+  if (!"jaspBase" %in% installed.packages())
+    stop("Cannot find the basic module `jaspBase`; please run `installJaspPkg(\"jaspBase\")`")
 
   modules   <- getModulePaths()
   reinstall <- getPkgOption("reinstall.modules")
@@ -138,7 +138,7 @@ reinstallChangedModules <- function() {
 
 initializeCoreJaspPackages <- function() {
   require(jaspResults)
-  require(JASP)
+  require(jaspBase)
   jaspResults::initJaspResults()
 
   assign("jaspResultsModule", list(create_cpp_jaspResults = function(name, state) get("jaspResults", envir = .GlobalEnv)$.__enclos_env__$private$jaspObject), envir = .GlobalEnv)
