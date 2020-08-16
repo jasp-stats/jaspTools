@@ -12,7 +12,7 @@ runTestsTravis <- function(modulePath) {
   if (Sys.getenv("REQUIRED_PKGS") == "")
     stop("Could not find environment variable `REQUIRED_PKGS`")
 
-  initJaspTools(TRUE, normalizePath(Sys.getenv("REQUIRED_PKGS")))
+  .setupJaspTools(NULL, normalizePath(Sys.getenv("REQUIRED_PKGS")), TRUE)
 
   setPkgOption("module.dirs", modulePath)
 
@@ -56,53 +56,9 @@ testAnalysis <- function(name) {
   printTipsNewPlots(hasNewPlots(results), name)
 }
 
-
-adjustTestthatForPlotTesting <- function() {
-
-  test_thatStandIn <- function(desc, code) {
-      code <- substitute(code)
-
-      envirPlotTest <- Sys.getenv("JASP_PLOT_TEST")
-      if (envirPlotTest == "true" && !any(grepl("expect_equal_plots", code, fixed=TRUE)))
-          return()
-
-      testthat:::test_code(desc, code, env = parent.frame())
-  }
-
-  Sys.setenv("JASP_PLOT_TEST" = "true")
-  replaceFn("test_that", test_thatStandIn, "testthat")
-}
-
-
-undoPlotTestingChanges <- function(originalFn) {
-  Sys.unsetenv("JASP_PLOT_TEST")
-  replaceFn("test_that", originalFn, "testthat")
-}
-
-
  fixRNGForTesting <- function() {
    suppressWarnings(RNGkind(sample.kind = "Rounding"))
  }
-
- getModulePathsForTesting <- function(name = NULL) {
-   if (!is.null(name))
-     modulePaths <- getModulePathFromRFunction(name)
-   else
-     modulePaths <- getModulePaths()
-
-   modulesWithTests <- NULL
-   for (modulePath in modulePaths) {
-     testDir <- file.path(modulePath, "tests", "testthat")
-     if (dir.exists(testDir) && length(list.files(testDir)) > 0)
-       modulesWithTests <- c(modulesWithTests, modulePath)
-   }
-
-   if (length(modulesWithTests) == 0)
-     stop("None of the module folders specified in `module.dirs` (see `viewPkgOptions()`) have any tests. Note that the tests should be in `moduleDir/tests/testthat` and named `test-analysisName.R`.")
-
-   return(modulesWithTests)
- }
-
 
 #' Test all analyses in the currently monitored modules.
 #'
@@ -149,7 +105,6 @@ testAll <- function() {
   printSuccessFailureModules(testResults)
   printTipsNewPlots(hasNewPlots)
 }
-
 
 #' Visually inspect new/failed test plots.
 #'
@@ -205,25 +160,6 @@ manageTestPlots <- function(name = NULL) {
   }
 }
 
-matchCaseTestFileAnalysisName <- function(name, testsDir) {
-  if (!is.null(name) && length(testsDir) ==  1 && is.character(testsDir)) {
-    testFiles <- list.files(testsDir)
-    if (length(testFiles) == 0)
-      stop("No files found to test.")
-
-    analysesToTest <- sub("^test-?", "", testFiles)
-    analysesToTest <- sub("\\.[rR]$", "", analysesToTest)
-    fileIndex <- which(tolower(basename(analysesToTest)) == tolower(name))
-    if (length(fileIndex) == 0)
-      stop("Could not locate test-", name, ".R, found the following testfiles: ", paste(basename(testFiles), collapse =  ", "))
-
-    name <- analysesToTest[fileIndex]
-  }
-
-  return(name)
-}
-
-
 #' Allows users to add package dependencies to unit testing, specifically to plot testing
 #'
 #' Testing might fail if dependencies are not the same across platforms (e.g., different versions of jaspGraphs).
@@ -252,9 +188,8 @@ addTestDependency <- function(dep) {
   depToWrite <- list()
   depToWrite[[dep]] <- packageVersion(dep)
   writeDepsToFile(depToWrite)
-  print(paste0("Dependency `", dep, "` added to jasp-deps.txt"))
+  message(paste0("Dependency `", dep, "` added to jasp-deps.txt"))
 }
-
 
 #' Aids in the creation of tests for tables.
 #'
@@ -311,7 +246,6 @@ makeTestTable <- function(rows, print=TRUE) {
 
   invisible(result)
 }
-
 
 approxMatch <- function(new, old, tol = 1e-5) {
 
@@ -370,6 +304,23 @@ approxMatch <- function(new, old, tol = 1e-5) {
 
 }
 
+matchCaseTestFileAnalysisName <- function(name, testsDir) {
+  if (!is.null(name) && length(testsDir) ==  1 && is.character(testsDir)) {
+    testFiles <- list.files(testsDir)
+    if (length(testFiles) == 0)
+      stop("No files found to test.")
+
+    analysesToTest <- sub("^test-?", "", testFiles)
+    analysesToTest <- sub("\\.[rR]$", "", analysesToTest)
+    fileIndex <- which(tolower(basename(analysesToTest)) == tolower(name))
+    if (length(fileIndex) == 0)
+      stop("Could not locate test-", name, ".R, found the following testfiles: ", paste(basename(testFiles), collapse =  ", "))
+
+    name <- analysesToTest[fileIndex]
+  }
+
+  return(name)
+}
 
 checkDepVersionMismatches <- function(modulePath) {
   depsInFile <- getDepsFromFile(modulePath)
@@ -394,12 +345,11 @@ checkDepVersionMismatches <- function(modulePath) {
   return(depMismatches)
 }
 
-
 handleVersionMismatches <- function(versionMismatches, name) {
   onlyNewer <- length(versionMismatches[["newer"]]) > 0 && length(versionMismatches[["older"]]) == 0
   if (onlyNewer) {
     if (is.null(name)) {
-      print("The installed packages on your system are newer than the ones used to create the library of test plots. Automatically updated the dependencies file; please make sure there are no plot mismatches in the Shiny app")
+      message("The installed packages on your system are newer than the ones used to create the library of test plots. Automatically updated the dependencies file; please make sure there are no plot mismatches in the Shiny app")
       writeUpdatedDeps(versionMismatches[["newer"]])
     } else {
       stop("The library of test plots was created using older packages; to avoid version mismatches between plots from different analyses please validate ALL plots by running `manageTestPlots()`")
@@ -409,7 +359,6 @@ handleVersionMismatches <- function(versionMismatches, name) {
   }
 }
 
-
 makeOutdatedDepsMsg <- function(oldDeps) {
   msg <- NULL
   for (oldDep in oldDeps)
@@ -417,7 +366,6 @@ makeOutdatedDepsMsg <- function(oldDeps) {
                          "* The ", oldDep[["pkg"]], " package is located at ", getInstallLocationDep(oldDep[["pkg"]])))
   return(paste(msg, collapse="\n\n"))
 }
-
 
 getDepsFromFile <- function(modulePath) {
   pathToDeps <- getDepsFileLocation(modulePath)
@@ -440,7 +388,6 @@ getDepsFromFile <- function(modulePath) {
   return(deps)
 }
 
-
 getDepsFromUser <- function(modulePath) {
   depPkgs <- names(getDepsFromFile(modulePath))
   userDeps <- list()
@@ -452,7 +399,6 @@ getDepsFromUser <- function(modulePath) {
   return(userDeps)
 }
 
-
 writeUpdatedDeps <- function(newDeps) {
   deps <- vector("list", length(newDeps))
   for (newDep in newDeps)
@@ -463,7 +409,6 @@ writeUpdatedDeps <- function(newDeps) {
 getDepsFileLocation <- function(modulePath) {
   return(file.path(modulePath, "tests", "figs", "jasp-deps.txt"))
 }
-
 
 writeDepsToFile <- function(deps, modulePath, add = TRUE) {
   if (add) {
@@ -483,11 +428,9 @@ writeDepsToFile <- function(deps, modulePath, add = TRUE) {
   close(fileConn)
 }
 
-
 hasNewPlots <- function(testthatResults) {
   any(grepl("`vdiffr::manage_cases()`", unlist(testthatResults), fixed=TRUE))
 }
-
 
 printSuccessFailureModules <- function(testResults) {
   if (length(testResults[["passedModules"]]) > 0)
@@ -496,8 +439,6 @@ printSuccessFailureModules <- function(testResults) {
   if (length(testResults[["failedModules"]]) > 0)
     message("\nThe tests failed for ", paste(testResults[["failedModules"]], collapse = ", "), ". Scroll up for more details.")
 }
-
-
 
 printTipsNewPlots <- function(hasNewPlots, name = NULL) {
   if (hasNewPlots) {
@@ -508,251 +449,55 @@ printTipsNewPlots <- function(hasNewPlots, name = NULL) {
   }
 }
 
-
-makeUnitTestsFromResults <- function(results, name, dataset, options) {
-  if (!is.list(results) || is.null(names(results)) || results$status == "error")
-    stop("Can't make unit test from results: not a results list")
-
-  tests <- getTests(results$results)
-  if (length(tests) == 0)
-    stop("Could not identify any tables or plots to test")
-
-  output <- makeExpectations(tests, name, options, dataset)
-  cat(output)
+getInstallLocationDep <- function(dep) {
+  pkgs <- installed.packages()
+  index <- min(which(row.names(pkgs) == dep))
+  return(pkgs[index, "LibPath"])
 }
 
-
-getTests <- function(results) {
-  tests <- list()
-
-  markResultsLocationExtractTests <- function(x) {
-    if (! "list" %in% class(x))
-      return(x)
-
-    unitTestType <- NULL
-    if (all(c("data", "schema") %in% names(x)))
-      unitTestType <- "table"
-    else if (all(c("data", "width", "height") %in% names(x)))
-      unitTestType <- "plot"
-
-    if (!is.null(unitTestType)) {
-      testid <- length(tests)
-      tests[[paste0("itemToUnitTest-", testid)]] <<- list(
-        title = unlist(x[["title"]]),
-        id = testid,
-        type = unitTestType,
-        data =  ifelse(unitTestType == "table", makeTestTable(x[["data"]], print=FALSE), ""))
-      x[["itemToUnitTest"]] <- testid
+charVec2MixedList <- function(x) {
+  x <- stringi::stri_escape_unicode(x)
+  x <- gsub("\\\\u.{4}", "<unicode>", x)
+  x <- stringi::stri_unescape_unicode(x)
+  lapply(x, function(element) {
+    res <- element
+    if (is.character(element)) {
+      num <- suppressWarnings(as.numeric(element))
+      if (! is.na(num)) {
+        res <- num
+      }
     }
+    return(res)
+  })
+}
 
-    return(lapply(x, markResultsLocationExtractTests))
+collapseTestTable <- function(rows) {
+  if (! is.list(rows) || length(rows) == 0)
+    stop("expecting input to be a list (with a list for each JASP table row)")
+
+  x <- unname(unlist(rows))
+  x <- charVec2MixedList(x)
+
+  return(x)
+}
+
+adjustTestthatForPlotTesting <- function() {
+
+  test_thatStandIn <- function(desc, code) {
+    code <- substitute(code)
+
+    envirPlotTest <- Sys.getenv("JASP_PLOT_TEST")
+    if (envirPlotTest == "true" && !any(grepl("expect_equal_plots", code, fixed=TRUE)))
+      return()
+
+    testthat:::test_code(desc, code, env = parent.frame())
   }
 
-  markedResults <- markResultsLocationExtractTests(results)
-  if (length(tests) > 0) {
-    tests <- addPathIndexToTests(tests, markedResults)
-    tests <- getOneTestPerCollection(tests)
-  }
-
-  return(tests)
+  Sys.setenv("JASP_PLOT_TEST" = "true")
+  replaceFn("test_that", test_thatStandIn, "testthat")
 }
 
-
-addPathIndexToTests <- function(tests, markedResults) {
-  results <- unlist(markedResults)
-  for (testName in names(tests)) {
-    id <- tests[[testName]][["id"]]
-    dotSeparatedPathName <- getTestLocationInResultsById(results, id)
-    tests[[testName]][["index"]] <- normalizeTestPath(dotSeparatedPathName)
-  }
-  return(tests)
-}
-
-
-getTestLocationInResultsById <- function(results, id) {
-  testIndices <- which(grepl("itemToUnitTest", names(results)))
-  index <- testIndices[results[testIndices] == id]
-  if (length(index) != 1)
-    stop("Failed to uniquely identify test case in results")
-
-  location <- names(results)[index]
-  return(gsub("itemToUnitTest", "data", location))
-}
-
-
-normalizeTestPath <- function(index) {
-  indexNames <- unlist(strsplit(index, ".", fixed=TRUE))
-  path <- paste0('[["', paste0(indexNames, collapse='"]][["'), '"]]')
-
-  return(path)
-}
-
-
-getOneTestPerCollection <- function(tests) {
-  pathNames <- NULL
-  for (test in tests) {
-    pathNames <- c(pathNames, test$index)
-  }
-
-  firstSiblingOrUnique <- rep(TRUE, length(tests))
-
-  purgedTests <- tests[firstSiblingOrUnique]
-
-  return(purgedTests)
-}
-
-
-makeExpectations <- function(tests, name, options, dataset) {
-  centralizePreamble <- FALSE
-  if (length(tests) > 1)
-    centralizePreamble <- TRUE
-
-  expectations <- ""
-
-  if (centralizePreamble) {
-    preamble <- addPreambleLines(name, options, dataset)
-    expectations <- paste0(preamble, "\n")
-  }
-
-  for (test in tests) {
-    if (!test$type %in% c("table", "plot"))
-      stop("Unknown test type extracted from results, cannot continue: ", test$type)
-
-    expectation <- makeSingleExpectation(test, name, options, dataset, centralizePreamble)
-    expectations <- paste(expectations, expectation, sep="\n\n")
-  }
-
-  return(expectations)
-}
-
-
-makeSingleExpectation <- function(test, name, options, dataset, centralizePreamble) {
-  if (!is.character(test$title) || test$title == "") {
-    test$title <- paste("titleless", test$type, test$id, sep="-")
-    warning(test$type, " does not have a title, using a generic one: ", test$title, immediate.=TRUE)
-  }
-
-  openingLine <- addOpeningLine(test)
-
-  preambleLines <- NA
-  if (!centralizePreamble) {
-    preambleLines <- addPreambleLines(name, options, dataset)
-    preambleLines <- gsub("\n", "\n\t", paste0("\t", preambleLines))
-  }
-
-  testSpecificLines <- NA
-  if (test$type == "table")
-    testSpecificLines <- addTableSpecificLines(test)
-  else if (test$type == "plot")
-    testSpecificLines <- addPlotSpecificLines(test, name)
-
-  closingLine <- "})"
-
-  expectation <- paste(openingLine, preambleLines, testSpecificLines, closingLine, sep="\n")
-  expectation <- gsub("NA\n", "", expectation)
-
-  return(expectation)
-}
-
-
-addOpeningLine <- function(test) {
-  opening <- paste0('test_that("', test$title)
-
-  titleContainsTestType <- grepl(test$type, test$title, ignore.case=TRUE)
-  if (test$type == "table")
-    opening <- paste0(opening, ifelse(titleContainsTestType, '',  ' table'), ' results match", {')
-  else if (test$type == "plot")
-    opening <- paste0(opening, ifelse(titleContainsTestType, '', ' plot'), ' matches", {')
-
-  return(opening)
-}
-
-
-addPreambleLines <- function(name, options, dataset) {
-  settingOfOptions <- addOptionSpecificationLines(name, options)
-  settingOfSeed <- "set.seed(1)"
-  runningOfAnalysis <- addRunAnalysisLines(name, dataset)
-
-  return(paste(settingOfOptions, settingOfSeed, runningOfAnalysis, sep="\n"))
-}
-
-
-addRunAnalysisLines <- function(name, dataset) {
-  if (is.character(dataset))
-    dataArg <- paste0('"', dataset ,'"')
-  else
-    dataArg <- paste0('dataset')
-
-  readingData <- paste0('dataset <- ', paste(capture.output(dput(dataset)), collapse="\n"))
-
-  running <- paste0('results <- runAnalysis("', name, '", ', dataArg, ', options)')
-
-  if (is.character(dataset))
-    return(running)
-  else
-    return(paste(readingData, running, sep="\n"))
-}
-
-
-addTableSpecificLines <- function(test) {
-  gettingTable <- paste0('\ttable <- results[["results"]]', test$index)
-
-  comparingTables <- paste0("\texpect_equal_tables(table,\n\t\t", gsub("\n", "\n\t\t", test$data), ")")
-
-  return(paste(gettingTable, comparingTables, sep="\n"))
-}
-
-
-addPlotSpecificLines <- function(test, name) {
-  gettingPlotName <- paste0('\tplotName <- results[["results"]]', test$index)
-
-  gettingPlot <- paste0('\ttestPlot <- results[["state"]][["figures"]][[plotName]][["obj"]]')
-
-  title <- gsub("-+", "-", gsub("\\W", "-", tolower(test$title)))
-  comparingPlots <- paste0('\texpect_equal_plots(testPlot, "', title, '", dir="', name, '")')
-
-  return(paste(gettingPlotName, gettingPlot, comparingPlots, sep="\n"))
-}
-
-
-addOptionSpecificationLines <- function(name, options) {
-  settingOfOptions <- paste0('options <- analysisOptions("', name, '")')
-
-  nonDefaultOpts <- getNonDefaultOptions(name, options)
-  if (length(nonDefaultOpts) > 0) {
-    nonDefaults <- paste0("options$", names(nonDefaultOpts), " <- ", nonDefaultOpts, collapse="\n")
-    settingOfOptions <- paste0(settingOfOptions, "\n", nonDefaults)
-  }
-
-  return(settingOfOptions)
-}
-
-
-getNonDefaultOptions <- function(name, options) {
-  defaultOpts <- analysisOptions(name)
-  if (!is.list(defaultOpts) || is.null(names(defaultOpts)))
-    stop("Couldn't find the default analysis options for this analysis")
-
-  nonDefaultOpts <- NULL
-  for (optName in names(options)) {
-    optValue <- options[[optName]]
-    if (!isTRUE(all.equal(defaultOpts[[optName]], optValue))) {
-      options[[optName]] <- prepOptionValueForPrinting(optValue)
-      nonDefaultOpts <- c(nonDefaultOpts, options[optName])
-    }
-  }
-
-  return(nonDefaultOpts)
-}
-
-
-prepOptionValueForPrinting <- function(value) {
-  if (is.list(value))
-    result <- paste(capture.output(dput(value)), collapse="\n")
-  else if (is.character(value) && length(value) == 1 && !startsWith(value, "\""))
-    result <- paste0("\"", value, "\"")
-  else
-    result <- value
-
-  return(result)
+undoPlotTestingChanges <- function(originalFn) {
+  Sys.unsetenv("JASP_PLOT_TEST")
+  replaceFn("test_that", originalFn, "testthat")
 }

@@ -8,7 +8,7 @@ You can install the R package with the use of `devtools`:
 
 Note: On some macs, it seems to be hard to build the dependency "data.table" from source resulting in the error message "clang: error: unsupported option '-fopenmp'". One hack to get around this is to select no when asked to install the package from source. This will install an older version of data.table without openmp support, which suffices for jaspTools. Alternatively, you might want to upgrade [clang](https://cran.r-project.org/bin/macosx/tools/). 
 
-After loading jaspTools with `library(jaspTools)`, you need to call `initJaspToolsInteractive()`. This is
+After loading jaspTools with `library(jaspTools)`, you need to call `setJaspTools()`. This is
 required once after every reinstall of jaspTools.
 
 ## Functionality
@@ -19,11 +19,11 @@ The general classes are:
 
 
 ### 1. Modifying jaspTools' settings
-- `viewPkgOptions`: views settings in the package
-- `setPkgOption`: change a setting in the package (e.g., paths and ppi)
+- `viewPkgOptions`: views options in the package
+- `setPkgOption`: change an options in the package (e.g., what module you are working on)
 
-After calling `initJaspToolsInteractive()` all the necessary dependencies were retrieved (packages, html, data files).
-These are then stored inside of the pkgOptions. You will generally not need to change these.
+After `setJaspTools()` retrieves all the necessary dependencies (packages, html, data files), the paths to a number of these dependencies are stored inside of the pkgOptions.
+You will generally not need to change them.
 However, what you must always do is tell jaspTools what modules you are working on:
 
 `setPkgOption("module.dirs", c("/path/to/module1", "/path/to/module2"))`

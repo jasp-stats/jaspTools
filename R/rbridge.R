@@ -1,4 +1,7 @@
-# functions to replace JASP's rcpp functions
+# functions / properties to replace JASP's rcpp functions / properties
+
+.ppi          <- 192
+.baseCitation <- "x"
 
 .encodeColNamesStrict <- function(x) return(x)
 .decodeColNamesStrict <- function(x) return(x)

@@ -122,112 +122,95 @@ view <- function(results) {
   utils::browseURL(htmlFile)
 }
 
+convertResultsListToJson <- function(lst) {
+  json <- try(jsonlite::toJSON(lst, null="null", auto_unbox=TRUE, digits=NA))
+  if (inherits(json, "try-error"))
+    json <- paste0("{ \"status\" : \"error\", \"results\" : { \"error\" : 1, \"errorMessage\" : \"Unable to jsonify\" } }")
 
+  json <- parseUnicode(json)
+  json <- gsub("<div class=stack-trace>", "<div>", json, fixed=TRUE) # this makes sure the stacktrace is not hidden
+  json <- gsub("\\\"", "\\\\\"", json, fixed=TRUE) # double escape all escaped quotes (otherwise the printed json is invalid)
 
-#' Run a JASP analysis in R.
-#'
-#' \code{runAnalysis} makes it possible to execute a JASP analysis in R. Usually this
-#' process is a bit cumbersome as there are a number of objects unique to the
-#' JASP environment. Think .ppi, data-reading, etc. These (rcpp) objects are
-#' replaced in the jaspTools so you do not have to deal with them. Note that
-#' \code{runAnalysis} sources JASP analyses every time it runs, so any change in
-#' analysis code between calls is incorporated. The output of the analysis is
-#' shown automatically through a call to \code{view} and returned
-#' invisibly.
-#'
-#'
-#' @param name String indicating the name of the analysis to run. This name is
-#' identical to that of the main function in a JASP analysis.
-#' @param dataset Data.frame, matrix, string name or string path; if it's a string then jaspTools
-#' first checks if it's valid path and if it isn't if the string matches one of the JASP datasets (e.g., "debug.csv").
-#' By default the folder in Resources is checked first, unless called within a testthat environment, in which case tests/datasets is checked first.
-#' @param options List of options to supply to the analysis (see also
-#' \code{analysisOptions}).
-#' @param view Boolean indicating whether to view the results in a webbrowser.
-#' @param quiet Boolean indicating whether to suppress messages from the
-#' analysis.
-#' @param makeTests Boolean indicating whether to create testthat unit tests and print them to the terminal.
-#' @examples
-#'
-#' options <- analysisOptions("BinomialTest")
-#' options[["variables"]] <- "contBinom"
-#' runAnalysis("BinomialTest", "debug", options)
-#'
-#' # Above and below are identical (below is taken from the Qt terminal)
-#'
-#' options <- analysisOptions('{
-#'    "id" : 6,
-#'    "name" : "BinomialTest",
-#'    "options" : {
-#'       "VovkSellkeMPR" : false,
-#'       "confidenceInterval" : false,
-#'       "confidenceIntervalInterval" : 0.950,
-#'       "descriptivesPlots" : false,
-#'       "descriptivesPlotsConfidenceInterval" : 0.950,
-#'       "hypothesis" : "notEqualToTestValue",
-#'       "plotHeight" : 300,
-#'       "plotWidth" : 160,
-#'       "testValue" : 0.50,
-#'       "variables" : [ "contBinom" ]
-#'    },
-#'    "perform" : "run",
-#'    "revision" : 1,
-#'    "settings" : {
-#'       "ppi" : 192
-#'    }
-#' }')
-#' runAnalysis("BinomialTest", "debug.csv", options)
-#'
-#'
-#' @export runAnalysis
-runAnalysis <- function(name, dataset, options, view = TRUE, quiet = FALSE, makeTests = FALSE) {
+  return(json)
+}
 
-  if (missing(name)) {
-    name <- attr(options, "analysisName")
-    if (is.null(name))
-      stop("Please supply an analysis name")
+insertJsonInHtml <- function(json, htmlFile) {
+  html <- readChar(file.path(getPkgOption("html.dir"), "index.html"), 1000000)
+  insertedJS <- paste0(
+    "<script>
+      var jasp = {}
+      jQuery(function($) {
+        $(document).ready(function() {
+          window.analysisChanged(", json, ")
+        })
+      })
+    </script></body>")
+  html <- gsub("</body>", insertedJS, html)
+  html <- changeJsIncludeForAdblockers(html)
+
+  writeChar(html, htmlFile)
+}
+
+initializeOutputFolder <- function(folder) {
+  if (!dir.exists(folder))
+    dir.create(folder, recursive=TRUE)
+
+  if (! "js" %in% list.dirs(folder, full.names=FALSE))
+    file.copy(list.files(getPkgOption("html.dir"), full.names = TRUE), folder, recursive = TRUE)
+
+  renameJsFileForAdblockers(folder)
+}
+
+changeJsIncludeForAdblockers <- function(html) {
+  gsub("analysis.js", "jaspanalysis.js", html, fixed = TRUE)
+}
+
+renameJsFileForAdblockers <- function(folder) {
+  if (file.exists(file.path(folder, "js", "analysis.js")))
+    file.rename(file.path(folder, "js", "analysis.js"), file.path(folder, "js", "jaspanalysis.js"))
+}
+
+parseUnicode <- function(str) {
+  if (! is.character(str) || length(str) == 0)
+    stop(paste("Invalid str provided, received", str))
+
+  # used unicode chars in JASP as of 3/11/17.
+  # unfortunately I have not found a way to do this more elegantly.
+  lookup <- list(
+    "\\u002a" = "*",
+    "\\u0042" = "B",
+    "\\u0046" = "F",
+    "\\u00b2" = "²",
+    "\\u00f4" = "ô",
+    "\\u03a7" = "χ",
+    "\\u03b1" = "α",
+    "\\u03b5" = "ε",
+    "\\u03b7" = "η",
+    "\\u03bb" = "λ",
+    "\\u03c3" = "σ",
+    "\\u03c7" = "χ",
+    "\\u03c9" = "ω",
+    "\\u2009" = "	",
+    "\\u2013" = "–",
+    "\\u2014" = "—",
+    "\\u2019" = "’",
+    "\\u207a" = "⁺",
+    "\\u207b" = "⁻",
+    "\\u2080" = "₀",
+    "\\u2081" = "₁",
+    "\\u2082" = "₂",
+    "\\u208a" = "₊",
+    "\\u208b" = "₋",
+    "\\u209a" = "ᵨ", # close enough
+    "\\u221e" = "∞",
+    "\\u2260" = "≠",
+    "\\u2264" = "≤",
+    "\\u273b" = "✻"
+  )
+
+  for (unicode in names(lookup)) {
+    str <- gsub(unicode, lookup[[unicode]], str, ignore.case=TRUE)
   }
 
-  if (insideTestEnvironment()) {
-    view  <- FALSE
-    quiet <- TRUE
-  }
-
-  oldLibPaths <- .libPaths()
-  oldWd       <- getwd()
-  oldLocale   <- Sys.getlocale()
-  on.exit({
-    .resetRunTimeInternals()
-    .libPaths(oldLibPaths)
-    setwd(oldWd)
-    localeRes <- suppressWarnings(Sys.setlocale(category = "LC_ALL", locale = oldLocale))
-  })
-
-  initAnalysisRuntime(dataset = dataset, makeTests = makeTests)
-  args <- fetchRunArgs(name, options)
-
-  if (quiet) {
-    sink(tempfile())
-    on.exit({suppressWarnings(sink(NULL))}, add = TRUE)
-    returnVal <- suppressWarnings(do.call(jaspBase::runJaspResults, args))
-    sink(NULL)
-  } else {
-    returnVal <- do.call(jaspBase::runJaspResults, args)
-  }
-
-  transferPlotsFromjaspResults()
-
-  jsonResults <- getJsonResultsFromJaspResults()
-  results     <- processJsonResults(jsonResults)
-
-  if (insideTestEnvironment())
-    .setInternal("lastResults", jsonResults)
-
-  if (view)
-    view(jsonResults)
-
-  if (makeTests)
-    makeUnitTestsFromResults(results, name, dataset, options)
-
-  return(invisible(results))
+  return(str)
 }

@@ -27,7 +27,7 @@ readQML <- function(file) {
     "LD.LDGenerateDisplayData"
   )
 
-  fileSize <- file.info(file)$size 
+  fileSize <- file.info(file)$size
   fileContents <- readChar(file, nchars=fileSize)
   fileContents <- gsub("//.*?(\\r\\n|\\r|\\n)", "", fileContents) # remove comments
   fileContents <- gsub('[[:blank:]]|\\"', "", fileContents) # strip whitespaces
@@ -49,7 +49,6 @@ readQML <- function(file) {
   return(options)
 }
 
-
 qmlElementsToOptionsList <- function(qmlElements) {
   opts <- list()
   for (qmlElement in qmlElements) {
@@ -58,10 +57,9 @@ qmlElementsToOptionsList <- function(qmlElements) {
   return(opts)
 }
 
-
 staticElementsToOptions <- function(fileContents) {
   result <- list()
-  
+
   result[["plotWidth"]] <- 480
   result[["plotHeight"]] <- 320
 
@@ -69,18 +67,18 @@ staticElementsToOptions <- function(fileContents) {
   if (grepl(regMatch, fileContents)) {
     result[["bayesFactorType"]] <- "BF10"
   }
-  
+
   regMatch <- "ContrastsList\\{"
   if (grepl(regMatch, fileContents)) {
     result[["contrast"]] <- "none"
   }
-  
+
   regMatch <- "SetSeed\\{"
   if (grepl(regMatch, fileContents)) {
     result[["setSeed"]] <- FALSE
     result[["seed"]] <- 1
   }
-  
+
   regMatch <- "SubjectivePriors\\{"
   if (grepl(regMatch, fileContents)) {
     subjectivePriors <- list(
@@ -105,13 +103,13 @@ staticElementsToOptions <- function(fileContents) {
     )
     result <- c(result, subjectivePriors)
   }
-  
+
   regMatch <- "LD.LDOptions\\{"
   if (grepl(regMatch, fileContents)) {
     LDoption <- parseLDOption(fileContents)
     result <- c(result, LDoption)
   }
-  
+
   regMatch <- "LD.LDGenerateDisplayData\\{"
   if (grepl(regMatch, fileContents)) {
     LDGenerateDisplayData <- list(
@@ -127,7 +125,7 @@ staticElementsToOptions <- function(fileContents) {
     )
     result <- c(result, LDGenerateDisplayData)
   }
-  
+
   return(result)
 }
 
@@ -158,11 +156,11 @@ getOptionParamValue <- function(option, param, default = NULL) {
 
 parseLDOption <- function(fileContents) {
   LDOption <- stringr::str_extract(fileContents, "LDOptions\\{.*?\\}")
-  
+
   negativeValues <- getOptionParamValue(LDOption, "negativeValues", default = TRUE)
   min            <- getOptionParamValue(LDOption, "min",            default = ifelse(negativeValues, -Inf, 0))
   max            <- getOptionParamValue(LDOption, "max",            default = Inf)
-  
+
   return(list(
     min_x                = getOptionParamValue(LDOption, "rangeMinX",         default = ifelse(min == -Inf, -3, min)),
     max_x                = getOptionParamValue(LDOption, "rangeMaxX",         default = ifelse(max == Inf, 3, max)),
@@ -188,7 +186,6 @@ extractData <- function (element, ...) {
   UseMethod("extractData", element)
 }
 
-
 extractData.IntegerField <- function(element, defaultValue = 0) {
   regMatch <- "default.*?:([+-]?([0-9]*[.])?[0-9]+)"
   matchTable <- stringr::str_match(element, regMatch)
@@ -199,11 +196,9 @@ extractData.IntegerField <- function(element, defaultValue = 0) {
   extractData.default(element, default)
 }
 
-
 extractData.DoubleField <- function(element, defaultValue = 0) {
   extractData.IntegerField(element, defaultValue)
 }
-
 
 extractData.PercentField <- function(element, defaultValue = 50) {
   regMatch <- "default.*?:([+-]?([0-9]*[.])?[0-9]+)"
@@ -216,11 +211,9 @@ extractData.PercentField <- function(element, defaultValue = 50) {
   extractData.default(element, default)
 }
 
-
 extractData.CIField <- function(element, defaultValue = 95) {
   extractData.PercentField(element, defaultValue)
 }
-
 
 extractData.AssignedVariablesList <- function(element) {
   regMatch <- "name:(.*?)[;\\}]"
@@ -260,7 +253,6 @@ extractData.Chi2TestTableView <- function(element) {
   extractData.default(element, list())
 }
 
-
 extractData.Slider <- function(element) {
   regMatch <- "value.*?:(\\d+)"
   matchTable <- stringr::str_match(element, regMatch)
@@ -268,11 +260,10 @@ extractData.Slider <- function(element) {
   extractData.default(element, value)
 }
 
-
 extractData.DropDown <- function(element) {
   regMatches <- c("indexDefaultValue:(\\d+)", "values:\\[(?!\\{)(.*?)\\]", "values:\\[(.*?)\\]")
   matchTable <- stringr::str_match_all(element, regMatches)
-  
+
   unnamedArray <- matchTable[[2]][2]
   if (!is.na(unnamedArray)) {
     values <- unlist(strsplit(unnamedArray, ","))
@@ -282,14 +273,14 @@ extractData.DropDown <- function(element) {
     matchTableValues <- stringr::str_match_all(namedArray, regMatchValue)
     values <- matchTableValues[[1]][, 2]
   }
-  
+
   index <- as.numeric(matchTable[[1]][2])
   if (!is.na(index)) {
     index <- index + 1 # zero based qml vs one based R array
   } else {
     index <- 1
   }
-  
+
   value <- NA
   if (length(values) >= index) {
     value <- values[index]
@@ -300,7 +291,6 @@ extractData.DropDown <- function(element) {
   extractData.default(element, value)
 }
 
-
 extractData.RadioButtonGroup <- function(element) {
   regMatch <- "RadioButton\\{[^\\}]*?checked:true"
   matchTable <- stringr::str_match(element, regMatch)
@@ -310,12 +300,11 @@ extractData.RadioButtonGroup <- function(element) {
   extractData.default(element, value)
 }
 
-
 extractData.default <- function(element, value = NA) {
   regMatch <- "name:(.*?)[;\\}]"
   matchTable <- stringr::str_match(element, regMatch)
   name <- matchTable[2]
-  
+
   result <- NULL
   if (!is.na(name)) {
     result <- list()
@@ -326,3 +315,4 @@ extractData.default <- function(element, value = NA) {
   }
   return(result)
 }
+
