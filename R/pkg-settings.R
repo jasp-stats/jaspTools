@@ -71,7 +71,7 @@ setPkgOption <- function(name, value) {
       if (!dir.exists(value[i]))
         stop("Folder ", value[i], " does not exist")
 
-      value[i] <- normalizePath(value[i])
+      value[i] <- gsub("[\\/]$", "", normalizePath(value[i])) # normalize path and strip trailing slashes (they trip up devtools::as.package)
     }
   }
 

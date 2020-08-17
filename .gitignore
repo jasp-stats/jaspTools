@@ -47,4 +47,6 @@ po/*~
 # OSX files
 *.DS_Store
 Thumbs.db
-.Rproj.user
+
+# JASP analysis
+state

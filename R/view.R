@@ -127,7 +127,6 @@ convertResultsListToJson <- function(lst) {
   if (inherits(json, "try-error"))
     json <- paste0("{ \"status\" : \"error\", \"results\" : { \"error\" : 1, \"errorMessage\" : \"Unable to jsonify\" } }")
 
-  json <- parseUnicode(json)
   json <- gsub("<div class=stack-trace>", "<div>", json, fixed=TRUE) # this makes sure the stacktrace is not hidden
   json <- gsub("\\\"", "\\\\\"", json, fixed=TRUE) # double escape all escaped quotes (otherwise the printed json is invalid)
 
@@ -168,49 +167,4 @@ changeJsIncludeForAdblockers <- function(html) {
 renameJsFileForAdblockers <- function(folder) {
   if (file.exists(file.path(folder, "js", "analysis.js")))
     file.rename(file.path(folder, "js", "analysis.js"), file.path(folder, "js", "jaspanalysis.js"))
-}
-
-parseUnicode <- function(str) {
-  if (! is.character(str) || length(str) == 0)
-    stop(paste("Invalid str provided, received", str))
-
-  # used unicode chars in JASP as of 3/11/17.
-  # unfortunately I have not found a way to do this more elegantly.
-  lookup <- list(
-    "\\u002a" = "*",
-    "\\u0042" = "B",
-    "\\u0046" = "F",
-    "\\u00b2" = "²",
-    "\\u00f4" = "ô",
-    "\\u03a7" = "χ",
-    "\\u03b1" = "α",
-    "\\u03b5" = "ε",
-    "\\u03b7" = "η",
-    "\\u03bb" = "λ",
-    "\\u03c3" = "σ",
-    "\\u03c7" = "χ",
-    "\\u03c9" = "ω",
-    "\\u2009" = "	",
-    "\\u2013" = "–",
-    "\\u2014" = "—",
-    "\\u2019" = "’",
-    "\\u207a" = "⁺",
-    "\\u207b" = "⁻",
-    "\\u2080" = "₀",
-    "\\u2081" = "₁",
-    "\\u2082" = "₂",
-    "\\u208a" = "₊",
-    "\\u208b" = "₋",
-    "\\u209a" = "ᵨ", # close enough
-    "\\u221e" = "∞",
-    "\\u2260" = "≠",
-    "\\u2264" = "≤",
-    "\\u273b" = "✻"
-  )
-
-  for (unicode in names(lookup)) {
-    str <- gsub(unicode, lookup[[unicode]], str, ignore.case=TRUE)
-  }
-
-  return(str)
 }

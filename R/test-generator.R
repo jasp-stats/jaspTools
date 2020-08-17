@@ -23,7 +23,7 @@ getTests <- function(results) {
     else if (all(c("data", "width", "height") %in% names(x)))
       unitTestType <- "plot"
 
-    if (!is.null(unitTestType)) {
+    if (!is.null(unitTestType) && unitTestType == "plot" || (unitTestType == "table" && length(x[["data"]]) > 0)) {
       testid <- length(tests)
       tests[[paste0("itemToUnitTest-", testid)]] <<- list(
         title = unlist(x[["title"]]),

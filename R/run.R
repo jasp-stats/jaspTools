@@ -153,7 +153,7 @@ reinstallChangedModules <- function() {
     newMd5Sums <- tools::md5sum(files)
     if (length(md5Sums) == 0 || !module %in% names(md5Sums) || !all(newMd5Sums %in% md5Sums[[module]])) {
       if (!msgPrinted) {
-        message("Reinstalling changed module(s)")
+        message("Installing module(s) from source")
         msgPrinted <- TRUE
       }
 
@@ -167,8 +167,8 @@ reinstallChangedModules <- function() {
 }
 
 initializeCoreJaspPackages <- function() {
-  require(jaspResults)
   require(jaspBase)
+  require(jaspResults)
   jaspResults::initJaspResults()
 
   assign("jaspResultsModule", list(create_cpp_jaspResults = function(name, state) get("jaspResults", envir = .GlobalEnv)$.__enclos_env__$private$jaspObject), envir = .GlobalEnv)
