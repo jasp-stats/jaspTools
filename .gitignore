@@ -18,7 +18,6 @@
 /*.Rcheck/
 
 # RStudio files
-Rproj.user
 .Rproj.user/*
 
 # produced vignettes
@@ -51,3 +50,5 @@ Thumbs.db
 
 # JASP analysis
 state
+
+.Rproj.user

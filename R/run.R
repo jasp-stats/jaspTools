@@ -135,9 +135,6 @@ initAnalysisRuntime <- function(dataset, makeTests, ...) {
 }
 
 reinstallChangedModules <- function() {
-  if (!"jaspBase" %in% installed.packages())
-    stop("Cannot find the basic module `jaspBase`; please run `installJaspPkg(\"jaspBase\")`")
-
   modules   <- getModulePaths()
   reinstall <- getPkgOption("reinstall.modules")
   if (!reinstall || length(modules) == 0)
@@ -157,7 +154,7 @@ reinstallChangedModules <- function() {
         msgPrinted <- TRUE
       }
 
-      devtools::install_local(module, force = TRUE, upgrade = "never", quiet = TRUE)
+      devtools::install_local(module, force = FALSE, upgrade = "never", quiet = TRUE, dependencies = FALSE)
       devtools::reload(module)
       md5Sums[[module]] <- newMd5Sums
     }
