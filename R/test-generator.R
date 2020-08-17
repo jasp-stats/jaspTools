@@ -175,7 +175,7 @@ addRunAnalysisLines <- function(name, dataset) {
 addTableSpecificLines <- function(test) {
   gettingTable <- paste0('\ttable <- results[["results"]]', test$index)
 
-  comparingTables <- paste0("\texpect_equal_tables(table,\n\t\t", gsub("\n", "\n\t\t", test$data), ")")
+  comparingTables <- paste0("\tjaspTools::expect_equal_tables(table,\n\t\t", gsub("\n", "\n\t\t", test$data), ")")
 
   return(paste(gettingTable, comparingTables, sep="\n"))
 }
@@ -186,7 +186,7 @@ addPlotSpecificLines <- function(test, name) {
   gettingPlot <- paste0('\ttestPlot <- results[["state"]][["figures"]][[plotName]][["obj"]]')
 
   title <- gsub("-+", "-", gsub("\\W", "-", tolower(test$title)))
-  comparingPlots <- paste0('\texpect_equal_plots(testPlot, "', title, '", dir="', name, '")')
+  comparingPlots <- paste0('\tjaspTools::expect_equal_plots(testPlot, "', title, '", dir="', name, '")')
 
   return(paste(gettingPlotName, gettingPlot, comparingPlots, sep="\n"))
 }
