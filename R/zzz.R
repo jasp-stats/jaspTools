@@ -24,7 +24,7 @@
       html.dir          = getJavascriptLocation(),
       data.dir          = getDatasetsLocation(),
       pkgs.dir          = readJaspRequiredFilesLocation(),
-      locale            = "en_US.UTF-8"
+      language          = "en"
     )
 
     # create the temp (html) directory for the output
@@ -36,6 +36,5 @@
     }
   }
 
-  # this is not used in combination with getAnywhere() in the code so it cannot be found
-  assign(".automaticColumnEncDecoding", FALSE, envir = .GlobalEnv)
+  .insertRbridgeIntoEnv(.GlobalEnv)
 }

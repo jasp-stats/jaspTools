@@ -310,11 +310,10 @@ fetchDatasets <- function(path) {
     dir.create(destDir)
 
   dataDir <- file.path(path, "Resources", "Data Sets")
-  testDataDir <- file.path(path, "JASP-Tests", "R", "tests", "datasets")
-  if (!dir.exists(dataDir) || !dir.exists(testDataDir))
+  if (!dir.exists(dataDir))
     stop("Could not move datasets from jasp-desktop, is the path correct? ", path)
 
-  dataFilePaths <- list.files(c(dataDir, testDataDir), pattern = "\\.csv$", recursive = TRUE, full.names = TRUE)
+  dataFilePaths <- list.files(dataDir, pattern = "\\.csv$", recursive = TRUE, full.names = TRUE)
   if (length(dataFilePaths) > 0) {
     dataFiles <- basename(dataFilePaths)
     for (i in seq_along(dataFilePaths))

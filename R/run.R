@@ -69,12 +69,12 @@ runAnalysis <- function(name, dataset, options, view = TRUE, quiet = FALSE, make
 
   oldLibPaths <- .libPaths()
   oldWd       <- getwd()
-  oldLocale   <- Sys.getlocale()
+  oldLang     <- Sys.getenv("LANG")
   on.exit({
     .resetRunTimeInternals()
     .libPaths(oldLibPaths)
     setwd(oldWd)
-    localeRes <- suppressWarnings(Sys.setlocale(category = "LC_ALL", locale = oldLocale))
+    Sys.setenv(LANG = oldLang)
   })
 
   initAnalysisRuntime(dataset = dataset, makeTests = makeTests)
@@ -136,7 +136,7 @@ initAnalysisRuntime <- function(dataset, makeTests, ...) {
   .setInternal("dataset", dataset)
 
   # prevent the results from being translated (unless the user explicitly wants to)
-  localeRes <- suppressWarnings(Sys.setlocale(category = "LC_ALL", locale = getPkgOption("locale")))
+  Sys.setenv(LANG = getPkgOption("language"))
 
   # jaspBase and jaspResults needs to be loaded until they are merged and the packages handle dependencies correctly
   initializeCoreJaspPackages()
@@ -155,7 +155,9 @@ reinstallChangedModules <- function() {
   msgPrinted <- FALSE
   md5Sums    <- .getInternal("modulesMd5Sums")
   for (module in modules) {
-    files <- list.files(module, include.dirs = FALSE, full.names = TRUE, recursive = TRUE, pattern="(NAMESPACE$)|(DESCRIPTION$)|(\\.R$)")
+    rootFiles <- list.files(module, full.names = TRUE, pattern = "(NAMESPACE$)|(DESCRIPTION$)")
+    rFiles    <- list.files(file.path(module, "R"), full.names = TRUE, pattern = "\\.R$")
+    files     <- c(rootFiles, rFiles)
     if (length(files) == 0)
       next
 
@@ -166,7 +168,7 @@ reinstallChangedModules <- function() {
         msgPrinted <- TRUE
       }
 
-      devtools::install_local(module, force = FALSE, upgrade = "never", quiet = TRUE, dependencies = FALSE)
+      devtools::install_local(module, force = TRUE, upgrade = "never", quiet = TRUE, dependencies = FALSE)
       devtools::reload(module)
       md5Sums[[module]] <- newMd5Sums
     }

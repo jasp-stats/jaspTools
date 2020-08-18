@@ -1,17 +1,25 @@
 # functions / properties to replace JASP's rcpp functions / properties
 
-.ppi          <- 192
+# These are not used in combination with getAnywhere() in the code so they cannot be found
+.insertRbridgeIntoEnv <- function(env) {
+  env[[".automaticColumnEncDecoding"]] <- FALSE
+
+  env[[".encodeColNamesStrict"]] <- function(x) return(x)
+  env[[".decodeColNamesStrict"]] <- function(x) return(x)
+  env[[".encodeColNamesLax"]] <- function(x) return(x)
+  env[[".decodeColNamesLax"]] <- function(x) return(x)
+  env[[".encodeColNamesStrict"]] <- function(x) return(x)
+
+  env[[".setColumnDataAsScale"]] <- function(...) return(TRUE)
+  env[[".setColumnDataAsOrdinal"]] <- function(...) return(TRUE)
+  env[[".setColumnDataAsNominal"]] <- function(...) return(TRUE)
+  env[[".setColumnDataAsNominalText"]] <- function(...) return(TRUE)
+}
+
+# These are used in combination with getAnywhere() and can stay in the jaspTools namespace
+.ppi <- 192
+
 .baseCitation <- "x"
-
-.encodeColNamesStrict <- function(x) return(x)
-.decodeColNamesStrict <- function(x) return(x)
-.encodeColNamesLax <- function(x) return(x)
-.decodeColNamesLax <- function(x) return(x)
-
-.setColumnDataAsScale <- function(...) return(TRUE)
-.setColumnDataAsOrdinal <- function(...) return(TRUE)
-.setColumnDataAsNominal <- function(...) return(TRUE)
-.setColumnDataAsNominalText <- function(...) return(TRUE)
 
 .readDatasetToEndNative <- function(columns = c(), columns.as.numeric = c(), columns.as.ordinal = c(),
                                     columns.as.factor = c(), all.columns = FALSE) {

@@ -4,8 +4,9 @@
 #' you call \code{viewPkgOptions}. You can adjust these values through
 #' \code{setPkgOption}.
 #'
-#' @details \code{locale}:
-#' The locale that the analysis runs in. Defaults to en_US.UTF-8 to avoid translation of strings.
+#' @details \code{language}:
+#' The language that the analysis runs in (passed to R environment variable "LANG"). Defaults to "en" to avoid translation of strings.
+#' See https://www.gnu.org/software/gettext/manual/html_node/Usual-Language-Codes.html
 #'
 #' @details \code{pkgs.dir}:
 #' The directory where the R packages from jasp-required-files can be found.
