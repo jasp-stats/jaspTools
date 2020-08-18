@@ -13,7 +13,7 @@
 
 .onAttach <- function(libname, pkgname) {
   if (!.isSetupComplete())
-    message("jaspTools needs to be setup, so it can find all the resources it needs. Please use `setupJaspTools()` (you don't have to provide args if you're not sure what they mean).")
+    packageStartupMessage("jaspTools needs to be setup, so it can find all the resources it needs. Please use `setupJaspTools()` (you don't have to provide args if you're not sure what they mean).")
 }
 
 .initJaspToolsInternals <- function() {
@@ -32,7 +32,7 @@
     if (!dir.exists(tempOutputDir)) {
       dir.create(file.path(tempOutputDir, "html", "plots"), recursive = TRUE)
       dir.create(file.path(tempOutputDir, "state"))
-      message(paste("Note: temp output files may be found at", tempOutputDir))
+      packageStartupMessage(paste("Note: temp output files may be found at", tempOutputDir))
     }
   }
 

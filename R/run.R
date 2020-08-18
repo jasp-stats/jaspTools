@@ -124,12 +124,24 @@ fetchRunArgs <- function(name, options) {
 }
 
 initAnalysisRuntime <- function(dataset, makeTests, ...) {
-  # source all the R analysis files
+  # first we reinstall any changed modules in the personal library, with pkgs from required-files present
+  libs <- c(.libPaths(), getPkgOption("pkgs.dir"))
+  .libPaths(libs)
   reinstallChangedModules()
-  .setInternal("dataset", dataset) # dataset to be found later when it needs to be read
-  .libPaths(c(getPkgOption("pkgs.dir"), .libPaths())) # location of JASP's R packages
-  localeRes <- suppressWarnings(Sys.setlocale(category = "LC_ALL", locale = getPkgOption("locale"))) # ensure it defaults to English unless specified otherwise
+
+  # after this we ensure that the pkgs from required-files are loaded first when needed
+  .libPaths(rev(libs))
+
+  # dataset to be found in the analysis when it needs to be read
+  .setInternal("dataset", dataset)
+
+  # prevent the results from being translated (unless the user explicitly wants to)
+  localeRes <- suppressWarnings(Sys.setlocale(category = "LC_ALL", locale = getPkgOption("locale")))
+
+  # jaspBase and jaspResults needs to be loaded until they are merged and the packages handle dependencies correctly
   initializeCoreJaspPackages()
+
+  # ensure that unit tests results are consistent
   if (makeTests)
     set.seed(1)
 }
