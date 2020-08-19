@@ -20,12 +20,10 @@
 #'
 #' @export expect_equal_plots
 expect_equal_plots <- function(test, name, dir) {
-  errorMsg <- getErrorMsgFromLastResults()
-  if (!is.null(errorMsg))
-    stop(paste("Tried retrieving plot from results, but last run of jaspTools exited with an error:\n", errorMsg), call.=FALSE)
-
-  if (length(test) == 0)
-      stop("The new plot has no data. Please check your unit test; is the index path to the plot specified correctly?", call.=FALSE)
+  if (length(test) == 0) {
+    expect(FALSE, getEmptyTestMsg("plot"))
+    return()
+  }
 
   skip_if_grob(test)
   skip_if_recordedPlot(test)
@@ -53,4 +51,18 @@ skip_if_grob <- function(test) {
 skip_if_recordedPlot <- function(test) {
   if (inherits(test, "recordedplot"))
     skip("Recorded plots are skipped until the scaling of these plots is fixed")
+}
+
+getEmptyTestMsg <- function(element) {
+  error <- getErrorMsgFromLastResults()
+  if (!is.null(error[["type"]])) {
+    if (error[["type"]] == "validationError" || error[["type"]] == "fatalError")
+      msg <- paste0("Tried retrieving ", element, " from results, but last run of jaspTools exited with a ", error[["type"]], ":\n\n", error[["message"]])
+    else if (error[["type"]] == "localError")
+      msg <- paste0("The new ", element, " has no data. Please check the validity of your unit test; found the following local errors in the results:\n\n", error[["message"]])
+  } else {
+    msg <- paste0("The new ", element, " has no data. Please check the validity of your unit test; is the index path to the plot specified correctly?")
+  }
+
+  return(msg)
 }

@@ -12,7 +12,7 @@ loadCorrectDataset <- function(x) {
     }
 
     # check if it's a name of a JASP dataset
-    locations <- getDatasetsLocation()
+    locations <- getDatasetsLocations()
     allDatasets <- c()
     for (location in locations) {
 

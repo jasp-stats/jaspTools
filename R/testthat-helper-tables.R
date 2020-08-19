@@ -22,20 +22,18 @@
 #'
 #' @export expect_equal_tables
 expect_equal_tables <- function(test, ref, label=NULL) {
-  if (is.null(label))
-    label <- "New table"
-
-  errorMsg <- getErrorMsgFromLastResults()
-  if (!is.null(errorMsg))
-    stop(paste("Tried retrieving table from results, but last run of jaspTools exited with an error:\n", errorMsg), call.=FALSE)
-
-  if (length(test) == 0)
-    stop(paste(label, "has no data. Please check your unit test; is the index path to the table specified correctly?"), call.=FALSE)
+  if (length(test) == 0) {
+    expect(FALSE, getEmptyTestMsg("table"))
+    return()
+  }
 
   nRows <- length(test)
   nCols <- length(test[[1]])
   cellNames <- names(unlist(test))
   test <- collapseTestTable(test)
+
+  if (is.null(label))
+    label <- "New table"
 
   if (length(test) == length(ref)) {
     mismatches <- getMismatchesEqualSizeTables(test, ref, nRows, nCols, cellNames)

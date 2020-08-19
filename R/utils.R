@@ -110,6 +110,8 @@ replaceFn <- function(fnName, fn, pkgName) {
 }
 
 getErrorMsgFromLastResults <- function() {
+  error <- list(type = NULL, message = NULL)
+
   lastResults <- .getInternal("lastResults")
   if (jsonlite::validate(lastResults))
     lastResults <- jsonlite::fromJSON(lastResults)
@@ -117,10 +119,23 @@ getErrorMsgFromLastResults <- function() {
   if (is.null(lastResults) || !is.list(lastResults) || is.null(names(lastResults)))
     return(NULL)
 
-  if ((lastResults[["status"]] == "validationError" || lastResults[["status"]] == "fatalError") && is.list(lastResults[["results"]]))
-    return(errorMsgFromHtml(lastResults$results$errorMessage))
+  if ((lastResults[["status"]] == "validationError" || lastResults[["status"]] == "fatalError") && is.list(lastResults[["results"]])) {
+    error[["type"]] <- lastResults[["status"]]
+    error[["message"]] <- errorMsgFromHtml(lastResults$results$errorMessage)
+  }
 
-  return(NULL)
+  if (is.null(error[["type"]])) {
+    flatResults <- unlist(lastResults)
+    localErrors <- endsWith(names(flatResults), ".error.errorMessage")
+    if (length(localErrors) > 0) {
+      posInResults <- gsub(".error.errorMessage", "", names(flatResults)[localErrors], fixed = TRUE)
+      msgs <- flatResults[localErrors]
+      error[["type"]] <- "localError"
+      error[["message"]] <- paste(posInResults, "-->", msgs, collapse = "\n")
+    }
+  }
+
+  return(error)
 }
 
 errorMsgFromHtml <- function(html) {

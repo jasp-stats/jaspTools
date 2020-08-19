@@ -11,8 +11,8 @@
 #' @details \code{pkgs.dir}:
 #' The directory where the R packages from jasp-required-files can be found.
 #'
-#' @details \code{data.dir}:
-#' The directory where datafiles can be found so they may be used by \code{runAnalysis}.
+#' @details \code{data.dirs}:
+#' The directories where datafiles can be found so they may be used by \code{runAnalysis}.
 #'
 #' @details \code{html.dir}:
 #' The directory where the javascript, css and .html files can be found to create output identical to JASP. Used by \code{view}.
@@ -35,7 +35,7 @@ viewPkgOptions <- function() {
   for (i in seq_along(names(pkgOptions))) {
     name  <- names(pkgOptions)[i]
     value <- getPkgOption(name)
-    message(name, " = ", value, "\n")
+    message(name, " = ", paste(value, collapse = ", "), "\n")
   }
 
   message("\nA description of these options can be found at `?viewPkgOptions`")

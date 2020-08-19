@@ -8,7 +8,7 @@
 #' @param pathJaspRequiredPkgs [optional] Character path to the root of jasp-required-files if present on the system.
 #' @param installJaspModules [optional] Boolean. Should jaspTools install all the JASP analysis modules as R packages (e.g., jaspAnova, jaspFrequencies)?
 #' @param quiet [optional] Boolean. Should the installation of R packages produce output?
-#' @param force [optional] Boolean. Should a fresh installation of jaspResults, jaspBase and jaspGraphs proceed if they are already installed on your system?
+#' @param force [optional] Boolean. Should a fresh installation of jaspResults, jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system?
 #'
 #' @export setupJaspTools
 setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, installJaspModules = TRUE, quiet = FALSE, force = FALSE) {
@@ -30,7 +30,7 @@ setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, 
       message("To fetch the dependencies correctly please answer the following:\n")
 
     if (missing(pathJaspDesktop)) {
-      hasJaspdesktop <- menu(c("Yes", "No"), title = "- Do you have a clone of jasp-stats/jasp-desktop on your system?")
+      hasJaspdesktop <- menu(c("Yes", "No"), title = "- Do you have an up-to-date clone of jasp-stats/jasp-desktop on your system?")
       if (hasJaspdesktop == 0) return(message("Setup aborted."))
 
       if (hasJaspdesktop == 1)
@@ -38,7 +38,7 @@ setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, 
     }
 
     if (missing(pathJaspRequiredPkgs) && getOS() != "linux") {
-      hasJaspRequiredPkgs <- menu(c("Yes", "No"), title = "- Do you have a clone of jasp-stats/jasp-required-files on your system?")
+      hasJaspRequiredPkgs <- menu(c("Yes", "No"), title = "- Do you have an up-to-date clone of jasp-stats/jasp-required-files on your system?")
       if (hasJaspRequiredPkgs == 0) return(message("Setup aborted."))
 
       if (hasJaspRequiredPkgs == 1)
@@ -46,7 +46,7 @@ setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, 
     }
 
     if (missing(installJaspModules)) {
-      wantsInstallJaspModules  <- menu(c("Yes", "No"), title = "- Would you like jaspTools to install all the JASP analysis modules located at github.com/jasp-stats?")
+      wantsInstallJaspModules  <- menu(c("Yes", "No"), title = "- Would you like jaspTools to install all the JASP analysis modules located at github.com/jasp-stats? This is useful if the module(s) you are working on requires functions from other JASP analysis modules.")
       if (wantsInstallJaspModules == 0) return(message("Setup aborted."))
 
       installJaspModules <- wantsInstallJaspModules == 1
@@ -85,7 +85,7 @@ setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, 
   installJaspPkg("jaspGraphs", quiet = quiet, force = force)
 
   if (isTRUE(installJaspModules))
-    installJaspModules(quiet = quiet)
+    installJaspModules(force = force, quiet = quiet)
 
   .setSetupComplete()
   .initJaspToolsInternals()
@@ -224,7 +224,7 @@ readJaspRequiredFilesLocation <- function() {
   unlink(getSetupCompleteFileName())
   unlink(getJaspRequiredFilesLocationFileName())
   unlink(getJavascriptLocation(), recursive = TRUE)
-  unlink(getDatasetsLocation(), recursive = TRUE)
+  unlink(getDatasetsLocations(jaspOnly = TRUE), recursive = TRUE)
   message("Removed files from previous jaspTools setup")
 }
 
@@ -284,10 +284,13 @@ getJavascriptLocation <- function(rootOnly = FALSE) {
   return(htmlDir)
 }
 
-getDatasetsLocation <- function() {
+getDatasetsLocations <- function(jaspOnly = FALSE) {
   jaspToolsDir <- getJaspToolsDir()
-  dataDir <- file.path(jaspToolsDir, "data")
-  return(dataDir)
+  dataDirs <- file.path(jaspToolsDir, "jaspData")
+  if (!jaspOnly)
+    dataDirs <- c(dataDirs, file.path(jaspToolsDir, "extdata"))
+
+  return(dataDirs)
 }
 
 fetchJavaScript <- function(path) {
@@ -305,7 +308,7 @@ fetchJavaScript <- function(path) {
 }
 
 fetchDatasets <- function(path) {
-  destDir <- getDatasetsLocation()
+  destDir <- getDatasetsLocations(jaspOnly = TRUE)
   if (!dir.exists(destDir))
     dir.create(destDir)
 
@@ -368,16 +371,23 @@ installJaspPkg <- function(pkg, force = FALSE, auth_token = NULL, ...) {
   devtools::install_github(paste("jasp-stats", pkg, sep = "/"), upgrade = "never", force = force, auth_token = auth_token, ...)
 }
 
-#' Install all modules and R packages from jasp-stats
+#' Install all JASP analysis modules from jasp-stats
 #'
 #' This function downloads all JASP modules locally and then installs them, to ensure all dependencies between JASP modules are resolved correctly.
+#' Useful if you're working on modules that have dependencies on other modules.
 #'
-#' @param onlyIfMissing Boolean. Should JASP reinstall everything or should it only install packages that are not installed on your system?
+#' @param force Boolean. Should JASP reinstall everything or should it only install packages that are not installed on your system?
 #' @param quiet Boolean. Should the installation procedure produce output?
 #'
 #' @export installJaspModules
-installJaspModules <- function(onlyIfMissing = FALSE, quiet = FALSE) {
-  res <- downloadAllJaspModules(onlyIfMissing, quiet)
+installJaspModules <- function(force = FALSE, quiet = FALSE) {
+  if (isJaspRequiredFilesLocationSet()) {
+    oldLibPaths <- .libPaths()
+    on.exit(.libPaths(oldLibPaths))
+    .libPaths(c(oldLibPaths, readJaspRequiredFilesLocation())) # we add it at the end so it doesn't actually write to it
+  }
+
+  res <- downloadAllJaspModules(force, quiet)
   if (length(res[["success"]]) > 0) {
     numWritten <- tools::write_PACKAGES(getTempJaspModulesLocation(), type = "source")
     rdsFile <- file.path(getTempJaspModulesLocation(), "packages.RDS")
@@ -403,12 +413,12 @@ getTempJaspModulesLocation <- function() {
   file.path(tempdir(), "JaspModules")
 }
 
-downloadAllJaspModules <- function(onlyIfMissing = FALSE, quiet = FALSE) {
+downloadAllJaspModules <- function(force = FALSE, quiet = FALSE) {
   repos <- getJaspGithubRepos()
   result <- list(success = NULL, fail = NULL)
   for (repo in repos) {
     if (!is.null(names(repo)) && c("name", "full_name") %in% names(repo)) {
-      if (isRepoJaspModule(repo[["name"]]) && (!onlyIfMissing || onlyIfMissing && !repo[["name"]] %in% installed.packages())) {
+      if (isRepoJaspModule(repo[["name"]]) && (force || !force && !repo[["name"]] %in% installed.packages())) {
         success <- downloadJaspPkg(repo[["name"]], quiet)
         if (success)
           result[["success"]] <- c(result[["success"]], repo[["name"]])

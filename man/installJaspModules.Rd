@@ -4,10 +4,10 @@
 \alias{installJaspModules}
 \title{Install all modules and R packages from jasp-stats}
 \usage{
-installJaspModules(onlyIfMissing = FALSE, quiet = FALSE)
+installJaspModules(force = FALSE, quiet = FALSE)
 }
 \arguments{
-\item{onlyIfMissing}{Boolean. Should JASP reinstall everything or should it only install packages that are not installed on your system?}
+\item{force}{Boolean. Should JASP reinstall everything or should it only install packages that are not installed on your system?}
 
 \item{quiet}{Boolean. Should the installation procedure produce output?}
 }

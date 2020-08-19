@@ -22,7 +22,7 @@
       module.dirs       = NULL,
       reinstall.modules = TRUE,
       html.dir          = getJavascriptLocation(),
-      data.dir          = getDatasetsLocation(),
+      data.dirs         = getDatasetsLocations(),
       pkgs.dir          = readJaspRequiredFilesLocation(),
       language          = "en"
     )
