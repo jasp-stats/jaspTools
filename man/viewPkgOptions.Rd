@@ -15,14 +15,15 @@ you call \code{viewPkgOptions}. You can adjust these values through
 \code{setPkgOption}.
 }
 \details{
-\code{locale}:
-The locale that the analysis runs in. Defaults to en_US.UTF-8 to avoid translation of strings.
+\code{language}:
+The language that the analysis runs in (passed to R environment variable "LANG"). Defaults to "en" to avoid translation of strings.
+See https://www.gnu.org/software/gettext/manual/html_node/Usual-Language-Codes.html
 
 \code{pkgs.dir}:
 The directory where the R packages from jasp-required-files can be found.
 
-\code{data.dir}:
-The directory where datafiles can be found so they may be used by \code{runAnalysis}.
+\code{data.dirs}:
+The directories where datafiles can be found so they may be used by \code{runAnalysis}.
 
 \code{html.dir}:
 The directory where the javascript, css and .html files can be found to create output identical to JASP. Used by \code{view}.

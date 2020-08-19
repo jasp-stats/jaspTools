@@ -3,16 +3,18 @@
 #' \code{analysisOptions} provides an easy way to create analysis options that can be supplied to \code{runAnalysis}.
 #'
 #'
-#' @param source There are two types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools will attempt to read the .qml file for that analysis and create a set of default options.
-#' The preferable options is 2) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
+#' @param source There are three types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools will attempt to read the .qml file for that analysis and create a set of default options.
+#' The preferable options is 2) a .jasp file that has one or more analyses with options you are interested in. Or (3) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
 #' The logs can be found by clicking 'Show logs" in the "Logging options". Click on the file "*Engine*.log" that has "Engine::receiveAnalysisMessage:" (usually Engine 1), copy the content between the { and }.
 #' Be sure to use single quotes (') when supplying this string to JASP.
 #'
-#' @return A list containing options you can supply to \code{runAnalysis}.
+#' @return If \code{source} is a .jasp file, then a list of lists containing analysis options. Otherwise a non-nested list containing options of the analysis. You can supply a list of options to \code{runAnalysis}.
 #' If \code{source} is the name of the R function of the analysis then all default options have been
 #' filled in and booleans set to FALSE. The options that have no default are
 #' left empty.
 #' @examples
+#' jaspOptions <- analysisOptions("~/Documents/someFile.jasp")
+#' options <- jaspOptions[[1]]
 #'
 #' options <- analysisOptions("BinomialTest")
 #' options[["variables"]] <- "contBinom"
@@ -56,6 +58,7 @@ analysisOptions <- function(source) {
   }
 
   options <- NULL
+  analysisName <- NULL
   source <- trimws(source)
   if (grepl("^\\{.*\\}$", source)) {
     analysisName <- stringr::str_match(source, '\\"name\\" : \\"(.*?)\\"')[2L]
@@ -64,11 +67,16 @@ analysisOptions <- function(source) {
       stop("Your json is invalid, please copy the entire message
            including the outer braces { } that was send to R in the Qt terminal.
            Remember to use single quotes around the message.", call.=FALSE)
+  } else if (file.exists(source)) {
+    options <- analysisOptionsFromJASPfile(source)
   } else {
     analysisName <- source
     options <- analysisOptionsFromQMLFile(source)
   }
-  attr(options, "analysisName") <- analysisName
+
+  if (!is.null(analysisName))
+    attr(options, "analysisName") <- analysisName
+
   return(options)
 }
 
@@ -122,6 +130,24 @@ analysisOptionsFromJSONString <- function(x) {
   options <- json[["options"]]
   if (!is.null(names(options)) && ".meta" %in% names(options))
     options[[".meta"]] <- NULL
+
+  return(options)
+}
+
+analysisOptionsFromJASPfile <- function(file) {
+  fileCon <- unz(file, "analyses.json")
+  on.exit(close(fileCon))
+  contents <- rjson::fromJSON(file = fileCon)
+  analyses <- contents[["analyses"]]
+  if (length(analyses) == 0)
+    stop("No analyses found in the provided file")
+
+  options <- vector("list", length(analyses))
+  for (i in seq_along(analyses)) {
+    analysis <- analyses[[i]]
+    options[[i]] <- analysis[["options"]]
+    attr(options[[i]], "analysisName") <- analysis[["name"]]
+  }
 
   return(options)
 }

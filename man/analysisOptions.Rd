@@ -7,13 +7,13 @@
 analysisOptions(source)
 }
 \arguments{
-\item{source}{There are two types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools will attempt to read the .qml file for that analysis and create a set of default options.
-The preferable options is 2) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
+\item{source}{There are three types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools will attempt to read the .qml file for that analysis and create a set of default options.
+The preferable options is 2) a .jasp file that has one or more analyses with options you are interested in. Or (3) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
 The logs can be found by clicking 'Show logs" in the "Logging options". Click on the file "*Engine*.log" that has "Engine::receiveAnalysisMessage:" (usually Engine 1), copy the content between the { and }.
 Be sure to use single quotes (') when supplying this string to JASP.}
 }
 \value{
-A list containing options you can supply to \code{runAnalysis}.
+If \code{source} is a .jasp file, then a list of lists containing analysis options. Otherwise a non-nested list containing options of the analysis. You can supply a list of options to \code{runAnalysis}.
 If \code{source} is the name of the R function of the analysis then all default options have been
 filled in and booleans set to FALSE. The options that have no default are
 left empty.
@@ -22,6 +22,8 @@ left empty.
 \code{analysisOptions} provides an easy way to create analysis options that can be supplied to \code{runAnalysis}.
 }
 \examples{
+jaspOptions <- analysisOptions("~/Documents/someFile.jasp")
+options <- jaspOptions[[1]]
 
 options <- analysisOptions("BinomialTest")
 options[["variables"]] <- "contBinom"

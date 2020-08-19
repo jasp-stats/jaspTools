@@ -62,6 +62,9 @@ runAnalysis <- function(name, dataset, options, view = TRUE, quiet = FALSE, make
       stop("Please supply an analysis name")
   }
 
+  if (!is.list(options) || is.null(names(options)))
+    stop("options should be a named list for one specific analysis")
+
   if (insideTestEnvironment()) {
     view  <- FALSE
     quiet <- TRUE

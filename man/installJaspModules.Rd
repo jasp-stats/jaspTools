@@ -2,7 +2,7 @@
 % Please edit documentation in R/pkg-setup.R
 \name{installJaspModules}
 \alias{installJaspModules}
-\title{Install all modules and R packages from jasp-stats}
+\title{Install all JASP analysis modules from jasp-stats}
 \usage{
 installJaspModules(force = FALSE, quiet = FALSE)
 }
@@ -13,4 +13,5 @@ installJaspModules(force = FALSE, quiet = FALSE)
 }
 \description{
 This function downloads all JASP modules locally and then installs them, to ensure all dependencies between JASP modules are resolved correctly.
+Useful if you're working on modules that have dependencies on other modules.
 }
