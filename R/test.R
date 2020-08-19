@@ -12,7 +12,9 @@ runTestsTravis <- function(modulePath) {
   if (Sys.getenv("REQUIRED_PKGS") == "")
     stop("Could not find environment variable `REQUIRED_PKGS`")
 
-  .setupJaspTools(NULL, normalizePath(Sys.getenv("REQUIRED_PKGS")), TRUE)
+  .setupJaspTools(NULL, normalizePath(Sys.getenv("REQUIRED_PKGS")), FALSE)
+
+  remotes::install_local(modulePath, upgrade = "never", force = FALSE)
 
   setPkgOption("module.dirs", modulePath)
 
