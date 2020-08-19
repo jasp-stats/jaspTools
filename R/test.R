@@ -45,8 +45,8 @@ testAnalysis <- function(name) {
   modulePath <- getModulePathsForTesting(name)
 
   testDir    <- file.path(modulePath, "tests", "testthat")
-  name       <- matchCaseTestFileAnalysisName(name, testDir)
-  fileToTest <- file.path(testDir, paste0("test-", name, ".R"))
+  nameMatch  <- matchCaseTestFileAnalysisName(name, testDir)
+  fileToTest <- file.path(testDir, paste0("test-", nameMatch, ".R"))
 
   envirValue <- Sys.getenv("NOT_CRAN")
   Sys.setenv("NOT_CRAN" = "true") # this is to prevent vdiffr from skipping plots
