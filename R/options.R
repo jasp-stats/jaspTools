@@ -91,25 +91,25 @@ getQMLFile <- function(name) {
   if (is.null(modulePath))
     stop("Could not locate the module location for ", name)
 
-  possibleQmlFile <- file.path(modulePath, "inst", "qml", paste0(name, ".qml")) # it's optional to specify the qml file in description.qml, you can also just name it RFunc.qml
+  possibleQmlFile <- file.path(modulePath, "inst", "qml", paste0(name, ".qml")) # it's optional to specify the qml file in Description.qml, you can also just name it RFunc.qml
   if (file.exists(possibleQmlFile))
     return(possibleQmlFile)
 
-  descrFile <- file.path(modulePath, "inst", "description.qml")
+  descrFile <- file.path(modulePath, "inst", "Description.qml")
   if (!file.exists(descrFile))
-    stop("Could not locate description.qml in ", modulePath)
+    stop("Could not locate Description.qml in ", modulePath)
 
   fileSize <- file.info(descrFile)$size
   fileContents <- readChar(descrFile, nchars = fileSize)
   fileContents <- gsub("[\"']", "", fileContents)
   rFuncLocExpr <- paste0("\\{[^\\{\\}]*func:\\s*", name, "[^\\{\\}]*\\}")
   if (!grepl(rFuncLocExpr, fileContents))
-    stop("Could not locate qml file for R function ", name, " in inst/qml folder and did not find the R function in inst/description.qml to look for an alternative name for the qml file")
+    stop("Could not locate qml file for R function ", name, " in inst/qml folder and did not find the R function in inst/Description.qml to look for an alternative name for the qml file")
 
   rLocMatch <- stringr::str_match(fileContents, rFuncLocExpr)[1]
   qmlLocExpr <- "[a-zA-Z0-9_]+\\.qml"
   if (!grepl(qmlLocExpr, rLocMatch))
-    stop("Could not locate qml file for R function ", name, " in inst/qml folder and did not find a qml entry in inst/description.qml that describes an alternative for the qml filename")
+    stop("Could not locate qml file for R function ", name, " in inst/qml folder and did not find a qml entry in inst/Description.qml that describes an alternative for the qml filename")
 
   qmlFileName <- stringr::str_match(rLocMatch, qmlLocExpr)
   qmlFilePath <- file.path(modulePath, "inst", "qml", qmlFileName)
