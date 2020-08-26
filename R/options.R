@@ -2,19 +2,21 @@
 #'
 #' \code{analysisOptions} provides an easy way to create analysis options that can be supplied to \code{runAnalysis}.
 #'
+#' @param source One of three: (1) R function name, (2) path to .jasp file or (3) json string. See the details section for more information.
 #'
-#' @param source There are three types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools will attempt to read the .qml file for that analysis and create a set of default options.
-#' The preferable options is 2) a .jasp file that has one or more analyses with options you are interested in. Or (3) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
-#' The logs can be found by clicking 'Show logs" in the "Logging options". Click on the file "*Engine*.log" that has "Engine::receiveAnalysisMessage:" (usually Engine 1), copy the content between the { and }.
-#' Be sure to use single quotes (') when supplying this string to JASP.
+#' @details
+#' There are three types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools will attempt to read the .qml file for that analysis and create a set of default options.
+#' 2) the path to .jasp file that has one or more analyses. Or (3) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
+#' The logs can be found by clicking 'Show logs" in the "Logging options". Click on the file "*Engine*.log" that has "Engine::receiveAnalysisMessage:" (usually Engine 1), copy the content between the \{ and \}.
+#' Be sure to use single quotes (') when supplying this string.
 #'
-#' @return If \code{source} is a .jasp file, then a list of lists containing analysis options. Otherwise a non-nested list containing options of the analysis. You can supply a list of options to \code{runAnalysis}.
+#' @return A list containing options of the analysis. If \code{source} is a .jasp file with multiple analyses, then a list of lists.
 #' If \code{source} is the name of the R function of the analysis then all default options have been
 #' filled in and booleans set to FALSE. The options that have no default are
 #' left empty.
 #' @examples
 #' jaspOptions <- analysisOptions("~/Documents/someFile.jasp")
-#' options <- jaspOptions[[1]]
+#' options <- jaspOptions[[1]] # if there are multiple analyses in the .jasp files you need to select one
 #'
 #' options <- analysisOptions("BinomialTest")
 #' options[["variables"]] <- "contBinom"
@@ -52,30 +54,25 @@
 #'
 #' @export analysisOptions
 analysisOptions <- function(source) {
-  if (! is.character(source) || length(source) > 1) {
-    stop("Expecting a character input of length 1 as source,
-    either a json string copied from the Qt terminal or an analysis name.")
-  }
+  if (! is.character(source) || length(source) > 1)
+    stop("Expecting a character input of length 1 as source")
 
-  options <- NULL
-  analysisName <- NULL
   source <- trimws(source)
-  if (grepl("^\\{.*\\}$", source)) {
-    analysisName <- stringr::str_match(source, '\\"name\\" : \\"(.*?)\\"')[2L]
-    options <- analysisOptionsFromJSONString(source)
-  } else if (grepl("[{}\":]", source)) {
+  if (grepl("[{}\":]", source)) { # json string
+    if (!grepl("^\\{.*\\}$", source))
       stop("Your json is invalid, please copy the entire message
            including the outer braces { } that was send to R in the Qt terminal.
-           Remember to use single quotes around the message.", call.=FALSE)
-  } else if (file.exists(source)) {
+           Remember to use single quotes around the message.")
+
+    options <- analysisOptionsFromJSONString(source)
+  } else if (file.exists(source)) { # .jasp file
+    if (!endsWith(source, ".jasp"))
+      stop("The file you provided exists, but it is not a .jasp file")
+
     options <- analysisOptionsFromJASPfile(source)
-  } else {
-    analysisName <- source
+  } else { # analysis name
     options <- analysisOptionsFromQMLFile(source)
   }
-
-  if (!is.null(analysisName))
-    attr(options, "analysisName") <- analysisName
 
   return(options)
 }
@@ -83,6 +80,8 @@ analysisOptions <- function(source) {
 analysisOptionsFromQMLFile <- function(analysis) {
   file <- getQMLFile(analysis)
   options <- readQML(file)
+  attr(options, "analysisName") <- analysis
+
   return(options)
 }
 
@@ -131,6 +130,9 @@ analysisOptionsFromJSONString <- function(x) {
   if (!is.null(names(options)) && ".meta" %in% names(options))
     options[[".meta"]] <- NULL
 
+  if ("name" %in% names(json))
+    attr(options, "analysisName") <- json[["name"]]
+
   return(options)
 }
 
@@ -148,6 +150,9 @@ analysisOptionsFromJASPfile <- function(file) {
     options[[i]] <- analysis[["options"]]
     attr(options[[i]], "analysisName") <- analysis[["name"]]
   }
+
+  if (length(options) == 1)
+    options <- options[[1]]
 
   return(options)
 }

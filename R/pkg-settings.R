@@ -17,6 +17,9 @@
 #' @details \code{html.dir}:
 #' The directory where the javascript, css and .html files can be found to create output identical to JASP. Used by \code{view}.
 #'
+#' @details \code{view.in.rstudio}:
+#' This option specifies where the html output of \code{runAnalysis} will be shown: inside RStudio or in a separate webbrowser.
+#'
 #' @details \code{reinstall.modules}:
 #' When you run an analysis or test it, jaspTools calls the *installed* version of the module.
 #' This option specifies if the installed version should be reinstalled automatically when you make any changes to your module.
@@ -67,16 +70,19 @@ setPkgOption <- function(name, value) {
     stop(name, " is not a valid option to set")
 
   # set relative paths to absolute paths to ensure they will work if the wd changes
-  if (endsWith(name, ".dir") || endsWith(name, ".dirs")) {
+  if (any(endsWith(name, c(".dir", ".dirs")))) {
     for (i in seq_along(value)) {
-      if (!dir.exists(value[i]))
+      if (is.null(value) || value == "") # allow users to reset paths to null values
+        next
+
+      if (!dir.exists(value[i])) # if the value is not a null value it should be a valid path
         stop("Folder ", value[i], " does not exist")
 
       value[i] <- gsub("[\\/]$", "", normalizePath(value[i])) # normalize path and strip trailing slashes (they trip up devtools::as.package)
     }
   }
 
-  .pkgenv[["pkgOptions"]][[name]] <- value
+  .pkgenv[["pkgOptions"]][name] <- list(value)
 
   message("`", name, "` -> ", paste(value, collapse = ", "))
 }

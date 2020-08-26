@@ -104,7 +104,7 @@ view <- function(results) {
       stop("Incorrect json provided. Could not locate required field 'results'")
   } else if (!is.list(results) || !"results" %in% names(results)) {
     stop("Incorrect object provided in results,
-    please enter a valid json string or a named results list.")
+         please enter a valid json string or a named results list.")
   }
 
   content <- list(
@@ -115,11 +115,12 @@ view <- function(results) {
   )
   json <- convertResultsListToJson(content)
 
-  initializeOutputFolder(file.path(tempdir(), "jaspTools", "html"))
+  if (isTRUE(getPkgOption("view.in.rstudio")) && !is.null(getOption("viewer")))
+    viewer <- getOption("viewer")
+  else
+    viewer <- utils::browseURL
 
-  htmlFile <- file.path(tempdir(), "jaspTools", "html", "tmp-index.html")
-  insertJsonInHtml(json, htmlFile)
-  utils::browseURL(htmlFile)
+  viewer(createHtmlFile(json))
 }
 
 convertResultsListToJson <- function(lst) {
@@ -133,8 +134,13 @@ convertResultsListToJson <- function(lst) {
   return(json)
 }
 
-insertJsonInHtml <- function(json, htmlFile) {
-  html <- readChar(file.path(getPkgOption("html.dir"), "index.html"), 1000000)
+createHtmlFile <- function(json) {
+  htmlDir <- getTempOutputLocation("html")
+  moveJaspHtmlToDir(htmlDir)
+
+  templateHtmlFile <- file.path(htmlDir, "index.html")
+  html <- readChar(templateHtmlFile, file.size(templateHtmlFile))
+
   insertedJS <- paste0(
     "<script>
       var jasp = {}
@@ -145,26 +151,27 @@ insertJsonInHtml <- function(json, htmlFile) {
       })
     </script></body>")
   html <- gsub("</body>", insertedJS, html)
+
+  # adblockers flag analysis.js so it needs to be renamed
+  renameJsFileForAdblockers(htmlDir)
   html <- changeJsIncludeForAdblockers(html)
 
+  htmlFile <- file.path(htmlDir, "tmp-index.html")
   writeChar(html, htmlFile)
+
+  return(htmlFile)
 }
 
-initializeOutputFolder <- function(folder) {
-  if (!dir.exists(folder))
-    dir.create(folder, recursive=TRUE)
-
-  if (! "js" %in% list.dirs(folder, full.names=FALSE))
-    file.copy(list.files(getPkgOption("html.dir"), full.names = TRUE), folder, recursive = TRUE)
-
-  renameJsFileForAdblockers(folder)
+moveJaspHtmlToDir <- function(dir) {
+  if (!"js" %in% list.dirs(dir, full.names = FALSE))
+    file.copy(list.files(getPkgOption("html.dir"), full.names = TRUE), dir, recursive = TRUE)
 }
 
 changeJsIncludeForAdblockers <- function(html) {
   gsub("analysis.js", "jaspanalysis.js", html, fixed = TRUE)
 }
 
-renameJsFileForAdblockers <- function(folder) {
-  if (file.exists(file.path(folder, "js", "analysis.js")))
-    file.rename(file.path(folder, "js", "analysis.js"), file.path(folder, "js", "jaspanalysis.js"))
+renameJsFileForAdblockers <- function(dir) {
+  if (file.exists(file.path(dir, "js", "analysis.js")))
+    file.rename(file.path(dir, "js", "analysis.js"), file.path(dir, "js", "jaspanalysis.js"))
 }

@@ -55,15 +55,17 @@
 #'
 #' @export runAnalysis
 runAnalysis <- function(name, dataset, options, view = TRUE, quiet = FALSE, makeTests = FALSE) {
+  if (is.list(options) && is.null(names(options)) && any(names(unlist(lapply(options, attributes))) == "analysisName"))
+    stop("The provided list of options is not named. Did you mean to index in the options list (e.g., options[[1]])?")
+
+  if (!is.list(options) || is.null(names(options)))
+    stop("The options should be a named list (you can obtain it through `analysisOptions()`")
 
   if (missing(name)) {
     name <- attr(options, "analysisName")
     if (is.null(name))
       stop("Please supply an analysis name")
   }
-
-  if (!is.list(options) || is.null(names(options)))
-    stop("options should be a named list for one specific analysis")
 
   if (insideTestEnvironment()) {
     view  <- FALSE
@@ -150,9 +152,8 @@ initAnalysisRuntime <- function(dataset, makeTests, ...) {
 }
 
 reinstallChangedModules <- function() {
-  modules   <- getModulePaths()
-  reinstall <- getPkgOption("reinstall.modules")
-  if (!reinstall || length(modules) == 0)
+  modules <- getModulePaths()
+  if (isFALSE(getPkgOption("reinstall.modules")) || length(modules) == 0)
     return()
 
   msgPrinted <- FALSE
@@ -204,8 +205,8 @@ processJsonResults <- function(jsonResults) {
 }
 
 transferPlotsFromjaspResults <- function() {
-  pathPlotsjaspResults <- file.path(tempdir(), "jaspResults", "plots")
-  pathPlotsjaspTools <- file.path(tempdir(), "jaspTools", "html")
+  pathPlotsjaspResults <- file.path(tempdir(), "jaspResults", "plots") # as defined in jaspResults pkg
+  pathPlotsjaspTools <- getTempOutputLocation("html")
   if (dir.exists(pathPlotsjaspResults)) {
     plots <- list.files(pathPlotsjaspResults)
     if (length(plots) > 0) {
@@ -222,4 +223,3 @@ getJsonResultsFromJaspResults <- function() {
   .setInternal("state", list())
   .setInternal("dataset", "")
 }
-

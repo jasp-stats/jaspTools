@@ -28,6 +28,9 @@ The directories where datafiles can be found so they may be used by \code{runAna
 \code{html.dir}:
 The directory where the javascript, css and .html files can be found to create output identical to JASP. Used by \code{view}.
 
+\code{view.in.rstudio}:
+This option specifies where the html output of \code{runAnalysis} will be shown: inside RStudio or in a separate webbrowser.
+
 \code{reinstall.modules}:
 When you run an analysis or test it, jaspTools calls the *installed* version of the module.
 This option specifies if the installed version should be reinstalled automatically when you make any changes to your module.

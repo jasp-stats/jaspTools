@@ -14,7 +14,7 @@ runTestsTravis <- function(modulePath) {
 
   .libPaths(c(.libPaths(), Sys.getenv("REQUIRED_PKGS")))
 
-  .setupJaspTools(NULL, normalizePath(Sys.getenv("REQUIRED_PKGS")), FALSE)
+  setupJaspTools(pathJaspDesktop = NULL, pathJaspRequiredPkgs = normalizePath(Sys.getenv("REQUIRED_PKGS")), installJaspModules = FALSE)
 
   remotes::install_local(modulePath, upgrade = "never", force = FALSE)
 

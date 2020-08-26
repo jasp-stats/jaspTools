@@ -9,7 +9,7 @@ findCorrectFunction <- function(name) {
 getModulePaths <- function() {
   modulePaths <- getPkgOption("module.dirs")
 
-  if (length(modulePaths) == 0)
+  if (length(modulePaths) == 0 || all(modulePaths == ""))
     stop("No module folders were specified through `setPkgOption(\"module.dirs\", ...)`. Please add the ones you are working on and want to run or test.")
 
   if (all(is.character(modulePaths)))
@@ -107,6 +107,17 @@ replaceFn <- function(fnName, fn, pkgName) {
     reAssign(getNamespace(pkgName)) # if not attached
     reAssign(as.environment(paste0("package:", pkgName))) # if attached
   })
+}
+
+getTempOutputLocation <- function(dir = NULL) {
+  loc <- file.path(tempdir(), "jaspTools")
+  if (!is.null(dir)) {
+    if (!dir %in% c("state", "html"))
+      stop("Unknown output directory requested ", dir)
+
+    loc <- file.path(loc, dir)
+  }
+  return(loc)
 }
 
 getErrorMsgFromLastResults <- function() {

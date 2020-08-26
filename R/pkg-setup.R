@@ -12,17 +12,15 @@
 #'
 #' @export setupJaspTools
 setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, installJaspModules = TRUE, quiet = FALSE, force = FALSE) {
+
+  argsMissing <- FALSE
   if (interactive()) {
 
     if (.isSetupComplete()) {
       continue <- menu(c("Yes", "No"), title = "You have previously completed the setup procedure, are you sure you want to do it again?")
-      if (continue == 1)
-        .removeCompletedSetupFiles()
-      else
-        return(message("Setup aborted."))
+      if (continue != 1) return(message("Setup aborted."))
     }
 
-    argsMissing <- FALSE
     if (missing(installJaspModules) || missing(pathJaspRequiredPkgs) || missing(pathJaspDesktop))
       argsMissing <- TRUE
 
@@ -51,20 +49,24 @@ setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, 
 
       installJaspModules <- wantsInstallJaspModules == 1
     }
-
-    .setupJaspTools(pathJaspDesktop, pathJaspRequiredPkgs, installJaspModules, quiet, force)
-
-    if (argsMissing)
-      printSetupArgs(pathJaspDesktop, pathJaspRequiredPkgs, installJaspModules)
   }
+
+  .setupJaspTools(pathJaspDesktop, pathJaspRequiredPkgs, installJaspModules, quiet, force)
+
+  if (argsMissing)
+    printSetupArgs(pathJaspDesktop, pathJaspRequiredPkgs, installJaspModules)
 }
 
-.setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, installJaspModules = TRUE, quiet = FALSE, force = FALSE) {
+.setupJaspTools <- function(pathJaspDesktop, pathJaspRequiredPkgs, installJaspModules, quiet, force) {
   pathJaspDesktop <- validateJaspResourceDir(pathJaspDesktop, isJaspDesktopDir, "jasp-desktop")
   pathJaspRequiredPkgs <- validateJaspResourceDir(pathJaspRequiredPkgs, isJaspRequiredFilesDir, "jasp-required-files")
 
+  if (.isSetupComplete()) # in case the setup is performed multiple times
+    .removeCompletedSetupFiles()
+
   message("Fetching resources...\n")
 
+  # set the jasp-requires files *before* installing jaspResults, jaspBase and jaspGraphs to avoid duplicating dependencies
   if (is.character(pathJaspRequiredPkgs))
     setLocationJaspRequiredFiles(pathJaspRequiredPkgs)
   else if (is.null(pathJaspRequiredPkgs) && isJaspRequiredFilesLocationSet())
@@ -87,8 +89,7 @@ setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, 
   if (isTRUE(installJaspModules))
     installJaspModules(force = force, quiet = quiet)
 
-  .setSetupComplete()
-  .initJaspToolsInternals()
+  .finalizeSetup()
 }
 
 printSetupArgs <- function(pathJaspDesktop, pathJaspRequiredPkgs, installJaspModules) {
@@ -211,13 +212,20 @@ readJaspRequiredFilesLocation <- function() {
   return(loc)
 }
 
+.finalizeSetup <- function() {
+  .setSetupComplete()
+
+  .initInternalPaths()
+  .initOutputDirs()
+
+  message("jaspTools setup complete")
+}
+
 .setSetupComplete <- function() {
   file <- getSetupCompleteFileName()
   fileConn <- file(file)
   on.exit(close(fileConn))
   writeLines("", fileConn)
-
-  message("jaspTools setup complete")
 }
 
 .removeCompletedSetupFiles <- function() {

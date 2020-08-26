@@ -1,14 +1,27 @@
-.pkgenv <- list2env(
-  list(internal = list(jaspToolsPath  = "",
-                       dataset        = "",
-                       state          = list(),
-                       modulesMd5Sums = list()),
-       pkgOptions = list()),
-  parent = emptyenv())
+.pkgenv <- list2env(list(
+  internal   = list(jaspToolsPath     = "",
+                    dataset           = "",
+                    state             = list(),
+                    modulesMd5Sums    = list()
+               ),
+  pkgOptions = list(module.dirs       = "",
+                    reinstall.modules = TRUE,
+                    view.in.rstudio   = TRUE,
+                    html.dir          = "",
+                    data.dirs         = "",
+                    pkgs.dir          = "",
+                    language          = "en"
+               )
+  ), parent = emptyenv())
 
 .onLoad <- function(libname, pkgname) {
-  .pkgenv[["internal"]][["jaspToolsPath"]] <- normalizePath(file.path(libname, "jaspTools"))
-  .initJaspToolsInternals()
+  .setInternal("jaspToolsPath", normalizePath(file.path(libname, "jaspTools")))
+  .insertRbridgeIntoEnv(.GlobalEnv)
+
+  if (.isSetupComplete()) {
+    .initInternalPaths()
+    .initOutputDirs()
+  }
 }
 
 .onAttach <- function(libname, pkgname) {
@@ -16,25 +29,18 @@
     packageStartupMessage("jaspTools needs to be setup, so it can find all the resources it needs. Please use `setupJaspTools()` (you don't have to provide args if you're not sure what they mean).")
 }
 
-.initJaspToolsInternals <- function() {
-  if (.isSetupComplete()) {
-    .pkgenv[["pkgOptions"]] <- list(
-      module.dirs       = NULL,
-      reinstall.modules = TRUE,
-      html.dir          = getJavascriptLocation(),
-      data.dirs         = getDatasetsLocations(),
-      pkgs.dir          = readJaspRequiredFilesLocation(),
-      language          = "en"
-    )
+.initInternalPaths <- function() {
+  setPkgOption("html.dir",  getJavascriptLocation())
+  setPkgOption("data.dirs", getDatasetsLocations())
+  setPkgOption("pkgs.dir",  readJaspRequiredFilesLocation())
+}
 
-    # create the temp (html) directory for the output
-    tempOutputDir <- file.path(tempdir(), "jaspTools")
-    if (!dir.exists(tempOutputDir)) {
-      dir.create(file.path(tempOutputDir, "html", "plots"), recursive = TRUE)
-      dir.create(file.path(tempOutputDir, "state"))
-      packageStartupMessage(paste("Note: temp output files may be found at", tempOutputDir))
-    }
-  }
+.initOutputDirs <- function() {
+  htmlDir <- getTempOutputLocation("html")
+  if (!dir.exists(htmlDir))
+    dir.create(file.path(htmlDir, "plots"), recursive = TRUE)
 
-  .insertRbridgeIntoEnv(.GlobalEnv)
+  stateDir <- getTempOutputLocation("state")
+  if (!dir.exists(stateDir))
+    dir.create(stateDir, recursive = TRUE)
 }
