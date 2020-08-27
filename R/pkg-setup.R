@@ -397,24 +397,20 @@ installJaspModules <- function(force = FALSE, quiet = FALSE) {
 
   res <- downloadAllJaspModules(force, quiet)
   if (length(res[["success"]]) > 0) {
-    numWritten <- tools::write_PACKAGES(getTempJaspModulesLocation(), type = "source")
-    rdsFile <- file.path(getTempJaspModulesLocation(), "packages.RDS")
-    if (numWritten > 0 && file.exists(rdsFile)) {
-      localPkgDB <- readRDS(rdsFile)
-      installCranDependencies(localPkgDB, quiet = quiet)
-      if (length(localPkgDB[, "Package"]) > 0)
-        install.packages(localPkgDB[, "Package"], contriburl = paste0("file:///", getTempJaspModulesLocation()), type = "source", quiet = quiet)
-    }
-  }
-}
+    pkgs <- list.files(getTempJaspModulesLocation(), full.names = TRUE)
+    failed <- NULL
+    for (pkg in pkgs) {
+      res <- try(silent = quiet, {
+        devtools::install_local(pkg, upgrade = "never", dependencies = TRUE, quiet = quiet, force = force)
+      })
 
-installCranDependencies <- function(localPkgDB, quiet = FALSE) {
-  allDeps <- unlist(tools::package_dependencies(localPkgDB[, "Package"], db = localPkgDB))
-  internalDeps <- localPkgDB[, "Package"] # these are the JASP modules
-  externalDeps <- setdiff(allDeps, internalDeps) # these are CRAN packages
-  missingDeps <- setdiff(externalDeps, installed.packages())
-  if (length(missingDeps) > 0)
-    install.packages(missingDeps, quiet = quiet)
+      if (inherits(res, "try-error"))
+        failed <- c(failed, basename(pkg))
+    }
+    if (length(failed) > 0)
+      warning("Installation failed for ", paste(failed, collapse = ", "))
+  }
+
 }
 
 getTempJaspModulesLocation <- function() {
@@ -460,11 +456,6 @@ downloadJaspPkg <- function(repo, quiet) {
 
     if (dir.exists(paste0(pkgLoc, "-master")))
       file.rename(paste0(pkgLoc, "-master"), pkgLoc)
-
-    devtools::build(pkgLoc, clean_doc = FALSE, quiet = quiet)
-
-    if (dir.exists(pkgLoc))
-      unlink(pkgLoc, recursive = TRUE)
 
     if (file.exists(zipFile))
       unlink(zipFile)
