@@ -18,4 +18,4 @@ Imports:
   stringr,
   testthat,
   vdiffr (>= 0.3.0)
-RoxygenNote: 6.1.1
+RoxygenNote: 7.1.1

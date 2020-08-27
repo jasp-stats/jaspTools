@@ -1,9 +1,9 @@
 #' View the tables and plots in a results object.
 #'
-#' \code{view} allows you to view output independently of Qt. It uses the same
-#' javascript/css/html and should generate identical output. This function may
+#' \code{view} allows you to view output independently of JASP. By default this output
+#' is shown in the RStudio viewer, if you would like it to go to your webbrowser, run \code{setPkgOption("view.in.rstudio", FALSE)}.
+#' The same javascript/css/html is used as in JASP and so the output is identical. This function may
 #' be called directly, but it is more convenient to use \code{runAnalysis}.
-#'
 #'
 #' @param results A named R list returned from a JASP analysis, or a json
 #' results string copied from the Qt terminal.
