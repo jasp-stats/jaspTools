@@ -25,14 +25,18 @@
 }
 
 .onAttach <- function(libname, pkgname) {
-  if (!.isSetupComplete())
+  if (.isSetupComplete())
+    .checkUpdatesJaspCorePkgs()
+  else
     packageStartupMessage("jaspTools needs to be setup, so it can find all the resources it needs. Please use `setupJaspTools()` (you don't have to provide args if you're not sure what they mean).")
 }
 
 .initInternalPaths <- function() {
-  setPkgOption("html.dir",  getJavascriptLocation())
-  setPkgOption("data.dirs", getDatasetsLocations())
-  setPkgOption("pkgs.dir",  readJaspRequiredFilesLocation())
+  suppressMessages({
+    setPkgOption("html.dir",  getJavascriptLocation())
+    setPkgOption("data.dirs", getDatasetsLocations())
+    setPkgOption("pkgs.dir",  readJaspRequiredFilesLocation())
+  })
 }
 
 .initOutputDirs <- function() {
@@ -43,4 +47,27 @@
   stateDir <- getTempOutputLocation("state")
   if (!dir.exists(stateDir))
     dir.create(stateDir, recursive = TRUE)
+}
+
+.checkUpdatesJaspCorePkgs <- function() {
+  hasUpdates <- NULL
+  corePkgs <- c("jaspGraphs", "jaspBase", "jaspTools")
+  for (pkg in corePkgs) {
+    suppressWarnings(try(silent = TRUE, {
+      localVer <- packageVersion(pkg)
+      upstreamDescr <- readChar(sprintf("https://raw.githubusercontent.com/jasp-stats/%s/master/DESCRIPTION", pkg), 1e5)
+      if (grepl("Version: [0-9\\.]+\\n", upstreamDescr)) {
+        upstreamVer <- package_version(stringr::str_match(upstreamDescr, "Version: ([0-9\\.]+)\\n")[2])
+        if (upstreamVer > localVer)
+          hasUpdates <- c(hasUpdates, pkg)
+      }
+    }))
+  }
+
+  if (length(hasUpdates) > 0)
+    packageStartupMessage(
+      sprintf("%1$s available for %2$s. It is recommended that you use `remotes::install_github()` to get the latest %3$s.",
+              ifelse(length(hasUpdates) == 1, "An update is", "Updates are"),
+              paste(hasUpdates, collapse = ", "),
+              ifelse(length(hasUpdates) == 1, "version", "versions")))
 }
