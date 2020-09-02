@@ -22,7 +22,7 @@ The general classes are:
 - `viewPkgOptions`: views options in the package
 - `setPkgOption`: change an options in the package (e.g., what module you are working on)
 
-After `setJaspTools()` retrieves all the necessary dependencies (packages, html, data files), the paths to a number of these dependencies are stored inside of the pkgOptions.
+After `setupJaspTools()` retrieves all the necessary dependencies (packages, html, data files), the paths to a number of these dependencies are stored inside of the pkgOptions.
 You will generally not need to change them.
 However, what you must always do is tell jaspTools what modules you are working on:
 
