@@ -8,7 +8,7 @@ You can install the R package with the use of `devtools`:
 
 Note: On some macs, it seems to be hard to build the dependency "data.table" from source resulting in the error message "clang: error: unsupported option '-fopenmp'". One hack to get around this is to select no when asked to install the package from source. This will install an older version of data.table without openmp support, which suffices for jaspTools. Alternatively, you might want to upgrade [clang](https://cran.r-project.org/bin/macosx/tools/). 
 
-After loading jaspTools with `library(jaspTools)`, you need to call `setJaspTools()`. This is
+After loading jaspTools with `library(jaspTools)`, you need to call `setupJaspTools()`. This is
 required once after every reinstall of jaspTools.
 
 ## Functionality
