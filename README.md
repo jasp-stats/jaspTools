@@ -24,7 +24,7 @@ The general classes are:
 
 After `setupJaspTools()` retrieves all the necessary dependencies (packages, html, data files), the paths to a number of these dependencies are stored inside of the pkgOptions.
 You will generally not need to change them.
-However, what you must always do is tell jaspTools what modules you are working on:
+However, what you must usually do is tell jaspTools what modules you are working on (unless your working directory already points to a module):
 
 `setPkgOption("module.dirs", c("/path/to/module1", "/path/to/module2"))`
 

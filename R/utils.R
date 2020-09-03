@@ -7,25 +7,34 @@ findCorrectFunction <- function(name) {
 }
 
 getModulePaths <- function() {
+  validModules <- NULL
+
   modulePaths <- getPkgOption("module.dirs")
+  if (length(modulePaths) > 0 && any(modulePaths != "")) {
 
-  if (length(modulePaths) == 0 || all(modulePaths == ""))
-    stop("No module folders were specified through `setPkgOption(\"module.dirs\", ...)`. Please add the ones you are working on and want to run or test.")
+    for (modulePath in modulePaths) {
+      pkgRoot <- getPkgRoot(modulePath)
+      if (hasJaspModuleRequisites(list.files(pkgRoot, recursive = TRUE)))
+        validModules <- c(validModules, pkgRoot)
+    }
 
-  if (all(is.character(modulePaths)))
-    modulePaths <- normalizePath(modulePaths)
+  } else {
 
-  validModulePaths <- NULL
-  for (modulePath in modulePaths) {
-    rPkg <- try(devtools::as.package(modulePath), silent = TRUE)
-    if (!inherits(rPkg, "try-error") && is.list(rPkg) && "path" %in% names(rPkg))
-      validModulePaths <- c(validModulePaths, rPkg[["path"]])
+    wdAsPkg <- getPkgRoot(getwd())
+    if (!is.null(wdAsPkg) && hasJaspModuleRequisites(list.files(wdAsPkg, recursive = TRUE))) {
+      message("Current working directory is a JASP module, using that because `module.dirs` is empty.")
+      setPkgOption("module.dirs", wdAsPkg)
+      validModules <- wdAsPkg
+    } else {
+      stop("No module folders were specified through `setPkgOption(\"module.dirs\", ...)`. Please add the ones you are working on and want to run or test.")
+    }
+
   }
 
-  if (length(validModulePaths) == 0)
-    stop("None of the module folders specified through `setPkgOption(\"module.dirs\", ...)` are valid R packages. All JASP modules should be R packages.")
+  if (length(validModules) == 0)
+    stop("None of the module folders specified through `setPkgOption(\"module.dirs\", ...)` are valid JASP modules. All JASP modules have these files: DESCRIPTION, NAMESPACE, inst/Description.qml.")
 
-  return(validModulePaths)
+  return(validModules)
 }
 
 getModuleNameFromPath <- function(modulePaths) {
@@ -83,6 +92,22 @@ getModulePathsForTesting <- function(name = NULL) {
     stop("None of the module folders specified in `module.dirs` (see `viewPkgOptions()`) have any tests. Note that the tests should be in `moduleDir/tests/testthat` and named `test-analysisName.R`.")
 
   return(modulesWithTests)
+}
+
+getPkgRoot <- function(dir) {
+  root <- NULL
+  rPkg <- try(devtools::as.package(dir), silent = TRUE)
+  if (!inherits(rPkg, "try-error") && is.list(rPkg) && "path" %in% names(rPkg))
+    root <- rPkg[["path"]]
+
+  return(root)
+}
+
+hasJaspModuleRequisites <- function(files, sep = .Platform$file.sep) {
+  requisites <- c("NAMESPACE", "DESCRIPTION", paste("inst", "Description.qml", sep = sep))
+  if (length(files) > 0 && all(requisites %in% files))
+    return(TRUE)
+  return(FALSE)
 }
 
 insideTestEnvironment <- function() {

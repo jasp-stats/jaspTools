@@ -465,14 +465,11 @@ downloadJaspPkg <- function(repo, quiet) {
 }
 
 isRepoJaspModule <- function(repo) {
-  isJaspModule <- FALSE
-
   repoTree <- githubGET(asGithubReposUrl("jasp-stats", repo, c("git", "trees", "master"), params = list(recursive = "false")))
   if (length(names(repoTree)) > 0 && "tree" %in% names(repoTree)) {
     pathNames <- unlist(lapply(repoTree[["tree"]], `[[`, "path"))
-    if (length(pathNames) > 0 && all(c("NAMESPACE", "DESCRIPTION", "R", "inst/Description.qml") %in% pathNames))
-      isJaspModule <- TRUE
+    return(hasJaspModuleRequisites(pathNames, sep = "/"))
   }
 
-  return(isJaspModule)
+  return(FALSE)
 }
