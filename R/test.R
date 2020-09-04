@@ -6,27 +6,28 @@
 #'
 #' @export runTestsTravis
 runTestsTravis <- function(modulePath) {
-  if (Sys.getenv("CI") == "")
-    stop("This function is meant to be run on Travis. If you want to run tests use `testAnalysis()` or `testAll()`")
+  if (Sys.getenv("CI") == "") {
+    testAll()
+  } else {
+    if (Sys.getenv("REQUIRED_PKGS") == "")
+      stop("Could not find environment variable `REQUIRED_PKGS`")
 
-  if (Sys.getenv("REQUIRED_PKGS") == "")
-    stop("Could not find environment variable `REQUIRED_PKGS`")
+    .libPaths(c(.libPaths(), Sys.getenv("REQUIRED_PKGS")))
 
-  .libPaths(c(.libPaths(), Sys.getenv("REQUIRED_PKGS")))
+    setupJaspTools(pathJaspDesktop = NULL, pathJaspRequiredPkgs = normalizePath(Sys.getenv("REQUIRED_PKGS")), installJaspModules = FALSE, force = FALSE)
 
-  setupJaspTools(pathJaspDesktop = NULL, pathJaspRequiredPkgs = normalizePath(Sys.getenv("REQUIRED_PKGS")), installJaspModules = FALSE, force = FALSE)
+    remotes::install_local(modulePath, upgrade = "never", force = FALSE)
 
-  remotes::install_local(modulePath, upgrade = "never", force = FALSE)
+    setPkgOption("module.dirs", modulePath)
 
-  setPkgOption("module.dirs", modulePath)
+    options("testthat.progress.max_fails" = 1E3L)
 
-  options("testthat.progress.max_fails" = 1E3L)
+    result <- testthat::test_dir("tests/testthat")
+    result <- as.data.frame(result)
 
-  result <- testthat::test_dir("tests/testthat")
-  result <- as.data.frame(result)
-
-  if (sum(result$failed) > 0 || sum(result$error) > 0)
-    quit(save = "no", status = 1)
+    if (sum(result$failed) > 0 || sum(result$error) > 0)
+      quit(save = "no", status = 1)
+  }
 }
 
 #' Test a specific JASP analysis.
