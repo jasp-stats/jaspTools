@@ -128,8 +128,10 @@ isJaspRequiredFilesDir <- function(path) {
 }
 
 isJaspDesktopDir <- function(path) {
-  dirs <- dir(path, pattern = "JASP-*")
-  return(all(c("JASP-Common", "JASP-Desktop", "JASP-Engine", "JASP-R-Interface") %in% dirs))
+  dirs <- list.dirs(path, full.names = FALSE, recursive = FALSE)
+  return(all(
+    c("Common", "Desktop", "Docs", "Engine", "Modules", "R-Interface", "Resources", "Tests", "Tools") %in% dirs
+  ))
 }
 
 findRequiredPkgs <- function(pathToRequiredFiles) {
