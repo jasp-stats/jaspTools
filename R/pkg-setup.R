@@ -308,7 +308,7 @@ fetchJavaScript <- function(path) {
   if (!dir.exists(destDir))
     dir.create(destDir)
 
-  htmlDir <- file.path(path, "JASP-Desktop", "html")
+  htmlDir <- file.path(path, "Desktop", "html")
   if (!dir.exists(htmlDir))
     stop("Could not move html files from jasp-desktop, is the path correct? ", path)
 
@@ -343,7 +343,7 @@ installJaspResults <- function(path, quiet = FALSE, force = FALSE) {
   if (isNamespaceLoaded("jaspResults"))
     unloadNamespace("jaspResults")
 
-  jaspResultsDir <- file.path(path, "JASP-R-Interface", "jaspResults")
+  jaspResultsDir <- file.path(path, "R-Interface", "jaspResults")
   if (!dir.exists(jaspResultsDir))
     stop("Could not locate jaspResults inside ", path)
 
