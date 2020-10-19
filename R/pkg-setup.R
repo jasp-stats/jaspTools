@@ -256,7 +256,7 @@ setLocationJaspRequiredFiles <- function(pathToRequiredFiles) {
 }
 
 # javascript, datasets, jaspResults
-fetchJaspDesktopDependencies <- function(jaspdesktopLoc = NULL, branch = "stable", quiet = FALSE, force = FALSE) {
+fetchJaspDesktopDependencies <- function(jaspdesktopLoc = NULL, branch = "development", quiet = FALSE, force = FALSE) {
   if (is.null(jaspdesktopLoc) || !isJaspDesktopDir(jaspdesktopLoc)) {
     baseLoc <- tempdir()
     jaspdesktopLoc <- file.path(baseLoc, paste0("jasp-desktop-", branch))
