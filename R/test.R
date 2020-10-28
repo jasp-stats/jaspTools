@@ -159,7 +159,7 @@ manageTestPlots <- function(name = NULL) {
 
     versionMismatches <- checkDepVersionMismatches(modulePath)
     if (length(versionMismatches[["newer"]]) > 0 || length(versionMismatches[["older"]]) > 0)
-      handleVersionMismatches(versionMismatches, name)
+      handleVersionMismatches(versionMismatches, name, modulePath)
 
     vdiffr::manage_cases(modulePath, filter = name)
   }
@@ -173,17 +173,21 @@ manageTestPlots <- function(name = NULL) {
 #'
 #'
 #' @param dep A single character value of a package name currently installed on your system
+#' @param modulePath Specify the path to the root folder of the module, or specify it through `setPkgOption("/.../")`
 #' @return This function only has a side effect: updating figs/jasp-deps.txt
 #' @examples
 #'
 #' addTestDependency("jaspGraphs")
 #'
 #' @export addTestDependency
-addTestDependency <- function(dep) {
+addTestDependency <- function(dep, modulePath = getPkgOption("module.dirs")) {
   if (!is.character(dep) || length(dep) > 1)
     stop("Expecting single name of a package")
 
-  depsInFile <- getDepsFromFile()
+  if (length(modulePath) != 1 || modulePath == "")
+    stop("Not sure where to write the dependency to. Please specify one module.")
+
+  depsInFile <- getDepsFromFile(modulePath)
   if (dep %in% names(depsInFile))
     stop("Package already exists in dependency file")
 
@@ -192,7 +196,7 @@ addTestDependency <- function(dep) {
 
   depToWrite <- list()
   depToWrite[[dep]] <- packageVersion(dep)
-  writeDepsToFile(depToWrite)
+  writeDepsToFile(depToWrite, modulePath)
   message(paste0("Dependency `", dep, "` added to jasp-deps.txt"))
 }
 
@@ -350,12 +354,12 @@ checkDepVersionMismatches <- function(modulePath) {
   return(depMismatches)
 }
 
-handleVersionMismatches <- function(versionMismatches, name) {
+handleVersionMismatches <- function(versionMismatches, name, modulePath) {
   onlyNewer <- length(versionMismatches[["newer"]]) > 0 && length(versionMismatches[["older"]]) == 0
   if (onlyNewer) {
     if (is.null(name)) {
       message("The installed packages on your system are newer than the ones used to create the library of test plots. Automatically updated the dependencies file; please make sure there are no plot mismatches in the Shiny app")
-      writeUpdatedDeps(versionMismatches[["newer"]])
+      writeUpdatedDeps(versionMismatches[["newer"]], modulePath)
     } else {
       stop("The library of test plots was created using older packages; to avoid version mismatches between plots from different analyses please validate ALL plots by running `manageTestPlots()`")
     }
@@ -404,11 +408,11 @@ getDepsFromUser <- function(modulePath) {
   return(userDeps)
 }
 
-writeUpdatedDeps <- function(newDeps) {
+writeUpdatedDeps <- function(newDeps, modulePath) {
   deps <- vector("list", length(newDeps))
   for (newDep in newDeps)
     deps[[newDep[["pkg"]]]] <- newDep[["userVersion"]]
-  writeDepsToFile(deps)
+  writeDepsToFile(deps, modulePath)
 }
 
 getDepsFileLocation <- function(modulePath) {

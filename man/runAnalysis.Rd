@@ -4,14 +4,8 @@
 \alias{runAnalysis}
 \title{Run a JASP analysis in R.}
 \usage{
-runAnalysis(
-  name,
-  dataset,
-  options,
-  view = TRUE,
-  quiet = FALSE,
-  makeTests = FALSE
-)
+runAnalysis(name, dataset, options, view = TRUE, quiet = FALSE,
+  makeTests = FALSE)
 }
 \arguments{
 \item{name}{String indicating the name of the analysis to run. This name is
