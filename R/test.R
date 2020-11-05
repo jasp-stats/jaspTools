@@ -16,7 +16,7 @@ runTestsTravis <- function(modulePath) {
 
     setupJaspTools(pathJaspDesktop = NULL, pathJaspRequiredPkgs = normalizePath(Sys.getenv("REQUIRED_PKGS")), installJaspModules = FALSE, force = FALSE)
 
-    remotes::install_local(modulePath, upgrade = "never", force = FALSE)
+    remotes::install_local(modulePath, upgrade = "never", force = FALSE, INSTALL_opts = "--no-multiarch")
 
     setPkgOption("module.dirs", modulePath)
 
