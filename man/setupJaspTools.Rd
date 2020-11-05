@@ -5,7 +5,8 @@
 \title{Setup the jaspTools package.}
 \usage{
 setupJaspTools(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL,
-  installJaspModules = TRUE, quiet = FALSE, force = TRUE)
+  installJaspModules = TRUE, installJaspCorePkgs = TRUE,
+  quiet = FALSE, force = TRUE)
 }
 \arguments{
 \item{pathJaspDesktop}{[optional] Character path to the root of jasp-desktop if present on the system.}
@@ -14,9 +15,11 @@ setupJaspTools(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL,
 
 \item{installJaspModules}{[optional] Boolean. Should jaspTools install all the JASP analysis modules as R packages (e.g., jaspAnova, jaspFrequencies)?}
 
+\item{installJaspCorePkgs}{[optional] Boolean. Should jaspTools install jaspBase, jaspResults and jaspGraphs?}
+
 \item{quiet}{[optional] Boolean. Should the installation of R packages produce output?}
 
-\item{force}{[optional] Boolean. Should a fresh installation of jaspResults, jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system?}
+\item{force}{[optional] Boolean. Should a fresh installation of jaspResults, jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.}
 }
 \description{
 Ensures that analyses can be run, tested and debugged locally by fetching all of the basic dependencies.
