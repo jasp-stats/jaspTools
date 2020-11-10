@@ -13,6 +13,7 @@ Imports:
   devtools,
   httr,
   jsonlite,
+  remotes,
   rjson,
   stringi,
   stringr,

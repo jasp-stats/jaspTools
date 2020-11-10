@@ -367,7 +367,7 @@ installJaspResults <- function(path, quiet = FALSE, force = FALSE) {
 #     if (!is.null(names(repo)) && c("name", "full_name") %in% names(repo)) {
 #       if (isRepoJaspRPackage(repo[["name"]]) && !repo[["name"]] %in% installed.packages()) {
 #         cat("Installing package:", paste0(repo[["full_name"]], "..."))
-#         res <- try(devtools::install_github(repo[["full_name"]], auth_token = getGithubPAT(), upgrade = "never", quiet = quiet), silent = quiet)
+#         res <- try(remotes::install_github(repo[["full_name"]], auth_token = getGithubPAT(), upgrade = "never", quiet = quiet), silent = quiet)
 #         if (inherits(res, "try-error"))
 #           cat(" failed\n")
 #         else
@@ -379,17 +379,17 @@ installJaspResults <- function(path, quiet = FALSE, force = FALSE) {
 
 #' Install a JASP R package from jasp-stats
 #'
-#' Thin wrapper around devtools::install_github.
+#' Thin wrapper around remotes::install_github.
 #'
 #' @param pkg Name of the JASP module (e.g., "jaspBase").
 #' @param force Boolean. Should the installation overwrite an existing installation if it hasn't changed?
 #' @param auth_token To install from a private repo, generate a personal access token (PAT) in "https://github.com/settings/tokens" and supply to this argument. This is safer than using a password because you can easily delete a PAT without affecting any others. Defaults to the GITHUB_PAT environment variable.
-#' @param ... Passed on to \code{devtools::install_github}
+#' @param ... Passed on to \code{remotes::install_github}
 installJaspPkg <- function(pkg, force = FALSE, auth_token = NULL, ...) {
   if (is.null(auth_token))
     auth_token <- getGithubPAT()
 
-  devtools::install_github(paste("jasp-stats", pkg, sep = "/"), upgrade = "never", force = force, auth_token = auth_token, INSTALL_opts = "--no-multiarch", ...)
+  remotes::install_github(paste("jasp-stats", pkg, sep = "/"), upgrade = "never", force = force, auth_token = auth_token, INSTALL_opts = "--no-multiarch", ...)
 }
 
 #' Install all JASP analysis modules from jasp-stats
@@ -414,7 +414,7 @@ installJaspModules <- function(force = FALSE, quiet = FALSE) {
     failed <- NULL
     for (pkg in pkgs) {
       res <- try(silent = quiet, {
-        devtools::install_local(pkg, upgrade = "never", dependencies = TRUE, quiet = quiet, force = force, INSTALL_opts = "--no-multiarch")
+        remotes::install_local(pkg, upgrade = "never", dependencies = TRUE, quiet = quiet, force = force, INSTALL_opts = "--no-multiarch")
       })
 
       if (inherits(res, "try-error"))
