@@ -172,7 +172,7 @@ reinstallChangedModules <- function() {
         msgPrinted <- TRUE
       }
 
-      devtools::install_local(module, force = TRUE, upgrade = "never", quiet = TRUE, dependencies = FALSE, INSTALL_opts = "--no-multiarch")
+      remotes::install_local(module, force = TRUE, upgrade = "never", quiet = TRUE, dependencies = FALSE, INSTALL_opts = "--no-multiarch")
       devtools::reload(module)
       md5Sums[[module]] <- newMd5Sums
     }
