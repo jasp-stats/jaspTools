@@ -3,17 +3,22 @@
 # These are not used in combination with getAnywhere() in the code so they cannot be found
 .insertRbridgeIntoEnv <- function(env) {
   env[[".automaticColumnEncDecoding"]] <- FALSE
+  env[[".encodeColNamesStrict"]]       <- function(x) return(x)
+  env[[".decodeColNamesStrict"]]       <- function(x) return(x)
+  env[[".encodeColNamesLax"]]          <- function(x) return(x)
+  env[[".decodeColNamesLax"]]          <- function(x) return(x)
+  env[[".encodeColNamesStrict"]]       <- function(x) return(x)
 
-  env[[".encodeColNamesStrict"]] <- function(x) return(x)
-  env[[".decodeColNamesStrict"]] <- function(x) return(x)
-  env[[".encodeColNamesLax"]] <- function(x) return(x)
-  env[[".decodeColNamesLax"]] <- function(x) return(x)
-  env[[".encodeColNamesStrict"]] <- function(x) return(x)
-
-  env[[".setColumnDataAsScale"]] <- function(...) return(TRUE)
-  env[[".setColumnDataAsOrdinal"]] <- function(...) return(TRUE)
-  env[[".setColumnDataAsNominal"]] <- function(...) return(TRUE)
+  env[[".setColumnDataAsScale"]]       <- function(...) return(TRUE)
+  env[[".setColumnDataAsOrdinal"]]     <- function(...) return(TRUE)
+  env[[".setColumnDataAsNominal"]]     <- function(...) return(TRUE)
   env[[".setColumnDataAsNominalText"]] <- function(...) return(TRUE)
+
+  env[[".allColumnNamesDataset"]]      <- function(...) {
+    dataset <- .getInternal("dataset")
+    dataset <- loadCorrectDataset(dataset)
+    return(colnames(dataset))
+  }
 }
 
 # These are used in combination with getAnywhere() and can stay in the jaspTools namespace
