@@ -9,24 +9,18 @@ runTestsTravis <- function(modulePath) {
   if (Sys.getenv("CI") == "") {
     testAll()
   } else {
-    if (Sys.getenv("REQUIRED_PKGS") == "")
-      stop("Could not find environment variable `REQUIRED_PKGS`")
+    if (!.isSetupComplete())
+      stop("The setup should be completed before the tests are ran")
 
-    .libPaths(c(.libPaths(), Sys.getenv("REQUIRED_PKGS")))
-
-    setupJaspTools(pathJaspDesktop = NULL, pathJaspRequiredPkgs = normalizePath(Sys.getenv("REQUIRED_PKGS")), installJaspModules = FALSE, force = FALSE)
+    setPkgOption("module.dirs", modulePath)
+    .libPaths(c(.libPaths(), getPkgOption("pkgs.dir")))
 
     remotes::install_local(modulePath, upgrade = "never", force = FALSE, INSTALL_opts = "--no-multiarch")
 
-    setPkgOption("module.dirs", modulePath)
+    testingStatus <- testAll()
 
-    options("testthat.progress.max_fails" = 1E3L)
-
-    result <- testthat::test_dir("tests/testthat")
-    result <- as.data.frame(result)
-
-    if (sum(result$failed) > 0 || sum(result$error) > 0)
-      quit(save = "no", status = 1)
+    if (!interactive())
+      quit(save = "no", status = testingStatus)
   }
 }
 
@@ -109,6 +103,12 @@ testAll <- function() {
 
   printSuccessFailureModules(testResults)
   printTipsNewPlots(hasNewPlots)
+
+  status <- 0
+  if (length(testResults[["failedModules"]]) > 0)
+    status <- 1
+
+  return(invisible(status))
 }
 
 #' Visually inspect new/failed test plots.

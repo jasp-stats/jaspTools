@@ -12,7 +12,7 @@
 #' @param force [optional] Boolean. Should a fresh installation of jaspResults, jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.
 #'
 #' @export setupJaspTools
-setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, installJaspModules = TRUE, installJaspCorePkgs = TRUE, quiet = FALSE, force = TRUE) {
+setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, installJaspModules = FALSE, installJaspCorePkgs = TRUE, quiet = FALSE, force = TRUE) {
 
   argsMissing <- FALSE
   if (interactive()) {
