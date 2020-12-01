@@ -124,7 +124,7 @@ These tests check if all tables still produce the same results, plots can be mad
 If an analysis is changed, it's a good idea to check that no unit test returns an error.
 To this purpose jaspTools offers convenience functions for testing.
 
-To create unit tests you can read [this guide](https://github.com/jasp-stats/jasp-desktop/blob/development/Tests/README.md).
+To create unit tests you can read [this guide](https://github.com/jasp-stats/jasp-desktop/blob/development/Docs/development/r-unit-test-guide.md).
 
 ## Known limitations:
 - Click actions in the browser are not supported (e.g., "save as")
