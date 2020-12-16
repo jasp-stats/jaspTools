@@ -21,7 +21,7 @@
 #' @export expect_equal_plots
 expect_equal_plots <- function(test, name, dir) {
   if (length(test) == 0) {
-    expect(FALSE, getEmptyTestMsg("plot"))
+    expect(FALSE, getEmptyTestMsg("expect_equal_plots()"))
     return()
   }
 
@@ -53,15 +53,15 @@ skip_if_recordedPlot <- function(test) {
     skip("Recorded plots are skipped until the scaling of these plots is fixed")
 }
 
-getEmptyTestMsg <- function(element) {
+getEmptyTestMsg <- function(expectationFn) {
   error <- getErrorMsgFromLastResults()
   if (!is.null(error[["type"]])) {
     if (error[["type"]] == "validationError" || error[["type"]] == "fatalError")
-      msg <- paste0("Tried retrieving ", element, " from results, but last run of jaspTools exited with a ", error[["type"]], ":\n\n", error[["message"]])
+      msg <- paste0("The `test` argument provided to `", expectationFn, "` is empty. Likely reason: the last run of jaspTools exited with a ", error[["type"]], ":\n\n", error[["message"]])
     else if (error[["type"]] == "localError")
-      msg <- paste0("The new ", element, " has no data. Please check the validity of your unit test; found the following local errors in the results:\n\n", error[["message"]])
+      msg <- paste0("The `test` argument provided to `", expectationFn,"` is empty. Likely reasons: (1) the path to the results in the unit test is not correct, or (2) one of the following errors in the results interfered with the test:\n\n", error[["message"]])
   } else {
-    msg <- paste0("The new ", element, " has no data. Please check the validity of your unit test; is the index path to the plot specified correctly?")
+    msg <- paste0("The `test` argument provided to `", expectationFn,"` is empty. Likely reason: the path to the results in the unit test is not correct.")
   }
 
   return(msg)

@@ -23,7 +23,7 @@
 #' @export expect_equal_tables
 expect_equal_tables <- function(test, ref, label=NULL) {
   if (length(test) == 0) {
-    expect(FALSE, getEmptyTestMsg("table"))
+    expect(FALSE, getEmptyTestMsg("expect_equal_tables()"))
     return()
   }
 
@@ -82,8 +82,9 @@ getMismatchesEqualSizeTables <- function(test, ref, nRows, nCols, cellNames) {
   testVec <- tableListToAnnotatedCharacterVector(test, cellNames)
   refVec <- tableListToAnnotatedCharacterVector(ref)
 
-  mismatches <- character(0)
+  tableMismatches <- character(0)
   for (row in 1:nRows) {
+    unmatchedRowVals <- character(0)
 
     cellRange <- (1 + (row - 1) * nCols):(row * nCols)
     lookupRow <- refVec[cellRange]
@@ -96,34 +97,26 @@ getMismatchesEqualSizeTables <- function(test, ref, nRows, nCols, cellNames) {
         if (isUnicodeMismatch(names(testVec)[cell]))
           next
 
-        mismatches <- c(mismatches,
-                        paste0("New table value `", names(testVec)[cell],
-                                "` (col `", attr(testVec, "cellNames")[cell], "`, row ", row, ")",
-                                " does not exist in old table"))
+        unmatchedRowVals <- c(unmatchedRowVals, paste0("`", names(testVec)[cell], "` (col: `", attr(testVec, "cellNames")[cell], "`)"))
+
       }
     }
 
-    if (length(lookupRow) == 1) {
-      if (isUnicodeMismatch(names(lookupRow)))
-        next
-
-      mismatches <- c(mismatches,
-                      paste0("Old table value `", names(lookupRow),
-                              "` does not exist in new table"))
-    }
-    else if (length(lookupRow) > 1) {
-      lookupRow <- excludeUnicodeMismatches(lookupRow)
-      if (length(lookupRow) == 0)
-        next
-
-      mismatches <- c(mismatches,
-                      paste0("Old table values `", paste0(names(lookupRow), collapse="`, `"),
-                              "` do not exist in new table"))
+    if (length(unmatchedRowVals) > 0) {
+      haveMultipleVals <- length(unmatchedRowVals) > 1
+      tableMismatches <- c(
+        tableMismatches,
+        paste0("*** Row ", row, " ***"),
+        paste0("  Table ", ifelse(haveMultipleVals, "cells", "cell"), " that changed:"),
+        paste0("    - ", paste(unmatchedRowVals, collapse = "\n    - ")),
+        paste0("  Original ", ifelse(haveMultipleVals, "values that were", "value that was"), " expected:"),
+        paste0("    - `", paste(excludeUnicodeMismatches(names(lookupRow)), collapse = "`, `"), "`")
+      )
     }
 
   }
 
-  return(paste(mismatches, collapse="\n"))
+  return(paste(tableMismatches, collapse="\n"))
 }
 
 getMissingValuesDiffSizeTables <- function(test, ref, cellNames) {

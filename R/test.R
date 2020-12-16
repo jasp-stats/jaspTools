@@ -37,7 +37,7 @@ runTestsTravis <- function(modulePath) {
 #'
 #' @export testAnalysis
 testAnalysis <- function(name) {
-  modulePath <- getModulePathsForTesting(name)
+  modulePath <- getModulePathFromRFunction(name)
 
   testDir    <- file.path(modulePath, "tests", "testthat")
   nameMatch  <- matchCaseTestFileAnalysisName(name, testDir)
@@ -130,9 +130,11 @@ testAll <- function() {
 #'
 #' @export manageTestPlots
 manageTestPlots <- function(name = NULL) {
-  modulePaths <- getModulePathsForTesting(name)
 
-  if (!is.null(name)) {
+  if (is.null(name)) {
+    modulePaths <- getModulePathsForTesting()
+  } else {
+    modulePaths <- getModulePathFromRFunction(name)
     name <- matchCaseTestFileAnalysisName(name, file.path(modulePaths, "tests", "testthat"))
     name <- paste0("^", name, "$")
   }
