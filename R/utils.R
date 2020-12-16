@@ -75,13 +75,9 @@ rFunctionExistsInModule <- function(name, modulePath) {
   return(FALSE)
 }
 
-getModulePathsForTesting <- function(name = NULL) {
-  if (!is.null(name))
-    modulePaths <- getModulePathFromRFunction(name)
-  else
-    modulePaths <- getModulePaths()
-
+getModulePathsForTesting <- function() {
   modulesWithTests <- NULL
+  modulePaths <- getModulePaths()
   for (modulePath in modulePaths) {
     testDir <- file.path(modulePath, "tests", "testthat")
     if (dir.exists(testDir) && length(list.files(testDir)) > 0)
@@ -89,7 +85,7 @@ getModulePathsForTesting <- function(name = NULL) {
   }
 
   if (length(modulesWithTests) == 0)
-    stop("None of the module folders specified in `module.dirs` (see `viewPkgOptions()`) have any tests. Note that the tests should be in `moduleDir/tests/testthat` and named `test-analysisName.R`.")
+    message("No tests were found. Note that the tests should be in `moduleDir/tests/testthat` and named `test-analysisName.R`.")
 
   return(modulesWithTests)
 }
@@ -163,7 +159,7 @@ getErrorMsgFromLastResults <- function() {
   if (is.null(error[["type"]])) {
     flatResults <- unlist(lastResults)
     localErrors <- endsWith(names(flatResults), ".error.errorMessage")
-    if (length(localErrors) > 0) {
+    if (sum(localErrors) > 0) {
       posInResults <- gsub(".error.errorMessage", "", names(flatResults)[localErrors], fixed = TRUE)
       msgs <- flatResults[localErrors]
       error[["type"]] <- "localError"
