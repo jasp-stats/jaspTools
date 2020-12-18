@@ -130,12 +130,9 @@ fetchRunArgs <- function(name, options) {
 
 initAnalysisRuntime <- function(dataset, makeTests, ...) {
   # first we reinstall any changed modules in the personal library, with pkgs from required-files present
-  libs <- c(.libPaths(), getPkgOption("pkgs.dir"))
-  .libPaths(libs)
-  reinstallChangedModules()
-
-  # after this we ensure that the pkgs from required-files are loaded first when needed
-  .libPaths(rev(libs))
+  userLib <- .libPaths()[1]
+  .libPaths(c(getPkgOption("pkgs.dir"), .libPaths()))
+  reinstallChangedModules(lib = userLib)
 
   # dataset to be found in the analysis when it needs to be read
   .setInternal("dataset", dataset)
@@ -151,30 +148,38 @@ initAnalysisRuntime <- function(dataset, makeTests, ...) {
     set.seed(1)
 }
 
-reinstallChangedModules <- function() {
-  modules <- getModulePaths()
-  if (isFALSE(getPkgOption("reinstall.modules")) || length(modules) == 0)
+reinstallChangedModules <- function(lib) {
+  modulePaths <- getModulePaths()
+  if (isFALSE(getPkgOption("reinstall.modules")) || length(modulePaths) == 0)
     return()
 
-  msgPrinted <- FALSE
-  md5Sums    <- .getInternal("modulesMd5Sums")
-  for (module in modules) {
-    rootFiles <- list.files(module, full.names = TRUE, pattern = "(NAMESPACE$)|(DESCRIPTION$)")
-    rFiles    <- list.files(file.path(module, "R"), full.names = TRUE, pattern = "\\.R$")
-    files     <- c(rootFiles, rFiles)
-    if (length(files) == 0)
+  md5Sums <- .getInternal("modulesMd5Sums")
+  for (modulePath in modulePaths) {
+    srcFiles <- c(
+      list.files(modulePath,                   full.names = TRUE, pattern = "(NAMESPACE|DESCRIPTION)$"),
+      list.files(file.path(modulePath, "src"), full.names = TRUE, pattern = "\\.(cpp|c)$"),
+      list.files(file.path(modulePath, "R"),   full.names = TRUE, pattern = "\\.R$")
+    )
+    if (length(srcFiles) == 0)
       next
 
-    newMd5Sums <- tools::md5sum(files)
-    if (length(md5Sums) == 0 || !module %in% names(md5Sums) || !all(newMd5Sums %in% md5Sums[[module]])) {
-      if (!msgPrinted) {
-        message("Installing module(s) from source")
-        msgPrinted <- TRUE
-      }
+    newMd5Sums <- tools::md5sum(srcFiles)
+    if (length(md5Sums) == 0 || !modulePath %in% names(md5Sums) || !all(newMd5Sums %in% md5Sums[[modulePath]])) {
+      modulePkg <- devtools::as.package(modulePath)$package
+      if (modulePkg %in% loadedNamespaces())
+        devtools::unload(modulePkg)
 
-      remotes::install_local(module, force = TRUE, upgrade = "never", quiet = TRUE, dependencies = FALSE, INSTALL_opts = "--no-multiarch")
-      devtools::reload(module)
-      md5Sums[[module]] <- newMd5Sums
+      message("Installing ", modulePkg, " from source")
+      suppressWarnings(install.packages(modulePath, lib = lib, type = "source", repos = NULL, quiet = TRUE, INSTALL_opts = "--no-multiarch"))
+
+      if (modulePkg %in% installed.packages()) {
+        md5Sums[[modulePath]] <- newMd5Sums
+      } else {
+        # to prevent the installation output from cluttering the console on each analysis run, we do this quietly.
+        # however, it is kinda nice to show errors, so we call the function again here and allow it to print this time (tryCatch/sink doesn't catch the installation failure reason).
+        install.packages(modulePath, lib = lib, type = "source", repos = NULL, INSTALL_opts = "--no-multiarch")
+        stop("The installation of ", modulePkg, " failed; you will need to fix the issue that prevents `install.packages()` from installing the module before any analysis will work")
+      }
     }
   }
 
