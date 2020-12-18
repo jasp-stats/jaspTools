@@ -434,9 +434,9 @@ downloadAllJaspModules <- function(force = FALSE, quiet = FALSE) {
   repos <- getJaspGithubRepos()
   result <- list(success = NULL, fail = NULL)
   for (repo in repos) {
-    if (!is.null(names(repo)) && c("name", "full_name") %in% names(repo)) {
-      if (isRepoJaspModule(repo[["name"]]) && (force || !force && !repo[["name"]] %in% installed.packages())) {
-        success <- downloadJaspPkg(repo[["name"]], quiet)
+    if (!is.null(names(repo)) && c("name", "default_branch") %in% names(repo)) {
+      if (isRepoJaspModule(repo[["name"]], repo[["default_branch"]]) && (force || !force && !repo[["name"]] %in% installed.packages())) {
+        success <- downloadJaspPkg(repo[["name"]], repo[["default_branch"]], quiet)
         if (success)
           result[["success"]] <- c(result[["success"]], repo[["name"]])
         else
@@ -450,8 +450,8 @@ downloadAllJaspModules <- function(force = FALSE, quiet = FALSE) {
   invisible(result)
 }
 
-downloadJaspPkg <- function(repo, quiet) {
-  url <- sprintf("https://github.com/jasp-stats/%1$s/%2$s/%3$s", repo, "archive", "master.zip")
+downloadJaspPkg <- function(repo, branch, quiet) {
+  url <- sprintf("https://github.com/jasp-stats/%1$s/archive/%2$s.zip", repo, branch)
   baseLoc <- getTempJaspModulesLocation()
   pkgLoc <- file.path(baseLoc, repo)
   zipFile <- file.path(baseLoc, paste0(repo, ".zip"))
@@ -467,8 +467,8 @@ downloadJaspPkg <- function(repo, quiet) {
 
     unzip(zipfile = zipFile, exdir = baseLoc)
 
-    if (dir.exists(paste0(pkgLoc, "-master")))
-      file.rename(paste0(pkgLoc, "-master"), pkgLoc)
+    if (dir.exists(paste0(pkgLoc, "-", branch)))
+      file.rename(paste0(pkgLoc, "-", branch), pkgLoc)
 
     if (file.exists(zipFile))
       unlink(zipFile)
@@ -477,8 +477,8 @@ downloadJaspPkg <- function(repo, quiet) {
   return(TRUE)
 }
 
-isRepoJaspModule <- function(repo) {
-  repoTree <- githubGET(asGithubReposUrl("jasp-stats", repo, c("git", "trees", "master"), params = list(recursive = "false")))
+isRepoJaspModule <- function(repo, branch) {
+  repoTree <- githubGET(asGithubReposUrl("jasp-stats", repo, c("git", "trees", branch), params = list(recursive = "false")))
   if (length(names(repoTree)) > 0 && "tree" %in% names(repoTree)) {
     pathNames <- unlist(lapply(repoTree[["tree"]], `[[`, "path"))
     return(hasJaspModuleRequisites(pathNames, sep = "/"))
