@@ -26,13 +26,13 @@ getModulePaths <- function() {
       setPkgOption("module.dirs", wdAsPkg)
       validModules <- wdAsPkg
     } else {
-      stop("No module folders were specified through `setPkgOption(\"module.dirs\", ...)`. Please add the ones you are working on and want to run or test.")
+      stop("jaspTools needs to know what module to obtain resources from. Please set the current working directory to your JASP module, or specify it through `setPkgOption(\"module.dirs\", \"path/to/module\")`")
     }
 
   }
 
   if (length(validModules) == 0)
-    stop("None of the module folders specified through `setPkgOption(\"module.dirs\", ...)` are valid JASP modules. All JASP modules have these files: DESCRIPTION, NAMESPACE, inst/Description.qml.")
+    stop("None of the module folders specified through `setPkgOption(\"module.dirs\", ...)` are valid JASP modules. All JASP modules should be valid R packages and have these files: DESCRIPTION, NAMESPACE, inst/Description.qml.")
 
   return(validModules)
 }
@@ -198,7 +198,7 @@ getOS <- function() {
 }
 
 getJaspGithubRepos <- function() {
-  githubGET(asGithubOrganizationUrl("jasp-stats", "repos", params = list(type = "public", "per_page" = 1e3)))
+  githubGET(asGithubOrganizationUrl("jasp-stats", "repos", params = list(type = "public", per_page = 1e3)))
 }
 
 asGithubOrganizationUrl <- function(owner, urlSegments = NULL, params = list()) {
