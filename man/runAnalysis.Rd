@@ -4,8 +4,14 @@
 \alias{runAnalysis}
 \title{Run a JASP analysis in R.}
 \usage{
-runAnalysis(name, dataset, options, view = TRUE, quiet = FALSE,
-  makeTests = FALSE)
+runAnalysis(
+  name,
+  dataset,
+  options,
+  view = TRUE,
+  quiet = FALSE,
+  makeTests = FALSE
+)
 }
 \arguments{
 \item{name}{String indicating the name of the analysis to run. This name is
@@ -13,7 +19,7 @@ identical to that of the main function in a JASP analysis.}
 
 \item{dataset}{Data.frame, matrix, string name or string path; if it's a string then jaspTools
 first checks if it's valid path and if it isn't if the string matches one of the JASP datasets (e.g., "debug.csv").
-By default the folder in Resources is checked first, unless called within a testthat environment, in which case tests/datasets is checked first.}
+By default the directory in Resources is checked first, unless called within a testthat environment, in which case tests/datasets is checked first.}
 
 \item{options}{List of options to supply to the analysis (see also
 \code{analysisOptions}).}

@@ -13,8 +13,8 @@ installJaspPkg(pkg, force = FALSE, auth_token = NULL, ...)
 
 \item{auth_token}{To install from a private repo, generate a personal access token (PAT) in "https://github.com/settings/tokens" and supply to this argument. This is safer than using a password because you can easily delete a PAT without affecting any others. Defaults to the GITHUB_PAT environment variable.}
 
-\item{...}{Passed on to \code{devtools::install_github}}
+\item{...}{Passed on to \code{remotes::install_github}}
 }
 \description{
-Thin wrapper around devtools::install_github.
+Thin wrapper around remotes::install_github.
 }

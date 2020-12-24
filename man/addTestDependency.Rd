@@ -9,7 +9,7 @@ addTestDependency(dep, modulePath = getPkgOption("module.dirs"))
 \arguments{
 \item{dep}{A single character value of a package name currently installed on your system}
 
-\item{modulePath}{Specify the path to the root folder of the module, or specify it through `setPkgOption("/.../")`}
+\item{modulePath}{Specify the path to the root directory of the module, or specify it through `setPkgOption("/.../")`}
 }
 \value{
 This function only has a side effect: updating figs/jasp-deps.txt

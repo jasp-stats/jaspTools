@@ -11,7 +11,7 @@ view(results)
 results string copied from the Qt terminal.}
 }
 \value{
-A html page is generated and placed in a temp folder.
+A html page is generated and placed in a temp directory
 }
 \description{
 \code{view} allows you to view output independently of JASP. By default this output

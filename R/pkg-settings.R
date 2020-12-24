@@ -26,7 +26,7 @@
 #'
 #' @details \code{module.dirs}:
 #' The directories that hold the source for the JASP module(s) you are working on.
-#' These module folders are used to find the R functions etc. in \code{runAnalysis} and the various testing functions.
+#' These module directories are used to find the R functions etc. in \code{runAnalysis} and the various testing functions.
 #'
 #' @return A print of the configurable options.
 #' @export viewPkgOptions
@@ -76,9 +76,9 @@ setPkgOption <- function(name, value) {
         next
 
       if (!dir.exists(value[i])) # if the value is not a null value it should be a valid path
-        stop("Folder ", value[i], " does not exist")
+        stop("Directory ", value[i], " does not exist")
 
-      value[i] <- gsub("[\\/]$", "", normalizePath(value[i])) # normalize path and strip trailing slashes (they trip up devtools::as.package)
+      value[i] <- gsub("[\\/]$", "", normalizePath(value[i])) # normalize path and strip trailing slashes
     }
   }
 

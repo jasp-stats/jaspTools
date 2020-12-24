@@ -7,7 +7,7 @@
 #'
 #' @param results A named R list returned from a JASP analysis, or a json
 #' results string copied from the Qt terminal.
-#' @return A html page is generated and placed in a temp folder.
+#' @return A html page is generated and placed in a temp directory
 #' @examples
 #'
 #' options <- analysisOptions("BinomialTest")

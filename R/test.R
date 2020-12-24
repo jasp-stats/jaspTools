@@ -123,7 +123,7 @@ testAll <- function() {
 #' tested.
 #' @return A Shiny app that shows all new/failed/orphaned cases. The app allows
 #' test plots to be validated, at which point they are placed in the figs
-#' folder and used as a reference for future tests.
+#' directory and used as a reference for future tests.
 #' @examples
 #'
 #' # manageTestPlots("Anova")
@@ -175,7 +175,7 @@ manageTestPlots <- function(name = NULL) {
 #'
 #'
 #' @param dep A single character value of a package name currently installed on your system
-#' @param modulePath Specify the path to the root folder of the module, or specify it through `setPkgOption("/.../")`
+#' @param modulePath Specify the path to the root directory of the module, or specify it through `setPkgOption("/.../")`
 #' @return This function only has a side effect: updating figs/jasp-deps.txt
 #' @examples
 #'

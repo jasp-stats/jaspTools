@@ -103,12 +103,12 @@ getQMLFile <- function(name) {
   fileContents <- gsub("[\"']", "", fileContents)
   rFuncLocExpr <- paste0("\\{[^\\{\\}]*func:\\s*", name, "[^\\{\\}]*\\}")
   if (!grepl(rFuncLocExpr, fileContents))
-    stop("Could not locate qml file for R function ", name, " in inst/qml folder and did not find the R function in inst/Description.qml to look for an alternative name for the qml file")
+    stop("Could not locate qml file for R function ", name, " in inst/qml directory and did not find the R function in inst/Description.qml to look for an alternative name for the qml file")
 
   rLocMatch <- stringr::str_match(fileContents, rFuncLocExpr)[1]
   qmlLocExpr <- "[a-zA-Z0-9_]+\\.qml"
   if (!grepl(qmlLocExpr, rLocMatch))
-    stop("Could not locate qml file for R function ", name, " in inst/qml folder and did not find a qml entry in inst/Description.qml that describes an alternative for the qml filename")
+    stop("Could not locate qml file for R function ", name, " in inst/qml directory and did not find a qml entry in inst/Description.qml that describes an alternative for the qml filename")
 
   qmlFileName <- stringr::str_match(rLocMatch, qmlLocExpr)
   qmlFilePath <- file.path(modulePath, "inst", "qml", qmlFileName)
