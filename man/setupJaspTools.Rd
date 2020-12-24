@@ -4,9 +4,14 @@
 \alias{setupJaspTools}
 \title{Setup the jaspTools package.}
 \usage{
-setupJaspTools(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL,
-  installJaspModules = TRUE, installJaspCorePkgs = TRUE,
-  quiet = FALSE, force = TRUE)
+setupJaspTools(
+  pathJaspDesktop = NULL,
+  pathJaspRequiredPkgs = NULL,
+  installJaspModules = FALSE,
+  installJaspCorePkgs = TRUE,
+  quiet = FALSE,
+  force = TRUE
+)
 }
 \arguments{
 \item{pathJaspDesktop}{[optional] Character path to the root of jasp-desktop if present on the system.}

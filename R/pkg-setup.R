@@ -250,7 +250,7 @@ readJaspRequiredFilesLocation <- function() {
 
 setLocationJaspRequiredFiles <- function(pathToRequiredFiles) {
   if (!dir.exists(pathToRequiredFiles))
-    stop("jasp-required-files folder does not exist at ", pathToRequiredFiles)
+    stop("jasp-required-files directory does not exist at ", pathToRequiredFiles)
 
   path <- normalizePath(pathToRequiredFiles)
   libPath <- findRequiredPkgs(path)
@@ -481,7 +481,7 @@ isRepoJaspModule <- function(repo, branch) {
   repoTree <- githubGET(asGithubReposUrl("jasp-stats", repo, c("git", "trees", branch), params = list(recursive = "false")))
   if (length(names(repoTree)) > 0 && "tree" %in% names(repoTree)) {
     pathNames <- unlist(lapply(repoTree[["tree"]], `[[`, "path"))
-    return(hasJaspModuleRequisites(pathNames, sep = "/"))
+    return(all(moduleRequisites(sep = "/") %in% pathNames))
   }
 
   return(FALSE)

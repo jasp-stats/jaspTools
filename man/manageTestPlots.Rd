@@ -13,7 +13,7 @@ tested.}
 \value{
 A Shiny app that shows all new/failed/orphaned cases. The app allows
 test plots to be validated, at which point they are placed in the figs
-folder and used as a reference for future tests.
+directory and used as a reference for future tests.
 }
 \description{
 This function is a wrapper around \code{vdiffr::manage_cases()}. It allows

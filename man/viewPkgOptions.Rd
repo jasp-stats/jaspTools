@@ -37,5 +37,5 @@ This option specifies if the installed version should be reinstalled automatical
 
 \code{module.dirs}:
 The directories that hold the source for the JASP module(s) you are working on.
-These module folders are used to find the R functions etc. in \code{runAnalysis} and the various testing functions.
+These module directories are used to find the R functions etc. in \code{runAnalysis} and the various testing functions.
 }

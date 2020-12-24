@@ -14,7 +14,7 @@
 #' identical to that of the main function in a JASP analysis.
 #' @param dataset Data.frame, matrix, string name or string path; if it's a string then jaspTools
 #' first checks if it's valid path and if it isn't if the string matches one of the JASP datasets (e.g., "debug.csv").
-#' By default the folder in Resources is checked first, unless called within a testthat environment, in which case tests/datasets is checked first.
+#' By default the directory in Resources is checked first, unless called within a testthat environment, in which case tests/datasets is checked first.
 #' @param options List of options to supply to the analysis (see also
 #' \code{analysisOptions}).
 #' @param view Boolean indicating whether to view the results in a webbrowser.
@@ -157,7 +157,7 @@ reinstallChangedModules <- function(lib) {
   for (modulePath in modulePaths) {
     srcFiles <- c(
       list.files(modulePath,                   full.names = TRUE, pattern = "(NAMESPACE|DESCRIPTION)$"),
-      list.files(file.path(modulePath, "src"), full.names = TRUE, pattern = "\\.(cpp|c)$"),
+      list.files(file.path(modulePath, "src"), full.names = TRUE, pattern = "(\\.(cpp|c|hpp|h)|(Makevars|Makevars\\.win))$"),
       list.files(file.path(modulePath, "R"),   full.names = TRUE, pattern = "\\.R$")
     )
     if (length(srcFiles) == 0)
@@ -165,20 +165,21 @@ reinstallChangedModules <- function(lib) {
 
     newMd5Sums <- tools::md5sum(srcFiles)
     if (length(md5Sums) == 0 || !modulePath %in% names(md5Sums) || !all(newMd5Sums %in% md5Sums[[modulePath]])) {
-      modulePkg <- devtools::as.package(modulePath)$package
-      if (modulePkg %in% loadedNamespaces())
-        devtools::unload(modulePkg)
+      moduleName <- getModuleName(modulePath)
+      if (moduleName %in% loadedNamespaces())
+        pkgload::unload(moduleName, quiet = TRUE)
 
-      message("Installing ", modulePkg, " from source")
+      message("Installing ", moduleName, " from source")
       suppressWarnings(install.packages(modulePath, lib = lib, type = "source", repos = NULL, quiet = TRUE, INSTALL_opts = "--no-multiarch"))
 
-      if (modulePkg %in% installed.packages()) {
+      if (moduleName %in% installed.packages()) {
         md5Sums[[modulePath]] <- newMd5Sums
       } else {
         # to prevent the installation output from cluttering the console on each analysis run, we do this quietly.
         # however, it is kinda nice to show errors, so we call the function again here and allow it to print this time (tryCatch/sink doesn't catch the installation failure reason).
         install.packages(modulePath, lib = lib, type = "source", repos = NULL, INSTALL_opts = "--no-multiarch")
-        stop("The installation of ", modulePkg, " failed; you will need to fix the issue that prevents `install.packages()` from installing the module before any analysis will work")
+        if (!moduleName %in% installed.packages())
+          stop("The installation of ", moduleName, " failed; you will need to fix the issue that prevents `install.packages()` from installing the module before any analysis will work")
       }
     }
   }
