@@ -38,10 +38,7 @@ runTestsTravis <- function(modulePath) {
 #' @export testAnalysis
 testAnalysis <- function(name) {
   modulePath <- getModulePathFromRFunction(name)
-
-  testDir    <- file.path(modulePath, "tests", "testthat")
-  nameMatch  <- matchCaseTestFileAnalysisName(name, testDir)
-  fileToTest <- file.path(testDir, paste0("test-", nameMatch, ".R"))
+  filesToTest <- getTestFilesMatchingName(name, modulePath)
 
   envirValue <- Sys.getenv("NOT_CRAN")
   Sys.setenv("NOT_CRAN" = "true") # this is to prevent vdiffr from skipping plots
@@ -50,7 +47,7 @@ testAnalysis <- function(name) {
   })
 
   fixRNGForTesting()
-  results <- testthat::test_file(fileToTest)
+  results <- testthat:::test_files(test_paths = filesToTest, test_dir = file.path(modulePath, "tests", "testthat"), reporter = testthat::default_compact_reporter(), test_package = NULL)
 
   printTipsNewPlots(hasNewPlots(results), name)
 }
@@ -130,15 +127,6 @@ testAll <- function() {
 #'
 #' @export manageTestPlots
 manageTestPlots <- function(name = NULL) {
-
-  if (is.null(name)) {
-    modulePaths <- getModulePathsForTesting()
-  } else {
-    modulePaths <- getModulePathFromRFunction(name)
-    name <- matchCaseTestFileAnalysisName(name, file.path(modulePaths, "tests", "testthat"))
-    name <- paste0("^", name, "$")
-  }
-
   envirValue <- Sys.getenv("NOT_CRAN")
   Sys.setenv("NOT_CRAN" = "true")
 
@@ -155,16 +143,47 @@ manageTestPlots <- function(name = NULL) {
   adjustTestthatForPlotTesting()
 
   fixRNGForTesting()
+
+  if (is.null(name))
+    manageAllTestPlots()
+  else
+    manageTestPlotsFile(name)
+}
+
+manageAllTestPlots <- function() {
+  modulePaths <- getModulePathsForTesting()
   for (modulePath in modulePaths) {
     if (length(modulePaths) > 1)
       message("\nTesting plots from ", modulePath, "\n")
 
-    versionMismatches <- checkDepVersionMismatches(modulePath)
-    if (length(versionMismatches[["newer"]]) > 0 || length(versionMismatches[["older"]]) > 0)
-      handleVersionMismatches(versionMismatches, name, modulePath)
-
-    vdiffr::manage_cases(modulePath, filter = name)
+    manageVdiffrCases(modulePath)
   }
+}
+
+manageTestPlotsFile <- function(name) {
+  modulePath <- getModulePathFromRFunction(name)
+  testFiles <- getTestFilesMatchingName(name, modulePath)
+  filter <- testFilesToVdiffrFilter(testFiles)
+  manageVdiffrCases(modulePath, filter)
+}
+
+manageVdiffrCases <- function(modulePath, filter = NULL) {
+  versionMismatches <- checkDepVersionMismatches(modulePath)
+  if (length(versionMismatches[["newer"]]) > 0 || length(versionMismatches[["older"]]) > 0)
+    handleVersionMismatches(modulePath, versionMismatches, allPlotsTested = is.null(filter))
+
+  vdiffr::manage_cases(package = modulePath, filter = filter)
+}
+
+testFilesToVdiffrFilter <- function(testFiles) {
+  strippedNames <- gsub("^test-", "", testFiles)
+  strippedNames <- gsub("\\.[rR]$", "", strippedNames)
+  if (length(strippedNames) > 1)
+    filter <- paste0("(^", paste(strippedNames, collapse = "$)|(^"), "$)")
+  else
+    filter <- paste0("^", strippedNames, "$")
+
+  return(filter)
 }
 
 #' Allows users to add package dependencies to unit testing, specifically to plot testing
@@ -315,22 +334,23 @@ approxMatch <- function(new, old, tol = 1e-5) {
 
 }
 
-matchCaseTestFileAnalysisName <- function(name, testsDir) {
-  if (!is.null(name) && length(testsDir) ==  1 && is.character(testsDir)) {
-    testFiles <- list.files(testsDir)
-    if (length(testFiles) == 0)
-      stop("No files found to test.")
+getTestFilesMatchingName <- function(name, modulePath) {
+  testsDir <- file.path(modulePath, "tests", "testthat")
+  if (!dir.exists(testsDir))
+    stop("Could not locate ", testsDir)
 
-    analysesToTest <- sub("^test-?", "", testFiles)
-    analysesToTest <- sub("\\.[rR]$", "", analysesToTest)
-    fileIndex <- which(tolower(basename(analysesToTest)) == tolower(name))
-    if (length(fileIndex) == 0)
-      stop("Could not locate test-", name, ".R, found the following testfiles: ", paste(basename(testFiles), collapse =  ", "))
+  testFiles <- list.files(testsDir)
+  if (length(testFiles) == 0)
+    stop("No files found to test.")
 
-    name <- analysesToTest[fileIndex]
-  }
+  analysisNames <- gsub("^test-(verified-)?", "", testFiles)
+  analysisNames <- gsub("\\.[rR]$", "", analysisNames)
 
-  return(name)
+  matches <- which(tolower(basename(analysisNames)) == tolower(name))
+  if (length(matches) == 0)
+    stop("Could not locate test-", name, ".R, found the following testfiles: ", paste(basename(testFiles), collapse =  ", "))
+
+  return(testFiles[matches])
 }
 
 checkDepVersionMismatches <- function(modulePath) {
@@ -356,10 +376,10 @@ checkDepVersionMismatches <- function(modulePath) {
   return(depMismatches)
 }
 
-handleVersionMismatches <- function(versionMismatches, name, modulePath) {
+handleVersionMismatches <- function(modulePath, versionMismatches, allPlotsTested) {
   onlyNewer <- length(versionMismatches[["newer"]]) > 0 && length(versionMismatches[["older"]]) == 0
   if (onlyNewer) {
-    if (is.null(name)) {
+    if (allPlotsTested) {
       message("The installed packages on your system are newer than the ones used to create the library of test plots. Automatically updated the dependencies file; please make sure there are no plot mismatches in the Shiny app")
       writeUpdatedDeps(versionMismatches[["newer"]], modulePath)
     } else {
