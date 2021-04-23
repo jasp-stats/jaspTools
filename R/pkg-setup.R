@@ -358,6 +358,7 @@ installJaspResults <- function(path, quiet = FALSE, force = FALSE) {
   if (!dir.exists(jaspResultsDir))
     stop("Could not locate jaspResults inside ", path)
 
+  remotes::install_deps(jaspResultsDir)
   install.packages(jaspResultsDir, type = "source", repos = NULL, quiet = quiet, INSTALL_opts = "--no-multiarch")
 }
 
