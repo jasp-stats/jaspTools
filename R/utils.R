@@ -123,8 +123,13 @@ moduleRequisites <- function(sep = .Platform$file.sep) {
   return(c("NAMESPACE", "DESCRIPTION", paste("inst", "Description.qml", sep = sep)))
 }
 
+binaryModuleRequisites <- function() {
+  return(c("NAMESPACE", "DESCRIPTION", "Description.qml", "qml", "Meta"))
+}
+
 hasJaspModuleRequisites <- function(path) {
-  all(file.exists(file.path(path, moduleRequisites())))
+  all(file.exists(file.path(path, moduleRequisites()))) ||
+    all(file.exists(file.path(path, binaryModuleRequisites())))
 }
 
 insideTestEnvironment <- function() {
