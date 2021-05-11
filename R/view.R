@@ -98,11 +98,11 @@
 #'
 #' @export view
 view <- function(results) {
-  if(is.list(results)) {
+  if (is.list(results)) {
     html <- makeHtmlFromList(results)
-  } else if(is.character(results) && jsonlite::validate(results) == TRUE) {# assuming a json string
+  } else if (is.character(results) && jsonlite::validate(results) == TRUE) {# assuming a json string
     html <- makeHtmlFromJson(results)
-  } else if(is.character(results) && file.exists(results) && grepl("*.jasp", results)) {
+  } else if (is.character(results) && file.exists(results) && tools::file_ext(results) == "jasp") {
     html <- makeHtmlFromJaspFile(results)
   } else {
     stop("'results' need to be a named results list, a valid json string, or a path to a .jasp file.")
@@ -117,7 +117,7 @@ view <- function(results) {
 }
 
 makeHtmlFromList <- function(results) {
-  if(!"results" %in% names(results))
+  if (!"results" %in% names(results))
     stop("Incorrect object provided in results (could not locate required field 'results'),
          please enter a valid json string or a named results list.")
 
@@ -143,7 +143,7 @@ makeHtmlFromJson <- function(results) {
 makeHtmlFromJaspFile <- function(results) {
   allFiles <- unzip(results, list = TRUE)
   outputFiles <- allFiles[["Name"]]
-  outputFiles <- outputFiles[grep("index.html|*.png", outputFiles)]
+  outputFiles <- outputFiles[grep("index\\.html$|*\\.png$", outputFiles)]
   tmpDir <- tempdir()
   unzip(results, files = outputFiles, exdir = tmpDir)
 

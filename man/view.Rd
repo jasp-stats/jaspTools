@@ -7,8 +7,8 @@
 view(results)
 }
 \arguments{
-\item{results}{A named R list returned from a JASP analysis, or a json
-results string copied from the Qt terminal.}
+\item{results}{A named R list returned from a JASP analysis, a json
+results string copied from the Qt terminal, or a path to a .jasp file.}
 }
 \value{
 A html page is generated and placed in a temp directory
