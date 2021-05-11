@@ -151,6 +151,10 @@ reinstallChangedModules <- function() {
 
   md5Sums <- .getInternal("modulesMd5Sums")
   for (modulePath in modulePaths) {
+
+    if (isBinaryPackage(modulePath))
+      next
+
     srcFiles <- c(
       list.files(modulePath,                   full.names = TRUE, pattern = "(NAMESPACE|DESCRIPTION)$"),
       list.files(file.path(modulePath, "src"), full.names = TRUE, pattern = "(\\.(cpp|c|hpp|h)|(Makevars|Makevars\\.win))$"),

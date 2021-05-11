@@ -51,19 +51,38 @@ getModulePathFromRFunction <- function(funName) {
   return(modulePath)
 }
 
+isBinaryPackage <- function(modulePath) {
+  # check if a JASP module is a binary package. The main difference is that in an installed binary package module/inst/* is moved to module/*
+
+  dir.exists(file.path(modulePath, "qml")) &&
+    dir.exists(file.path(modulePath, "Meta")) &&
+    length(list.files(file.path(modulePath, "R"))) == 3L
+}
+
 rFunctionExistsInModule <- function(funName, modulePath) {
-  env <- new.env()
-  rFiles <- list.files(file.path(modulePath, "R"), pattern = "\\.[RrSsQq]$", recursive = TRUE, full.names = TRUE)
-  if (length(rFiles) == 0)
+
+  if (isBinaryPackage(modulePath)) {
+
+    # this is how `::` looks up functions
+    moduleName <- getModuleName(modulePath)
+    ns <- asNamespace(moduleName)
+    return(!is.null(.getNamespaceInfo(ns, "exports")[[funName]]))
+
+  } else {
+
+    env <- new.env()
+    rFiles <- list.files(file.path(modulePath, "R"), pattern = "\\.[RrSsQq]$", recursive = TRUE, full.names = TRUE)
+    if (length(rFiles) == 0)
+      return(FALSE)
+
+    for (rFile in rFiles)
+      source(rFile, local = env)
+
+    if (funName %in% names(env))
+      return(TRUE)
+
     return(FALSE)
-
-  for (rFile in rFiles)
-    source(rFile, local = env)
-
-  if (funName %in% names(env))
-    return(TRUE)
-
-  return(FALSE)
+  }
 }
 
 getModulePathsForTesting <- function() {
