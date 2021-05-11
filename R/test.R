@@ -6,11 +6,18 @@
 #'
 #' @export runTestsTravis
 runTestsTravis <- function(modulePath) {
-  if (Sys.getenv("CI") == "") {
+  if (Sys.getenv("CI") == "" && Sys.getenv("R_COVR") == "") {
     testAll()
   } else {
     if (!.isSetupComplete())
       stop("The setup should be completed before the tests are ran")
+
+    # this check is identical to covr::in_covr()
+    if (identical(Sys.getenv("R_COVR"), "true")) {
+      # inside covr::package_coverage, getwd() is one directory deeper (the test directory)
+      # fixing this here avoids adding an if statement to every testthat.R
+      modulePath <- normalizePath(file.path(modulePath, ".."))
+    }
 
     setPkgOption("module.dirs", modulePath)
 
