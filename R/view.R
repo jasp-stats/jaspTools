@@ -5,8 +5,8 @@
 #' The same javascript/css/html is used as in JASP and so the output is identical. This function may
 #' be called directly, but it is more convenient to use \code{runAnalysis}.
 #'
-#' @param results A named R list returned from a JASP analysis, or a json
-#' results string copied from the Qt terminal.
+#' @param results A named R list returned from a JASP analysis, a json
+#' results string copied from the Qt terminal, or a path to a .jasp file.
 #' @return A html page is generated and placed in a temp directory
 #' @examples
 #'
@@ -98,14 +98,28 @@
 #'
 #' @export view
 view <- function(results) {
-  if (is.character(results) && jsonlite::validate(results) == TRUE) { # assuming a json string
-    results <- jsonlite::fromJSON(results, simplifyVector=FALSE)
-    if (!"results" %in% names(results))
-      stop("Incorrect json provided. Could not locate required field 'results'")
-  } else if (!is.list(results) || !"results" %in% names(results)) {
-    stop("Incorrect object provided in results,
-         please enter a valid json string or a named results list.")
+  if(is.list(results)) {
+    html <- makeHtmlFromList(results)
+  } else if(is.character(results) && jsonlite::validate(results) == TRUE) {# assuming a json string
+    html <- makeHtmlFromJson(results)
+  } else if(is.character(results) && file.exists(results) && grepl("*.jasp", results)) {
+    html <- makeHtmlFromJaspFile(results)
+  } else {
+    stop("'results' need to be a named results list, a valid json string, or a path to a .jasp file.")
   }
+
+  if (isTRUE(getPkgOption("view.in.rstudio")) && !is.null(getOption("viewer")))
+    viewer <- getOption("viewer")
+  else
+    viewer <- utils::browseURL
+
+  viewer(html)
+}
+
+makeHtmlFromList <- function(results) {
+  if(!"results" %in% names(results))
+    stop("Incorrect object provided in results (could not locate required field 'results'),
+         please enter a valid json string or a named results list.")
 
   content <- list(
     id = ifelse(is.null(results[["id"]]), 0, results[["id"]]),
@@ -114,13 +128,26 @@ view <- function(results) {
     results = results[["results"]]
   )
   json <- convertResultsListToJson(content)
+  html <- createHtmlFile(json)
 
-  if (isTRUE(getPkgOption("view.in.rstudio")) && !is.null(getOption("viewer")))
-    viewer <- getOption("viewer")
-  else
-    viewer <- utils::browseURL
+  return(html)
+}
 
-  viewer(createHtmlFile(json))
+makeHtmlFromJson <- function(results) {
+  results <- jsonlite::fromJSON(results, simplifyVector=FALSE)
+  html <- makeHtmlFromList(results)
+
+  return(html)
+}
+
+makeHtmlFromJaspFile <- function(results) {
+  allFiles <- unzip(results, list = TRUE)
+  outputFiles <- allFiles[["Name"]]
+  outputFiles <- outputFiles[grep("index.html|*.png", outputFiles)]
+  tmpDir <- tempdir()
+  unzip(results, files = outputFiles, exdir = tmpDir)
+
+  return(file.path(tmpDir, "index.html"))
 }
 
 convertResultsListToJson <- function(lst) {
