@@ -9,7 +9,6 @@
                     view.in.rstudio   = TRUE,
                     html.dir          = "",
                     data.dirs         = "",
-                    pkgs.dir          = "",
                     language          = "en"
                )
   ), parent = emptyenv())
@@ -35,7 +34,6 @@
   suppressMessages({
     setPkgOption("html.dir",  getJavascriptLocation())
     setPkgOption("data.dirs", getDatasetsLocations())
-    setPkgOption("pkgs.dir",  readJaspRequiredFilesLocation())
   })
 }
 

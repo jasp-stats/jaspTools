@@ -19,9 +19,6 @@ you call \code{viewPkgOptions}. You can adjust these values through
 The language that the analysis runs in (passed to R environment variable "LANG"). Defaults to "en" to avoid translation of strings.
 See https://www.gnu.org/software/gettext/manual/html_node/Usual-Language-Codes.html
 
-\code{pkgs.dir}:
-The directory where the R packages from jasp-required-files can be found.
-
 \code{data.dirs}:
 The directories where datafiles can be found so they may be used by \code{runAnalysis}.
 
