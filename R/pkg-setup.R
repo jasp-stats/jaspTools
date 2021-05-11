@@ -1,18 +1,17 @@
 #' Setup the jaspTools package.
 #'
 #' Ensures that analyses can be run, tested and debugged locally by fetching all of the basic dependencies.
-#' This includes fetching the data library and html files, installing jaspBase and jaspGraphs and adding the required-files.
+#' This includes fetching the data library and html files and installing jaspBase and jaspGraphs.
 #' If no parameters are supplied the function will interactively ask for the location of these dependencies.
 #'
 #' @param pathJaspDesktop [optional] Character path to the root of jasp-desktop if present on the system.
-#' @param pathJaspRequiredPkgs [optional] Character path to the root of jasp-required-files if present on the system.
 #' @param installJaspModules [optional] Boolean. Should jaspTools install all the JASP analysis modules as R packages (e.g., jaspAnova, jaspFrequencies)?
 #' @param installJaspCorePkgs [optional] Boolean. Should jaspTools install jaspBase, jaspResults and jaspGraphs?
 #' @param quiet [optional] Boolean. Should the installation of R packages produce output?
 #' @param force [optional] Boolean. Should a fresh installation of jaspResults, jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.
 #'
 #' @export setupJaspTools
-setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, installJaspModules = FALSE, installJaspCorePkgs = TRUE, quiet = FALSE, force = TRUE) {
+setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, installJaspCorePkgs = TRUE, quiet = FALSE, force = TRUE) {
 
   argsMissing <- FALSE
   if (interactive()) {
@@ -22,26 +21,18 @@ setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, 
       if (continue != 1) return(message("Setup aborted."))
     }
 
-    if (missing(installJaspModules) || missing(pathJaspRequiredPkgs) || missing(pathJaspDesktop))
+    if (missing(installJaspModules) || missing(pathJaspDesktop))
       argsMissing <- TRUE
 
     if (argsMissing)
       message("To fetch the dependencies correctly please answer the following:\n")
 
     if (missing(pathJaspDesktop)) {
-      hasJaspdesktop <- menu(c("Yes", "No"), title = "- Do you have an up-to-date clone of jasp-stats/jasp-desktop on your system?")
+      hasJaspdesktop <- menu(c("Yes", "No"), title = "- Do you have an up-to-date clone of jasp-stats/jasp-desktop on your system (note that this is not a requirement)?")
       if (hasJaspdesktop == 0) return(message("Setup aborted."))
 
       if (hasJaspdesktop == 1)
         pathJaspDesktop <- validateJaspResourceDir(readline(prompt = "Please provide path/to/jasp-desktop: \n"), isJaspDesktopDir, "jasp-desktop")
-    }
-
-    if (missing(pathJaspRequiredPkgs) && getOS() != "linux") {
-      hasJaspRequiredPkgs <- menu(c("Yes", "No"), title = "- Do you have an up-to-date clone of jasp-stats/jasp-required-files on your system?")
-      if (hasJaspRequiredPkgs == 0) return(message("Setup aborted."))
-
-      if (hasJaspRequiredPkgs == 1)
-        pathJaspRequiredPkgs <- validateJaspResourceDir(readline(prompt = "Please provide path/to/jasp-required-files: \n"), isJaspRequiredFilesDir, "jasp-required-files")
     }
 
     if (missing(installJaspModules)) {
@@ -59,37 +50,24 @@ setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, 
     }
   }
 
-  .setupJaspTools(pathJaspDesktop, pathJaspRequiredPkgs, installJaspModules, installJaspCorePkgs, quiet, force)
+  .setupJaspTools(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force)
 
   if (argsMissing)
-    printSetupArgs(pathJaspDesktop, pathJaspRequiredPkgs, installJaspModules, installJaspCorePkgs, quiet, force)
+    printSetupArgs(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force)
 }
 
-.setupJaspTools <- function(pathJaspDesktop, pathJaspRequiredPkgs, installJaspModules, installJaspCorePkgs, quiet, force) {
+.setupJaspTools <- function(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force) {
   pathJaspDesktop <- validateJaspResourceDir(pathJaspDesktop, isJaspDesktopDir, "jasp-desktop")
-  pathJaspRequiredPkgs <- validateJaspResourceDir(pathJaspRequiredPkgs, isJaspRequiredFilesDir, "jasp-required-files")
 
   if (.isSetupComplete()) # in case the setup is performed multiple times
     .removeCompletedSetupFiles()
 
   message("Fetching resources...\n")
 
-  # set the jasp-requires files *before* installing jaspResults, jaspBase and jaspGraphs to avoid duplicating dependencies
-  if (is.character(pathJaspRequiredPkgs))
-    setLocationJaspRequiredFiles(pathJaspRequiredPkgs)
-  else if (is.null(pathJaspRequiredPkgs) && isJaspRequiredFilesLocationSet())
-    unlink(getJaspRequiredFilesLocationFileName())
-
-  if (isJaspRequiredFilesLocationSet()) {
-    oldLibPaths <- .libPaths()
-    on.exit(.libPaths(oldLibPaths))
-    .libPaths(c(oldLibPaths, readJaspRequiredFilesLocation())) # we add it at the end so it doesn't actually write to it
-  }
-
   depsOK <- fetchJaspDesktopDependencies(pathJaspDesktop, getJaspResults = installJaspCorePkgs, quiet = quiet, force = force)
   if (!depsOK)
     stop("jaspTools setup could not be completed. Reason: could not fetch the jasp-stats/jasp-desktop repo and as a result the required dependencies are not installed.\n
-            If this problem persists clone jasp-stats/jasp-desktop manually and provide the path to `setupJaspTools()` in `pathJaspDesktop`.")
+            If this problem persists clone jasp-stats/jasp-desktop manually.")
 
   if (isTRUE(installJaspCorePkgs)) {
     installJaspPkg("jaspBase", quiet = quiet, force = force)
@@ -102,18 +80,13 @@ setupJaspTools <- function(pathJaspDesktop = NULL, pathJaspRequiredPkgs = NULL, 
   .finalizeSetup()
 }
 
-printSetupArgs <- function(pathJaspDesktop, pathJaspRequiredPkgs, installJaspModules, installJaspCorePkgs, quiet, force) {
+printSetupArgs <- function(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force) {
   if (is.character(pathJaspDesktop))
     showPathJasp <- paste0("\"", pathJaspDesktop, "\"")
   else
     showPathJasp <- "NULL"
 
-  if (is.character(pathJaspRequiredPkgs))
-    showPathPkgs <- paste0("\"", pathJaspRequiredPkgs, "\"")
-  else
-    showPathPkgs <- "NULL"
-
-  message("\nIn the future you can skip the interactive part of the setup by calling `setupJaspTools(pathJaspDesktop = ", showPathJasp, ", pathJaspRequiredPkgs = ", showPathPkgs, ", installJaspModules = ", installJaspModules, ", installJaspCorePkgs = ", installJaspCorePkgs, ", quiet = ", quiet, ", force = ", force, ")`")
+  message("\nIn the future you can skip the interactive part of the setup by calling `setupJaspTools(pathJaspDesktop = ", showPathJasp, ", installJaspModules = ", installJaspModules, ", installJaspCorePkgs = ", installJaspCorePkgs, ", quiet = ", quiet, ", force = ", force, ")`")
 }
 
 validateJaspResourceDir <- function(path, validationFn, title) {
@@ -127,69 +100,11 @@ validateJaspResourceDir <- function(path, validationFn, title) {
   return(path)
 }
 
-isJaspRequiredFilesDir <- function(path) {
-  dirs <- dir(path)
-  if (getOS() == "windows")
-    return("R" %in% dirs && dir.exists(file.path(path, "R", "library")))
-  else if (getOS() == "osx")
-    return("Frameworks" %in% dirs && dir.exists(file.path(path, "Frameworks", "R.framework")))
-  else if (getOS() == "linux")
-    stop("jasp-required-files are not used on Linux")
-}
-
 isJaspDesktopDir <- function(path) {
   dirs <- list.dirs(path, full.names = FALSE, recursive = FALSE)
   return(all(
     c("Common", "Desktop", "Engine", "Modules", "R-Interface") %in% dirs
   ))
-}
-
-findRequiredPkgs <- function(pathToRequiredFiles) {
-  result <- ""
-  if (isJaspRequiredFilesDir(pathToRequiredFiles)) {
-    if (getOS() == "windows")
-      result <- getPkgDirWindows(pathToRequiredFiles)
-    else if (getOS() == "osx")
-      result <- getPkgDirOSX(pathToRequiredFiles)
-  }
-  return(result)
-}
-
-getPkgDirWindows <- function(pathToRequiredFiles) {
-  potentialPkgDir <- file.path(pathToRequiredFiles, "R", "library")
-
-  if (dirHasBundledPackages(potentialPkgDir, hasPkg="Rcpp"))
-    return(potentialPkgDir)
-
-  return("")
-}
-
-getPkgDirOSX <- function(pathToRequiredFiles) {
-  basePathPkgs <- file.path(pathToRequiredFiles, "Frameworks", "R.framework", "Versions")
-  rVersions <- list.files(basePathPkgs)
-  if (identical(rVersions, character(0)))
-    return("")
-
-  rVersions <- suppressWarnings(as.numeric(rVersions))
-  r <- sort(rVersions, decreasing = TRUE)[1]
-  potentialPkgDir <- file.path(basePathPkgs, r, "Resources", "library")
-
-  if (dirHasBundledPackages(potentialPkgDir, hasPkg="Rcpp"))
-    return(potentialPkgDir)
-
-  return("")
-}
-
-dirHasBundledPackages <- function(dir, hasPkg) {
-  if (!dir.exists(dir))
-    return(FALSE)
-
-  pkgs <- list.files(dir)
-  if (!identical(pkgs, character(0)) && hasPkg %in% pkgs) {
-    return(TRUE)
-  }
-
-  return(FALSE)
 }
 
 getJaspToolsDir <- function() {
@@ -202,26 +117,8 @@ getSetupCompleteFileName <- function() {
   return(file)
 }
 
-getJaspRequiredFilesLocationFileName <- function() {
-  jaspToolsDir <- getJaspToolsDir()
-  file <- file.path(jaspToolsDir, "jasp-required-files_location.txt")
-  return(file)
-}
-
 .isSetupComplete <- function() {
   return(file.exists(getSetupCompleteFileName()))
-}
-
-isJaspRequiredFilesLocationSet <- function() {
-  return(file.exists(getJaspRequiredFilesLocationFileName()))
-}
-
-readJaspRequiredFilesLocation <- function() {
-  loc <- NULL
-  if (isJaspRequiredFilesLocationSet())
-    loc <- readLines(getJaspRequiredFilesLocationFileName())
-
-  return(loc)
 }
 
 .finalizeSetup <- function() {
@@ -242,27 +139,9 @@ readJaspRequiredFilesLocation <- function() {
 
 .removeCompletedSetupFiles <- function() {
   unlink(getSetupCompleteFileName())
-  unlink(getJaspRequiredFilesLocationFileName())
   unlink(getJavascriptLocation(), recursive = TRUE)
   unlink(getDatasetsLocations(jaspOnly = TRUE), recursive = TRUE)
   message("Removed files from previous jaspTools setup")
-}
-
-setLocationJaspRequiredFiles <- function(pathToRequiredFiles) {
-  if (!dir.exists(pathToRequiredFiles))
-    stop("jasp-required-files directory does not exist at ", pathToRequiredFiles)
-
-  path <- normalizePath(pathToRequiredFiles)
-  libPath <- findRequiredPkgs(path)
-  if (libPath == "")
-    stop("Could not locate the R packages within ", pathToRequiredFiles)
-
-  file <- getJaspRequiredFilesLocationFileName()
-  fileConn <- file(file)
-  on.exit(close(fileConn))
-  writeLines(libPath, fileConn)
-
-  message(sprintf("Created %s", file))
 }
 
 # javascript, datasets, jaspResults
@@ -403,12 +282,6 @@ installJaspPkg <- function(pkg, force = FALSE, auth_token = NULL, ...) {
 #'
 #' @export installJaspModules
 installJaspModules <- function(force = FALSE, quiet = FALSE) {
-  if (isJaspRequiredFilesLocationSet()) {
-    oldLibPaths <- .libPaths()
-    on.exit(.libPaths(oldLibPaths))
-    .libPaths(c(oldLibPaths, readJaspRequiredFilesLocation())) # we add it at the end so it doesn't actually write to it
-  }
-
   res <- downloadAllJaspModules(force, quiet)
   if (length(res[["success"]]) > 0) {
     pkgs <- list.files(getTempJaspModulesLocation(), full.names = TRUE)

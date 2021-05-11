@@ -13,7 +13,6 @@ runTestsTravis <- function(modulePath) {
       stop("The setup should be completed before the tests are ran")
 
     setPkgOption("module.dirs", modulePath)
-    .libPaths(c(.libPaths(), getPkgOption("pkgs.dir")))
 
     remotes::install_local(modulePath, upgrade = "never", force = FALSE, INSTALL_opts = "--no-multiarch")
 

@@ -72,12 +72,10 @@ runAnalysis <- function(name, dataset, options, view = TRUE, quiet = FALSE, make
     quiet <- TRUE
   }
 
-  oldLibPaths <- .libPaths()
   oldWd       <- getwd()
   oldLang     <- Sys.getenv("LANG")
   on.exit({
     .resetRunTimeInternals()
-    .libPaths(oldLibPaths)
     setwd(oldWd)
     Sys.setenv(LANG = oldLang)
   })
@@ -129,10 +127,8 @@ fetchRunArgs <- function(name, options) {
 }
 
 initAnalysisRuntime <- function(dataset, makeTests, ...) {
-  # first we reinstall any changed modules in the personal library, with pkgs from required-files present
-  userLib <- .libPaths()[1]
-  .libPaths(c(getPkgOption("pkgs.dir"), .libPaths()))
-  reinstallChangedModules(lib = userLib)
+  # first we reinstall any changed modules in the personal library
+  reinstallChangedModules()
 
   # dataset to be found in the analysis when it needs to be read
   .setInternal("dataset", dataset)
@@ -148,7 +144,7 @@ initAnalysisRuntime <- function(dataset, makeTests, ...) {
     set.seed(1)
 }
 
-reinstallChangedModules <- function(lib) {
+reinstallChangedModules <- function() {
   modulePaths <- getModulePaths()
   if (isFALSE(getPkgOption("reinstall.modules")) || length(modulePaths) == 0)
     return()
@@ -170,14 +166,14 @@ reinstallChangedModules <- function(lib) {
         pkgload::unload(moduleName, quiet = TRUE)
 
       message("Installing ", moduleName, " from source")
-      suppressWarnings(install.packages(modulePath, lib = lib, type = "source", repos = NULL, quiet = TRUE, INSTALL_opts = "--no-multiarch"))
+      suppressWarnings(install.packages(modulePath, type = "source", repos = NULL, quiet = TRUE, INSTALL_opts = "--no-multiarch"))
 
       if (moduleName %in% installed.packages()) {
         md5Sums[[modulePath]] <- newMd5Sums
       } else {
         # to prevent the installation output from cluttering the console on each analysis run, we do this quietly.
         # however, it is kinda nice to show errors, so we call the function again here and allow it to print this time (tryCatch/sink doesn't catch the installation failure reason).
-        install.packages(modulePath, lib = lib, type = "source", repos = NULL, INSTALL_opts = "--no-multiarch")
+        install.packages(modulePath, type = "source", repos = NULL, INSTALL_opts = "--no-multiarch")
         if (!moduleName %in% installed.packages())
           stop("The installation of ", moduleName, " failed; you will need to fix the issue that prevents `install.packages()` from installing the module before any analysis will work")
       }
