@@ -186,7 +186,7 @@ addPlotSpecificLines <- function(test, name) {
   gettingPlot <- paste0('\ttestPlot <- results[["state"]][["figures"]][[plotName]][["obj"]]')
 
   title <- gsub("-+", "-", gsub("\\W", "-", tolower(test$title)))
-  comparingPlots <- paste0('\tjaspTools::expect_equal_plots(testPlot, "', title, '", dir="', name, '")')
+  comparingPlots <- paste0('\tjaspTools::expect_equal_plots(testPlot, "', title, '")')
 
   return(paste(gettingPlotName, gettingPlot, comparingPlots, sep="\n"))
 }

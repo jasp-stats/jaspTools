@@ -2,7 +2,7 @@
 % Please edit documentation in R/test.R
 \name{manageTestPlots}
 \alias{manageTestPlots}
-\title{Visually inspect new/failed test plots.}
+\title{Visually inspect failed test plots.}
 \usage{
 manageTestPlots(name = NULL)
 }
@@ -11,14 +11,14 @@ manageTestPlots(name = NULL)
 tested.}
 }
 \value{
-A Shiny app that shows all new/failed/orphaned cases. The app allows
-test plots to be validated, at which point they are placed in the figs
+A Shiny app that shows all failed cases. The app allows
+test plots to be validated, at which point they are placed in the _snaps
 directory and used as a reference for future tests.
 }
 \description{
-This function is a wrapper around \code{vdiffr::manage_cases()}. It allows
-visual inspection of the plots in the unit tests that were newly added or
-produced an error. If no analysis is specified it will iterate over all test
+This function is a wrapper around \code{testthat::snapshot_review()}. It allows
+visual inspection of the plots in the unit tests that produced an error.
+If no analysis is specified it will iterate over all test
 cases.
 }
 \examples{

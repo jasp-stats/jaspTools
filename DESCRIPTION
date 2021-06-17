@@ -12,11 +12,13 @@ Imports:
   data.table,
   httr,
   jsonlite,
+  lifecycle,
   pkgload,
   remotes,
   rjson,
   stringi,
   stringr,
-  testthat,
-  vdiffr (>= 0.3.0)
+  testthat (>= 3.0.0),
+  vdiffr (>= 1.0.0)
 RoxygenNote: 7.1.1
+Roxygen: list(markdown = TRUE)

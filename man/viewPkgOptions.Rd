@@ -29,7 +29,7 @@ The directory where the javascript, css and .html files can be found to create o
 This option specifies where the html output of \code{runAnalysis} will be shown: inside RStudio or in a separate webbrowser.
 
 \code{reinstall.modules}:
-When you run an analysis or test it, jaspTools calls the *installed* version of the module.
+When you run an analysis or test it, jaspTools calls the \emph{installed} version of the module.
 This option specifies if the installed version should be reinstalled automatically when you make any changes to your module.
 
 \code{module.dirs}:
