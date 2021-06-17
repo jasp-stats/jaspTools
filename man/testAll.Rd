@@ -4,7 +4,10 @@
 \alias{testAll}
 \title{Test all analyses in the currently monitored modules.}
 \usage{
-testAll()
+testAll(onlyPlots = FALSE)
+}
+\arguments{
+\item{onlyPlots}{Would you like to only run the tests for plots? This can speed up the generating of reference images in case you are not interested in the other unit tests.}
 }
 \description{
 Tests all R analyses found under modules/tests/testthat. Useful to perform before making

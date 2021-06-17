@@ -5,8 +5,8 @@
 #'
 #'
 #' @param test The plot object you wish to test (does not work well for non-ggplot2 objects).
-#' @param name The name of the reference plot (a .svg stored in /tests/figs).
-#' @param dir The directory in tests/figs where the .svg is stored (commonly the name of the analysis).
+#' @param name The name of the reference plot (a .svg stored in /tests/testthat/_snaps).
+#' @param dir `r lifecycle::badge('deprecated')`
 #'
 #' @examples
 #'
@@ -19,7 +19,7 @@
 #' expect_equal_plots(testPlot, "descriptives-1", dir = "BinomialTest")
 #'
 #' @export expect_equal_plots
-expect_equal_plots <- function(test, name, dir) {
+expect_equal_plots <- function(test, name, dir = lifecycle::deprecated()) {
   if (length(test) == 0) {
     expect(FALSE, getEmptyTestMsg("expect_equal_plots()"))
     return()
@@ -32,14 +32,14 @@ expect_equal_plots <- function(test, name, dir) {
     subplots <- test$subplots
 
     for (i in seq_along(subplots))
-      vdiffr::expect_doppelganger(paste(dir, name, "subplot", i, sep="-"), subplots[[i]], path=dir)
+      vdiffr::expect_doppelganger(paste(name, "subplot", i, sep = "-"), subplots[[i]])
 
   } else {
     if (inherits(test, "qgraph")) {
       qq <- test
       test <- function() plot(qq)
     }
-    suppressWarnings(vdiffr::expect_doppelganger(paste(dir, name, sep="-"), test, path=dir))
+    suppressWarnings(vdiffr::expect_doppelganger(name, test))
   }
 }
 

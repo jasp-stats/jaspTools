@@ -29,13 +29,14 @@ runTestsTravis <- function(modulePath) {
 #' making a pull request, to prevent failing builds.
 #'
 #'
-#' @param name String name of the analysis to test.
+#' @param name String name of the analysis to test (case sensitive).
+#' @param onlyPlots Would you like to only run the tests for plots? This can speed up the generating of reference images in case you are not interested in the other unit tests.
 #' @examples
 #'
 #' testAnalysis("AnovaBayesian")
 #'
 #' @export testAnalysis
-testAnalysis <- function(name) {
+testAnalysis <- function(name, onlyPlots = FALSE) {
   modulePath <- getModulePathFromRFunction(name)
   filesToTest <- getTestFilesMatchingName(name, modulePath)
 
@@ -45,10 +46,16 @@ testAnalysis <- function(name) {
     Sys.setenv("NOT_CRAN" = envirValue)
   })
 
-  fixRNGForTesting()
-  results <- testthat:::test_files(test_paths = filesToTest, test_dir = file.path(modulePath, "tests", "testthat"), reporter = testthat::default_compact_reporter(), test_package = NULL)
+  if (onlyPlots) {
+    originalFn <- testthat::test_that
+    on.exit(undoPlotTestingChanges(originalFn), add=TRUE)
+    adjustTestthatForPlotTesting()
+  }
 
-  printTipsNewPlots(hasNewPlots(results), name)
+  fixRNGForTesting()
+  testthat:::test_files(test_paths = filesToTest, test_dir = file.path(modulePath, "tests", "testthat"), reporter = testthat::default_compact_reporter(), test_package = NULL)
+
+  return(invisible())
 }
 
  fixRNGForTesting <- function() {
@@ -60,9 +67,10 @@ testAnalysis <- function(name) {
 #' Tests all R analyses found under modules/tests/testthat. Useful to perform before making
 #' a pull request, to prevent failing builds.
 #'
+#' @param onlyPlots Would you like to only run the tests for plots? This can speed up the generating of reference images in case you are not interested in the other unit tests.
 #'
 #' @export testAll
-testAll <- function() {
+testAll <- function(onlyPlots = FALSE) {
   envirValue <- Sys.getenv("NOT_CRAN")
   Sys.setenv("NOT_CRAN" = "true")
 
@@ -74,31 +82,32 @@ testAll <- function() {
     options("testthat.progress.max_fails" = optsValue)
   })
 
+  if (onlyPlots) {
+    originalFn <- testthat::test_that
+    on.exit(undoPlotTestingChanges(originalFn), add=TRUE)
+    adjustTestthatForPlotTesting()
+  }
+
   modulePaths <- getModulePathsForTesting()
   fixRNGForTesting()
 
-  hasNewPlots <- FALSE
   testResults <- list(failedModules = c(), passedModules = c())
   for (modulePath in modulePaths) {
     if (length(modulePaths) > 1)
       message("\nRunning tests from ", modulePath, "\n")
 
     testDir <- file.path(modulePath, "tests", "testthat")
-    results <- as.data.frame(testthat::test_dir(testDir))
+    results <- try(as.data.frame(testthat::test_dir(testDir)))
 
-    if (length(modulePaths) > 1) {
-      if (sum(results$failed) > 0 || sum(results$error) > 0)
-        testResults[["failedModules"]] <- c(testResults[["failedModules"]], basename(modulePath))
-      else
-        testResults[["passedModules"]] <- c(testResults[["passedModules"]], basename(modulePath))
-    }
+    if (inherits(results, "try-error") || (sum(results$failed) > 0 || sum(results$error) > 0))
+      testResults[["failedModules"]] <- c(testResults[["failedModules"]], basename(modulePath))
+    else
+      testResults[["passedModules"]] <- c(testResults[["passedModules"]], basename(modulePath))
 
-    if (hasNewPlots(results))
-      hasNewPlots <- TRUE
   }
 
-  printSuccessFailureModules(testResults)
-  printTipsNewPlots(hasNewPlots)
+  if (length(modulePaths) > 1)
+    printSuccessFailureModules(testResults)
 
   status <- 0
   if (length(testResults[["failedModules"]]) > 0)
@@ -107,18 +116,18 @@ testAll <- function() {
   return(invisible(status))
 }
 
-#' Visually inspect new/failed test plots.
+#' Visually inspect failed test plots.
 #'
-#' This function is a wrapper around \code{vdiffr::manage_cases()}. It allows
-#' visual inspection of the plots in the unit tests that were newly added or
-#' produced an error. If no analysis is specified it will iterate over all test
+#' This function is a wrapper around \code{testthat::snapshot_review()}. It allows
+#' visual inspection of the plots in the unit tests that produced an error.
+#' If no analysis is specified it will iterate over all test
 #' cases.
 #'
 #'
 #' @param name Optional string name of the analysis whose plots should be
 #' tested.
-#' @return A Shiny app that shows all new/failed/orphaned cases. The app allows
-#' test plots to be validated, at which point they are placed in the figs
+#' @return A Shiny app that shows all failed cases. The app allows
+#' test plots to be validated, at which point they are placed in the _snaps
 #' directory and used as a reference for future tests.
 #' @examples
 #'
@@ -126,23 +135,6 @@ testAll <- function() {
 #'
 #' @export manageTestPlots
 manageTestPlots <- function(name = NULL) {
-  envirValue <- Sys.getenv("NOT_CRAN")
-  Sys.setenv("NOT_CRAN" = "true")
-
-  optsValue <- getOption("testthat.progress.max_fails")
-  options("testthat.progress.max_fails" = 1000)
-
-  on.exit({
-    Sys.setenv("NOT_CRAN" = envirValue)
-    options("testthat.progress.max_fails" = optsValue)
-  })
-
-  originalFn <- testthat::test_that
-  on.exit(undoPlotTestingChanges(originalFn), add=TRUE)
-  adjustTestthatForPlotTesting()
-
-  fixRNGForTesting()
-
   if (is.null(name))
     manageAllTestPlots()
   else
@@ -155,69 +147,18 @@ manageAllTestPlots <- function() {
     if (length(modulePaths) > 1)
       message("\nTesting plots from ", modulePath, "\n")
 
-    manageVdiffrCases(modulePath)
+    .manageTestPlots(modulePath)
   }
 }
 
 manageTestPlotsFile <- function(name) {
   modulePath <- getModulePathFromRFunction(name)
   testFiles <- getTestFilesMatchingName(name, modulePath)
-  filter <- testFilesToVdiffrFilter(testFiles)
-  manageVdiffrCases(modulePath, filter)
+  .manageTestPlots(modulePath, testFiles)
 }
 
-manageVdiffrCases <- function(modulePath, filter = NULL) {
-  versionMismatches <- checkDepVersionMismatches(modulePath)
-  if (length(versionMismatches[["newer"]]) > 0 || length(versionMismatches[["older"]]) > 0)
-    handleVersionMismatches(modulePath, versionMismatches, allPlotsTested = is.null(filter))
-
-  vdiffr::manage_cases(package = modulePath, filter = filter)
-}
-
-testFilesToVdiffrFilter <- function(testFiles) {
-  strippedNames <- gsub("^test-", "", testFiles)
-  strippedNames <- gsub("\\.[rR]$", "", strippedNames)
-  if (length(strippedNames) > 1)
-    filter <- paste0("(^", paste(strippedNames, collapse = "$)|(^"), "$)")
-  else
-    filter <- paste0("^", strippedNames, "$")
-
-  return(filter)
-}
-
-#' Allows users to add package dependencies to unit testing, specifically to plot testing
-#'
-#' Testing might fail if dependencies are not the same across platforms (e.g., different versions of jaspGraphs).
-#' If this is the case then those dependencies should be monitored and errors given when they do not match.
-#' This function allows you to define "unit test breaking" dependencies for plots
-#'
-#'
-#' @param dep A single character value of a package name currently installed on your system
-#' @param modulePath Specify the path to the root directory of the module, or specify it through `setPkgOption("/.../")`
-#' @return This function only has a side effect: updating figs/jasp-deps.txt
-#' @examples
-#'
-#' addTestDependency("jaspGraphs")
-#'
-#' @export addTestDependency
-addTestDependency <- function(dep, modulePath = getPkgOption("module.dirs")) {
-  if (!is.character(dep) || length(dep) > 1)
-    stop("Expecting single name of a package")
-
-  if (length(modulePath) != 1 || modulePath == "")
-    stop("Not sure where to write the dependency to. Please specify one module.")
-
-  depsInFile <- getDepsFromFile(modulePath)
-  if (dep %in% names(depsInFile))
-    stop("Package already exists in dependency file")
-
-  if (!dep %in% installed.packages())
-    stop("The package is not installed on your system, cannot retrieve a version")
-
-  depToWrite <- list()
-  depToWrite[[dep]] <- packageVersion(dep)
-  writeDepsToFile(depToWrite, modulePath)
-  message(paste0("Dependency `", dep, "` added to jasp-deps.txt"))
+.manageTestPlots <- function(modulePath, testFiles = NULL) {
+  testthat::snapshot_review(files = testFiles, path = file.path(modulePath, "tests", "testthat"))
 }
 
 #' Aids in the creation of tests for tables.
@@ -352,137 +293,12 @@ getTestFilesMatchingName <- function(name, modulePath) {
   return(testFiles[matches])
 }
 
-checkDepVersionMismatches <- function(modulePath) {
-  depsInFile <- getDepsFromFile(modulePath)
-  userDeps <- getDepsFromUser(modulePath)
-
-  depMismatches <- list(older=list(), newer=list())
-  for (i in seq_along(userDeps)) {
-    pkgName <- names(userDeps)[i]
-    pkgVersion <- userDeps[[i]]
-
-    if (pkgVersion == depsInFile[[pkgName]])
-      next
-
-    type <- "older"
-    if (pkgVersion > depsInFile[[pkgName]])
-      type <- "newer"
-
-    misMatch <- list(pkg=pkgName, userVersion=pkgVersion, fileVersion=depsInFile[[pkgName]])
-    depMismatches[[type]] <- c(depMismatches[[type]], list(misMatch))
-  }
-
-  return(depMismatches)
-}
-
-handleVersionMismatches <- function(modulePath, versionMismatches, allPlotsTested) {
-  onlyNewer <- length(versionMismatches[["newer"]]) > 0 && length(versionMismatches[["older"]]) == 0
-  if (onlyNewer) {
-    if (allPlotsTested) {
-      message("The installed packages on your system are newer than the ones used to create the library of test plots. Automatically updated the dependencies file; please make sure there are no plot mismatches in the Shiny app")
-      writeUpdatedDeps(versionMismatches[["newer"]], modulePath)
-    } else {
-      stop("The library of test plots was created using older packages; to avoid version mismatches between plots from different analyses please validate ALL plots by running `manageTestPlots()`")
-    }
-  } else {
-    stop("Some of your installed packages are outdated (the library of test plots was created with a newer version). Please update these packages:\n", makeOutdatedDepsMsg(versionMismatches[["older"]]))
-  }
-}
-
-makeOutdatedDepsMsg <- function(oldDeps) {
-  msg <- NULL
-  for (oldDep in oldDeps)
-    msg <- c(msg, paste0("- ", oldDep[["pkg"]], " (version ", oldDep[["userVersion"]], ") is older than the version used to create other plots (", oldDep[["fileVersion"]], ").\n",
-                         "* The ", oldDep[["pkg"]], " package is located at ", getInstallLocationDep(oldDep[["pkg"]])))
-  return(paste(msg, collapse="\n\n"))
-}
-
-getDepsFromFile <- function(modulePath) {
-  pathToDeps <- getDepsFileLocation(modulePath)
-  if (!file.exists(pathToDeps)) {
-    message("File with JASP dependencies does not exist yet. Creating ", pathToDeps)
-    writeDepsToFile(list(jaspGraphs = packageVersion("jaspGraphs")), modulePath, add = FALSE)
-  }
-
-  depLines <- readLines(pathToDeps, warn=FALSE)
-  pattern <- "^- ([a-zA-Z0-9.]{2,}(?<![.])): ((\\d+\\.?)+)$"
-  deps <- list()
-  for (depLine in depLines) {
-    if (!grepl(pattern, depLine, perl=TRUE))
-      stop("jasp-deps.txt is corrupted; each line should have the form `- valid.package.name: 0.1.5`")
-    matches <- stringr::str_match(depLine, pattern)
-    name <- matches[, 2]
-    version <- matches[, 3]
-    deps[[name]] <- version
-  }
-  return(deps)
-}
-
-getDepsFromUser <- function(modulePath) {
-  depPkgs <- names(getDepsFromFile(modulePath))
-  userDeps <- list()
-  for (dep in depPkgs) {
-    if (! dep %in% installed.packages())
-      stop("You must install the dependency ", dep, " before you can test plots")
-    userDeps[[dep]] <- packageVersion(dep)
-  }
-  return(userDeps)
-}
-
-writeUpdatedDeps <- function(newDeps, modulePath) {
-  deps <- vector("list", length(newDeps))
-  for (newDep in newDeps)
-    deps[[newDep[["pkg"]]]] <- newDep[["userVersion"]]
-  writeDepsToFile(deps, modulePath)
-}
-
-getDepsFileLocation <- function(modulePath) {
-  return(file.path(modulePath, "tests", "figs", "jasp-deps.txt"))
-}
-
-writeDepsToFile <- function(deps, modulePath, add = TRUE) {
-  if (add) {
-    depsInFile <- getDepsFromFile(modulePath)
-    deps <- modifyList(depsInFile, deps)
-  }
-
-  txt <- character(0)
-  for (i in seq_along(deps)) {
-    txt <- c(txt, paste0("- ", names(deps)[i], ": ", deps[[i]]))
-  }
-  txt <- paste(txt, collapse="\n")
-
-  pathToDeps <- getDepsFileLocation(modulePath)
-  fileConn <- file(pathToDeps, open = "w")
-  writeLines(txt, fileConn)
-  close(fileConn)
-}
-
-hasNewPlots <- function(testthatResults) {
-  any(grepl("`vdiffr::manage_cases()`", unlist(testthatResults), fixed=TRUE))
-}
-
 printSuccessFailureModules <- function(testResults) {
   if (length(testResults[["passedModules"]]) > 0)
     message("\nThe tests passed for ", paste(testResults[["passedModules"]], collapse = ", "), ".")
 
   if (length(testResults[["failedModules"]]) > 0)
     message("\nThe tests failed for ", paste(testResults[["failedModules"]], collapse = ", "), ". Scroll up for more details.")
-}
-
-printTipsNewPlots <- function(hasNewPlots, name = NULL) {
-  if (hasNewPlots) {
-    analysisName <- ""
-    if (!is.null(name))
-      analysisName <- paste0('"', name,'"')
-    message("To more easily validate new plots use manageTestPlots(", analysisName, ")")
-  }
-}
-
-getInstallLocationDep <- function(dep) {
-  pkgs <- installed.packages()
-  index <- min(which(row.names(pkgs) == dep))
-  return(pkgs[index, "LibPath"])
 }
 
 charVec2MixedList <- function(x) {
@@ -513,14 +329,30 @@ collapseTestTable <- function(rows) {
 
 adjustTestthatForPlotTesting <- function() {
 
-  test_thatStandIn <- function(desc, code) {
+  # taken from testthat::test_that
+  test_thatStandIn <- function (desc, code) {
+    if (!is.character(desc) || length(desc) != 1) {
+      rlang::abort("`desc` must be a string")
+    }
+    reporter <- testthat::get_reporter()
+    if (is.null(reporter)) {
+      reporter <- testthat:::local_interactive_reporter()
+    }
+    testthat::local_test_context()
     code <- substitute(code)
+    if (testthat::edition_get() >= 3) {
+      if (!rlang::is_call(code, "{")) {
+        rlang::warn("The `code` argument to `test_that()` must be a braced expression to get accurate file-line information for failures.")
+      }
+    }
 
+    # and added these lines
     envirPlotTest <- Sys.getenv("JASP_PLOT_TEST")
     if (envirPlotTest == "true" && !any(grepl("expect_equal_plots", code, fixed=TRUE)))
       return()
+    # until here
 
-    testthat:::test_code(desc, code, env = parent.frame())
+    testthat:::test_code(desc, code, env = parent.frame(), reporter = reporter)
   }
 
   Sys.setenv("JASP_PLOT_TEST" = "true")
