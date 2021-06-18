@@ -90,11 +90,20 @@ getQMLFile <- function(name) {
   if (is.null(modulePath))
     stop("Could not locate the module location for ", name)
 
-  possibleQmlFile <- file.path(modulePath, "inst", "qml", paste0(name, ".qml")) # it's optional to specify the qml file in Description.qml, you can also just name it RFunc.qml
+  if (isBinaryPackage(modulePath)) {
+    qmlDir  <- file.path(modulePath, "qml")
+    instDir <- modulePath
+  } else { # source pkg
+    qmlDir  <- file.path(modulePath, "inst", "qml")
+    instDir <- file.path(modulePath, "inst")
+
+  }
+
+  possibleQmlFile <- file.path(qmlDir, paste0(name, ".qml")) # it's optional to specify the qml file in Description.qml, you can also just name it RFunc.qml
   if (file.exists(possibleQmlFile))
     return(possibleQmlFile)
 
-  descrFile <- file.path(modulePath, "inst", "Description.qml")
+  descrFile <- file.path(instDir, "Description.qml")
   if (!file.exists(descrFile))
     stop("Could not locate Description.qml in ", modulePath)
 
@@ -111,7 +120,7 @@ getQMLFile <- function(name) {
     stop("Could not locate qml file for R function ", name, " in inst/qml directory and did not find a qml entry in inst/Description.qml that describes an alternative for the qml filename")
 
   qmlFileName <- stringr::str_match(rLocMatch, qmlLocExpr)
-  qmlFilePath <- file.path(modulePath, "inst", "qml", qmlFileName)
+  qmlFilePath <- file.path(qmlDir, qmlFileName)
   if (!file.exists(qmlFilePath))
     stop("Found a qml filename for the R function ", name, " but this qml file does not appear to exist in inst/qml/")
 

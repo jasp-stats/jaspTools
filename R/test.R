@@ -6,7 +6,7 @@
 #'
 #' @export runTestsTravis
 runTestsTravis <- function(modulePath) {
-  if (Sys.getenv("CI") == "") {
+  if (Sys.getenv("CI") == "" && Sys.getenv("R_COVR") == "") {
     testAll()
   } else {
     if (!.isSetupComplete())
@@ -14,7 +14,12 @@ runTestsTravis <- function(modulePath) {
 
     setPkgOption("module.dirs", modulePath)
 
-    remotes::install_local(modulePath, upgrade = "never", force = FALSE, INSTALL_opts = "--no-multiarch")
+    # this check is identical to covr::in_covr()
+    codeCoverage <- identical(Sys.getenv("R_COVR"), "true")
+
+    # only install the pkg if we're not running on covr, because covr also installs it
+    if (!codeCoverage)
+      remotes::install_local(modulePath, upgrade = "never", force = FALSE, INSTALL_opts = "--no-multiarch")
 
     testingStatus <- testAll()
 
