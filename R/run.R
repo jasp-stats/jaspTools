@@ -74,10 +74,12 @@ runAnalysis <- function(name, dataset, options, view = TRUE, quiet = FALSE, make
 
   oldWd       <- getwd()
   oldLang     <- Sys.getenv("LANG")
+  oldLanguage <- Sys.getenv("LANGUAGE")
   on.exit({
     .resetRunTimeInternals()
     setwd(oldWd)
     Sys.setenv(LANG = oldLang)
+    Sys.setenv(LANGUAGE = oldLanguage)
   })
 
   initAnalysisRuntime(dataset = dataset, makeTests = makeTests)
@@ -135,6 +137,7 @@ initAnalysisRuntime <- function(dataset, makeTests, ...) {
 
   # prevent the results from being translated (unless the user explicitly wants to)
   Sys.setenv(LANG = getPkgOption("language"))
+  Sys.setenv(LANGUAGE = getPkgOption("language"))
 
   # jaspBase and jaspResults needs to be loaded until they are merged and the packages handle dependencies correctly
   initializeCoreJaspPackages()
