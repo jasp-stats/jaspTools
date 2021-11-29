@@ -1,3 +1,6 @@
+#' @importFrom utils install.packages menu download.file unzip capture.output installed.packages packageVersion
+#' @importFrom testthat expect skip
+
 findCorrectFunction <- function(funName) {
   modulePath <- getModulePathFromRFunction(funName)
   if (is.null(modulePath))
