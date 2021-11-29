@@ -4,11 +4,11 @@
 #' This includes fetching the data library and html files and installing jaspBase and jaspGraphs.
 #' If no parameters are supplied the function will interactively ask for the location of these dependencies.
 #'
-#' @param pathJaspDesktop [optional] Character path to the root of jasp-desktop if present on the system.
-#' @param installJaspModules [optional] Boolean. Should jaspTools install all the JASP analysis modules as R packages (e.g., jaspAnova, jaspFrequencies)?
-#' @param installJaspCorePkgs [optional] Boolean. Should jaspTools install jaspBase, jaspResults and jaspGraphs?
-#' @param quiet [optional] Boolean. Should the installation of R packages produce output?
-#' @param force [optional] Boolean. Should a fresh installation of jaspResults, jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.
+#' @param pathJaspDesktop (optional) Character path to the root of jasp-desktop if present on the system.
+#' @param installJaspModules (optional) Boolean. Should jaspTools install all the JASP analysis modules as R packages (e.g., jaspAnova, jaspFrequencies)?
+#' @param installJaspCorePkgs (optional) Boolean. Should jaspTools install jaspBase, jaspResults and jaspGraphs?
+#' @param quiet (optional) Boolean. Should the installation of R packages produce output?
+#' @param force (optional) Boolean. Should a fresh installation of jaspResults, jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.
 #'
 #' @export setupJaspTools
 setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, installJaspCorePkgs = TRUE, quiet = FALSE, force = TRUE) {
