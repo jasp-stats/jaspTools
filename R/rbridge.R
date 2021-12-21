@@ -15,9 +15,7 @@
   env[[".setColumnDataAsNominalText"]] <- function(...) return(TRUE)
 
   env[[".allColumnNamesDataset"]]      <- function(...) {
-    dataset <- .getInternal("dataset")
-    dataset <- loadCorrectDataset(dataset)
-    return(colnames(dataset))
+    return(colnames(.getInternal("dataset")))
   }
 }
 
@@ -30,7 +28,6 @@
                                     columns.as.factor = c(), all.columns = FALSE) {
 
   dataset <- .getInternal("dataset")
-  dataset <- loadCorrectDataset(dataset)
 
   if (all.columns) {
     columns <- colnames(dataset)

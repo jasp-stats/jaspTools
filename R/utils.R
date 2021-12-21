@@ -1,138 +1,12 @@
 #' @importFrom utils install.packages menu download.file unzip capture.output installed.packages packageVersion
 #' @importFrom testthat expect skip
 
-findCorrectFunction <- function(funName) {
-  modulePath <- getModulePathFromRFunction(funName)
-  if (is.null(modulePath))
-    stop("Could not locate the module location for `", funName, "`")
-
-  return(paste(getModuleName(modulePath), funName, sep = "::"))
-}
-
-getModulePaths <- function() {
-  validModules <- NULL
-
-  modulePaths <- getPkgOption("module.dirs")
-  if (length(modulePaths) > 0 && any(modulePaths != "")) {
-
-    for (modulePath in modulePaths) {
-      validModuleRoot <- getValidModuleRoot(modulePath)
-      if (!is.null(validModuleRoot))
-        validModules <- c(validModules, validModuleRoot)
-    }
-
-  } else {
-
-    wdAsValidModule <- getValidModuleRoot(getwd())
-    if (!is.null(wdAsValidModule)) {
-      message("Current working directory is a JASP module, using that because `module.dirs` is empty.")
-      setPkgOption("module.dirs", wdAsValidModule)
-      validModules <- wdAsValidModule
-    } else {
-      stop("jaspTools needs to know what module to obtain resources from. Please set the current working directory to your JASP module, or specify it through `setPkgOption(\"module.dirs\", \"path/to/module\")`")
-    }
-
-  }
-
-  if (length(validModules) == 0)
-    stop("None of the modules specified through `setPkgOption(\"module.dirs\", ...)` are valid JASP modules. All JASP modules should be valid R packages and have these files: DESCRIPTION, NAMESPACE and inst/Description.qml.")
-
-  return(validModules)
-}
-
-getModulePathFromRFunction <- function(funName) {
-  modulePath <- NULL
-
-  modulePaths <- getModulePaths()
-  for (i in seq_along(modulePaths))
-    if (rFunctionExistsInModule(funName, modulePaths[[i]]))
-      modulePath <- modulePaths[i]
-
-  if (is.null(modulePath))
-    stop("Could not locate R function `", funName, "` in any module. Did you specify the R function correctly (it's case sensitive)? Also make sure the `module.dirs` is complete (see `viewPkgOptions()`).")
-
-  return(modulePath)
-}
-
 isBinaryPackage <- function(modulePath) {
   # check if a JASP module is a binary package. The main difference is that in an installed binary package module/inst/* is moved to module/*
 
   dir.exists(file.path(modulePath, "qml")) &&
     dir.exists(file.path(modulePath, "Meta")) &&
     length(list.files(file.path(modulePath, "R"))) == 3L
-}
-
-rFunctionExistsInModule <- function(funName, modulePath) {
-
-  if (isBinaryPackage(modulePath)) {
-
-    # this is how `::` looks up functions
-    moduleName <- getModuleName(modulePath)
-    ns <- asNamespace(moduleName)
-    return(!is.null(.getNamespaceInfo(ns, "exports")[[funName]]))
-
-  } else {
-
-    env <- new.env()
-    rFiles <- list.files(file.path(modulePath, "R"), pattern = "\\.[RrSsQq]$", recursive = TRUE, full.names = TRUE)
-    if (length(rFiles) == 0)
-      return(FALSE)
-
-    for (rFile in rFiles)
-      source(rFile, local = env)
-
-    if (funName %in% names(env))
-      return(TRUE)
-
-    return(FALSE)
-  }
-}
-
-getModulePathsForTesting <- function() {
-  modulesWithTests <- NULL
-  modulePaths <- getModulePaths()
-  for (modulePath in modulePaths) {
-    testDir <- file.path(modulePath, "tests", "testthat")
-    if (dir.exists(testDir) && length(list.files(testDir)) > 0)
-      modulesWithTests <- c(modulesWithTests, modulePath)
-  }
-
-  if (length(modulesWithTests) == 0)
-    message("No tests were found. Note that the tests should be in `moduleDir/tests/testthat` and named `test-analysisName.R`.")
-
-  return(modulesWithTests)
-}
-
-getModuleName <- function(moduleRoot) {
-  descrFile <- file.path(moduleRoot, "DESCRIPTION")
-  pkgName <- as.vector(read.dcf(descrFile, fields = "Package"))
-  if (is.na(pkgName))
-    stop("Could not obtain package name from `Package` field in ", descrFile)
-
-  return(pkgName)
-}
-
-getValidModuleRoot <- function(path) {
-  while (!hasJaspModuleRequisites(path)) {
-    parentDir <- dirname(path)
-    if (identical(parentDir, dirname(parentDir))) # we're at the root of the filesystem
-      return(NULL)
-    path <- parentDir
-  }
-  return(path)
-}
-
-moduleRequisites <- function(sep = .Platform$file.sep) {
-  return(c("NAMESPACE", "DESCRIPTION", paste("inst", "Description.qml", sep = sep)))
-}
-
-binaryModuleRequisites <- function() {
-  return(c("NAMESPACE", "DESCRIPTION", "Description.qml", "qml", "Meta"))
-}
-
-hasJaspModuleRequisites <- function(path) {
-  all(file.exists(file.path(path, moduleRequisites()))) ||
-    all(file.exists(file.path(path, binaryModuleRequisites())))
 }
 
 insideTestEnvironment <- function() {
@@ -286,4 +160,8 @@ getGithubHeader <- function() {
   pat <- getGithubPAT()
   httr::add_headers(Authorization = sprintf("token %s", pat),
                     Accept = "application/vnd.github.golden-comet-preview+json")
+}
+
+tidyPath <- function(path) {
+  gsub("[\\/]$", "", normalizePath(path)) # normalize path and strip trailing slashes
 }

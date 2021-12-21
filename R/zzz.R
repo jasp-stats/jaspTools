@@ -2,10 +2,11 @@
   internal   = list(jaspToolsPath     = "",
                     dataset           = "",
                     state             = list(),
+                    modulePaths       = "",
                     modulesMd5Sums    = list()
                ),
-  pkgOptions = list(module.dirs       = "",
-                    reinstall.modules = TRUE,
+  pkgOptions = list(reinstall.modules = TRUE,
+                    install.deps      = TRUE,
                     view.in.rstudio   = TRUE,
                     html.dir          = "",
                     data.dirs         = "",
@@ -32,8 +33,8 @@
 
 .initInternalPaths <- function() {
   suppressMessages({
-    setPkgOption("html.dir",  getJavascriptLocation())
-    setPkgOption("data.dirs", getDatasetsLocations())
+    setPkgOption("html.dir",  getJaspDesktopJSLocation())
+    setPkgOption("data.dirs", c(getJaspDesktopDatasetLocation(), getJaspToolsDatasetLocation()))
   })
 }
 

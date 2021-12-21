@@ -114,7 +114,7 @@ runAnalysis <- function(name, dataset, options, view = TRUE, quiet = FALSE, make
 fetchRunArgs <- function(name, options) {
   possibleArgs <- list(
     name = name,
-    functionCall = findCorrectFunction(name),
+    functionCall = asNamespacedFunctionCall(name),
     title = "",
     requiresInit = TRUE,
     options = jsonlite::toJSON(options),
@@ -133,7 +133,7 @@ initAnalysisRuntime <- function(dataset, makeTests, ...) {
   reinstallChangedModules()
 
   # dataset to be found in the analysis when it needs to be read
-  .setInternal("dataset", dataset)
+  .setInternal("dataset", loadDataset(dataset))
 
   # prevent the results from being translated (unless the user explicitly wants to)
   Sys.setenv(LANG = getPkgOption("language"))
@@ -173,6 +173,11 @@ reinstallChangedModules <- function() {
         pkgload::unload(moduleName, quiet = TRUE)
 
       message("Installing ", moduleName, " from source")
+
+      if (isTRUE(getPkgOption("install.deps")))
+        suppressWarnings(remotes::install_deps(modulePath, upgrade = "never", INSTALL_opts = "--no-multiarch"))
+
+      # we use install.packages here because of https://github.com/jasp-stats/jaspTools/pull/14#issuecomment-748112692
       suppressWarnings(install.packages(modulePath, type = "source", repos = NULL, quiet = TRUE, INSTALL_opts = "--no-multiarch"))
 
       if (moduleName %in% installed.packages()) {

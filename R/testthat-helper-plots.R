@@ -20,6 +20,12 @@
 #'
 #' @export expect_equal_plots
 expect_equal_plots <- function(test, name, dir = lifecycle::deprecated()) {
+  if (!missing(dir))
+    lifecycle::deprecate_warn(
+      when = "1.5.0",
+      what = "expect_equal_plots(dir)",
+    )
+
   if (length(test) == 0) {
     expect(FALSE, getEmptyTestMsg("expect_equal_plots()"))
     return()

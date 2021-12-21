@@ -18,6 +18,6 @@ incorporated when any jaspTools function is called.
 }
 \examples{
 
-setPkgOption("module.dirs", c("~/Documents/Github/Regression", "~/Document/Github/Frequencies"))
+setPkgOption("reinstall.modules", FALSE)
 
 }

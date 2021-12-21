@@ -12,7 +12,7 @@ runTestsTravis <- function(modulePath) {
     if (!.isSetupComplete())
       stop("The setup should be completed before the tests are ran")
 
-    setPkgOption("module.dirs", modulePath)
+    monitor(modulePath)
 
     # this check is identical to covr::in_covr()
     codeCoverage <- identical(Sys.getenv("R_COVR"), "true")

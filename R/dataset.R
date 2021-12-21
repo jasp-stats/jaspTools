@@ -1,8 +1,6 @@
-loadCorrectDataset <- function(x) {
-  if (is.matrix(x) || is.data.frame(x)) {
-    return(x)
-  } else if (is.character(x)) {
-    if (! endsWith(x, ".csv")) {
+loadDataset <- function(x) {
+  if (is.character(x)) {
+    if (!endsWith(x, ".csv")) {
       x <- paste0(x, ".csv")
     }
 
@@ -11,8 +9,8 @@ loadCorrectDataset <- function(x) {
       return(utils::read.csv(x, header = TRUE, check.names = FALSE))
     }
 
-    # check if it's a name of a JASP dataset
-    locations <- getPkgOption("data.dirs")
+    # check if it's a name of a jasp-desktop, jaspTools or module dataset
+    locations <- getDatasetLocations()
     allDatasets <- c()
     for (location in locations) {
 
@@ -33,6 +31,11 @@ loadCorrectDataset <- function(x) {
     cat("It appears", x, "could not be found. Please supply either a full filepath or the name of one of the following datasets:\n",
         paste0(sort(allDatasets), collapse = '\n'), "\n")
     stop(paste(x, "not found"))
+  } else {
+    return(x)
   }
-  stop(paste("Cannot handle data of type", mode(x)))
+}
+
+getDatasetLocations <- function() {
+  return(c(getPkgOption("data.dirs"), getModuleDatasetLocations()))
 }
