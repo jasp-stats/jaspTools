@@ -148,7 +148,9 @@ jobs:
         shell: Rscript {0}
        
       - name: Install ${{ github.event.repository.name }}
-        run: remotes::install_local(".")
+        run: |
+          remotes::install_local(".")
+          jaspTools::setupJaspTools(force = FALSE)
         shell: Rscript {0}
 
       - name: Run unit tests
