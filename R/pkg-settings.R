@@ -69,7 +69,7 @@ setPkgOption <- function(name, value) {
   # set relative paths to absolute paths to ensure they will work if the wd changes
   if (any(endsWith(name, c(".dir", ".dirs")))) {
     for (i in seq_along(value)) {
-      if (is.null(value) || value == "") # allow users to reset paths to null values
+      if (length(value) == 1L && (is.null(value) || value == "")) # allow users to reset paths to null values
         next
 
       if (!dir.exists(value[i])) # if the value is not a null value it should be a valid path
