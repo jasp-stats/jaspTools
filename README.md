@@ -12,23 +12,21 @@ After loading jaspTools with `library(jaspTools)`, you need to call `setupJaspTo
 required once after every reinstall of jaspTools.
 
 ## Functionality
-At the moment jaspTools has three classes of functions.
-Each of these functions has documentation you may view by the usual syntax, e.g., `?runAnalysis`.
+jaspTools has three classes of functions related to:
+1. Modifying jaspTools' settings
+2. Running JASP analyses
+3. Testing JASP analyses
+These are further explained below. All functions have documentation you may view by the usual syntax, e.g., `?runAnalysis`.
 
-The general classes are:
-
+Note that before using functions from 2. or 3. you will need to tell jaspTools what module you're working on by calling `monitor("path/to/module")` (unless your working directory already points to a module).
+jaspTools will use this information to locate R functions, tests, etc. The module(s) that you specify are automatically reinstalled every time you change your R, NAMESPACE or DESCRIPTION files.
 
 ### 1. Modifying jaspTools' settings
 - `viewPkgOptions`: views options in the package
-- `setPkgOption`: change an options in the package (e.g., what module you are working on)
+- `setPkgOption`: change an options in the package
 
 After `setupJaspTools()` retrieves all the necessary dependencies (packages, html, data files), the paths to a number of these dependencies are stored inside of the pkgOptions.
 You will generally not need to change them.
-However, what you must usually do is tell jaspTools what modules you are working on (unless your working directory already points to a module):
-
-`setPkgOption("module.dirs", c("/path/to/module1", "/path/to/module2"))`
-
-jaspTools will use these to locate R functions, tests, etc. The module(s) that you specify are automatically reinstalled every time you change your R, NAMESPACE or DESCRIPTION files.
 
 ### 2. Running JASP analyses
 - `runAnalysis`: run a JASP analysis
@@ -39,7 +37,7 @@ jaspTools will use these to locate R functions, tests, etc. The module(s) that y
 There are three general procedures to obtaining the options to run an analysis with in jaspTools.  
 
 ##### Procedure 1
-The first procedure uses the .qml files to create option lists.
+The first procedure uses the UI .qml files to create option lists.
 These lists will almost always require further editing.
 
 ###### Example
@@ -52,9 +50,10 @@ options[["variables"]] <- "contBinom"
 runAnalysis("BinomialTest", dataset="debug.csv", options=options)
 ```
 
-##### Procedure 2
-And so the second procedure might be preferred. You can set the options to your liking in JASP and then save the .jasp file (it may contain several analyses).
+##### Procedure 2 (recommended)
+And so the second procedure might be preferred. You can set the analysis options to your liking in JASP and then save the .jasp file (it may contain several analyses).
 You can then let jaspTools read the .jasp file to extract the options from.
+Note that you do not need to close JASP while jaspTools reads the .jasp file. So you can read the .jasp file in R, change some more UI options in JASP followed by a save, and run the read command in R again.
 
 ###### Example
 ```
@@ -114,9 +113,9 @@ It is not necessary to use a JASP dataset (such as the debug.csv file we showed 
 data.frame to the dataset argument of the `runAnalysis` function. 
 
 ### 3. Testing JASP analyses
-- `testAll`: test all analyses
+- `testAll`: test all analyses (in one or more modules)
 - `testAnalysis`: test a specific analysis
-- `manageTestPlots`: validate a new plot or inspect differing test plots
+- `manageTestPlots`: inspect failing test plots
 - `makeTestTable`: transform the output of a JASP table to short, testable list
 
 To ensure that no aspects of JASP are accidentally broken, we use unit testing.

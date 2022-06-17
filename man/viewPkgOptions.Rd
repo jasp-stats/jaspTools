@@ -32,7 +32,6 @@ This option specifies where the html output of \code{runAnalysis} will be shown:
 When you run an analysis or test it, jaspTools calls the \emph{installed} version of the module.
 This option specifies if the installed version should be reinstalled automatically when you make any changes to your module.
 
-\code{module.dirs}:
-The directories that hold the source for the JASP module(s) you are working on.
-These module directories are used to find the R functions etc. in \code{runAnalysis} and the various testing functions.
+\code{install.deps}:
+This option specifies if jaspTools should install missing deps of the module.
 }

@@ -137,8 +137,8 @@ getSetupCompleteFileName <- function() {
 
 .removeCompletedSetupFiles <- function() {
   unlink(getSetupCompleteFileName())
-  unlink(getJavascriptLocation(), recursive = TRUE)
-  unlink(getDatasetsLocations(jaspOnly = TRUE), recursive = TRUE)
+  unlink(getJaspDesktopJSLocation(), recursive = TRUE)
+  unlink(getJaspDesktopDatasetLocation(), recursive = TRUE)
   message("Removed files from previous jaspTools setup")
 }
 
@@ -165,13 +165,13 @@ fetchJaspDesktopDependencies <- function(jaspdesktopLoc = NULL, branch = "develo
   if (!isJaspDesktopDir(jaspdesktopLoc))
     return(invisible(FALSE))
 
-  fetchJavaScript(jaspdesktopLoc)
-  fetchDatasets(jaspdesktopLoc)
+  fetchJaspDesktopJS(jaspdesktopLoc)
+  fetchJaspDesktopDatasets(jaspdesktopLoc)
 
   return(invisible(TRUE))
 }
 
-getJavascriptLocation <- function(rootOnly = FALSE) {
+getJaspDesktopJSLocation <- function(rootOnly = FALSE) {
   jaspToolsDir <- getJaspToolsDir()
   htmlDir <- file.path(jaspToolsDir, "html")
   if (!rootOnly)
@@ -180,17 +180,16 @@ getJavascriptLocation <- function(rootOnly = FALSE) {
   return(htmlDir)
 }
 
-getDatasetsLocations <- function(jaspOnly = FALSE) {
-  jaspToolsDir <- getJaspToolsDir()
-  dataDirs <- file.path(jaspToolsDir, "jaspData")
-  if (!jaspOnly)
-    dataDirs <- c(dataDirs, file.path(jaspToolsDir, "extdata"))
-
-  return(dataDirs)
+getJaspToolsDatasetLocation <- function() {
+  return(file.path(getJaspToolsDir(), "extdata"))
 }
 
-fetchJavaScript <- function(path) {
-  destDir <- getJavascriptLocation(rootOnly = TRUE)
+getJaspDesktopDatasetLocation <- function() {
+  return(file.path(getJaspToolsDir(), "jaspData"))
+}
+
+fetchJaspDesktopJS <- function(path) {
+  destDir <- getJaspDesktopJSLocation(rootOnly = TRUE)
   if (!dir.exists(destDir))
     dir.create(destDir)
 
@@ -199,12 +198,12 @@ fetchJavaScript <- function(path) {
     stop("Could not move html files from jasp-desktop, is the path correct? ", path)
 
   file.copy(from = htmlDir, to = destDir, overwrite = TRUE, recursive = TRUE)
-  file.rename(file.path(destDir, "html"), getJavascriptLocation())
+  file.rename(file.path(destDir, "html"), getJaspDesktopJSLocation())
   message("Moved html files to jaspTools")
 }
 
-fetchDatasets <- function(path) {
-  destDir <- getDatasetsLocations(jaspOnly = TRUE)
+fetchJaspDesktopDatasets <- function(path) {
+  destDir <- getJaspDesktopDatasetLocation()
   if (!dir.exists(destDir))
     dir.create(destDir)
 
@@ -336,7 +335,7 @@ isRepoJaspModule <- function(repo, branch) {
   repoTree <- githubGET(asGithubReposUrl("jasp-stats", repo, c("git", "trees", branch), params = list(recursive = "false")))
   if (length(names(repoTree)) > 0 && "tree" %in% names(repoTree)) {
     pathNames <- unlist(lapply(repoTree[["tree"]], `[[`, "path"))
-    return(all(moduleRequisites(sep = "/") %in% pathNames))
+    return(all(sourceModuleRequisites(sep = "/") %in% pathNames))
   }
 
   return(FALSE)
