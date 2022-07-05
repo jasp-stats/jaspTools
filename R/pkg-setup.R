@@ -43,7 +43,12 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
     }
 
     if (missing(installJaspCorePkgs)) {
-      wantsInstallJaspCorePkgs  <- menu(c("Yes", "No"), title = "- Would you like jaspTools to install jaspResults, jaspBase and jaspGraphs? If you opt no, you must install them yourself.")
+      title <- if (jaspBaseIsLegacyVersion()) {
+        "- Would you like jaspTools to install jaspResults, jaspBase and jaspGraphs? If you opt no, you must install them yourself."
+      } else {
+        "- Would you like jaspTools to install jaspBase and jaspGraphs? If you opt no, you must install them yourself."
+      }
+      wantsInstallJaspCorePkgs <- menu(c("Yes", "No"), title = title)
       if (wantsInstallJaspCorePkgs == 0) return(message("Setup aborted."))
 
       installJaspCorePkgs <- wantsInstallJaspCorePkgs == 1
@@ -69,8 +74,14 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
     stop("jaspTools setup could not be completed. Reason: could not fetch the jasp-stats/jasp-desktop repo and as a result the required dependencies are not installed.\n
             If this problem persists clone jasp-stats/jasp-desktop manually.")
 
-  if (isTRUE(installJaspCorePkgs))
-    installJaspPkg(c("jaspBase", "jaspGraphs", "jaspResults"), quiet = quiet, force = force)
+  if (isTRUE(installJaspCorePkgs)) {
+    jaspCorePkgs <- if (jaspBaseIsLegacyVersion())
+      c("jaspBase", "jaspGraphs", "jaspResults")
+    else
+      c("jaspBase", "jaspGraphs")
+    installJaspPkg(jaspCorePkgs, quiet = quiet, force = force)
+
+  }
 
   if (isTRUE(installJaspModules))
     installJaspModules(force = force, quiet = quiet)
@@ -340,4 +351,9 @@ isRepoJaspModule <- function(repo, branch) {
   }
 
   return(FALSE)
+}
+
+jaspBaseIsLegacyVersion <- function() {
+  jaspBaseInstalled <- find.package("jaspBase", .libPaths(), quiet = TRUE, verbose = FALSE)
+  length(jaspBaseInstalled) != 0L && packageVersion("jaspBase") < "0.16.4"
 }

@@ -94,10 +94,16 @@ runAnalysis <- function(name, dataset, options, view = TRUE, quiet = FALSE, make
     returnVal <- do.call(jaspBase::runJaspResults, args)
   }
 
+  # always TRUE after jaspResults is merged into jaspBase
+  jsonResults <- if (inherits(returnVal, c("jaspResultsR", "R6"))) {
+    getJsonResultsFromJaspResults(returnVal)
+  } else {
+    getJsonResultsFromJaspResultsLegacy()
+  }
+
   transferPlotsFromjaspResults()
 
-  jsonResults <- getJsonResultsFromJaspResults()
-  results     <- processJsonResults(jsonResults)
+  results <- processJsonResults(jsonResults)
 
   if (insideTestEnvironment())
     .setInternal("lastResults", jsonResults)
@@ -192,10 +198,12 @@ reinstallChangedModules <- function() {
 
 initializeCoreJaspPackages <- function() {
   require(jaspBase)
-  require(jaspResults)
-  jaspResults::initJaspResults()
-
-  assign("jaspResultsModule", list(create_cpp_jaspResults = function(name, state) get("jaspResults", envir = .GlobalEnv)$.__enclos_env__$private$jaspObject), envir = .GlobalEnv)
+  if (jaspBaseIsLegacyVersion()) {
+    warning("jaspBase should be at least version 0.16.4! Continuing now but if something crashes update jaspBase.", domain = NA)
+    require(jaspResults)
+    jaspResults::initJaspResults()
+    assign("jaspResultsModule", list(create_cpp_jaspResults = function(name, state) get("jaspResults", envir = .GlobalEnv)$.__enclos_env__$private$jaspObject), envir = .GlobalEnv)
+  }
 }
 
 processJsonResults <- function(jsonResults) {
@@ -224,7 +232,11 @@ transferPlotsFromjaspResults <- function() {
   }
 }
 
-getJsonResultsFromJaspResults <- function() {
+getJsonResultsFromJaspResults <- function(jaspResults) {
+  return(jaspResults$.__enclos_env__$private$getResults())
+}
+
+getJsonResultsFromJaspResultsLegacy <- function() {
   return(jaspResults$.__enclos_env__$private$getResults())
 }
 
