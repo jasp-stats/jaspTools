@@ -355,7 +355,7 @@ isRepoJaspModule <- function(repo, branch) {
 
 jaspBaseIsLegacyVersion <- function() {
   jaspBaseInstalled <- find.package("jaspBase", .libPaths(), quiet = TRUE, verbose = FALSE)
-  if (length(jaspBaseInstalled) != 0L) {
+  if (length(jaspBaseInstalled) == 0L) {
     # This check can be deleted once jaspResults is merged into jaspBase
     upstreamDescr <- readChar("https://raw.githubusercontent.com/jasp-stats/jaspBase/master/DESCRIPTION", 1e5)
     if (grepl("Version: [0-9\\.]+\\n", upstreamDescr)) {
