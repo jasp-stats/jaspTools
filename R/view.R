@@ -174,6 +174,11 @@ createHtmlFile <- function(json) {
       jQuery(function($) {
         $(document).ready(function() {
           window.analysisChanged(", json, ")
+          HTMLCollection.prototype.forEach = Array.prototype.forEach;
+          imgs = document.getElementsByClassName('jasp-image-image');
+          imgs.forEach(function(el, i) {
+            imgs[i].style.backgroundImage = imgs[i].style.backgroundImage.replace('plot://', '')
+          })
         })
       })
     </script></body>")
