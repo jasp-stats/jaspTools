@@ -2,9 +2,12 @@
 R package which aids developers with writing JASP analyses.
 
 ## Installation
-You can install the R package with the use of `devtools`:
+You can install the R package with the use of `remotes`:
 
-`devtools::install_github("jasp-stats/jaspTools")`.
+```
+install.packages("remotes")
+remotes::install_github("jasp-stats/jaspTools")
+```
 
 Note: On some macs, it seems to be hard to build the dependency "data.table" from source resulting in the error message "clang: error: unsupported option '-fopenmp'". One hack to get around this is to select no when asked to install the package from source. This will install an older version of data.table without openmp support, which suffices for jaspTools. Alternatively, you might want to upgrade [clang](https://cran.r-project.org/bin/macosx/tools/). 
 
