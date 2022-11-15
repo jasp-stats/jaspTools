@@ -57,14 +57,17 @@ testAnalysis <- function(name, onlyPlots = FALSE) {
     adjustTestthatForPlotTesting()
   }
 
-  fixRNGForTesting()
   testthat:::test_files(test_paths = filesToTest, test_dir = file.path(modulePath, "tests", "testthat"), reporter = testthat::default_compact_reporter(), test_package = NULL)
 
   return(invisible())
 }
 
  fixRNGForTesting <- function() {
-   suppressWarnings(RNGkind(sample.kind = "Rounding"))
+  lifecycle::deprecate_stop(
+    when = "1.5.2",
+    what = "jaspTools::fixRNGForTesting()",
+    details = "Set options(jaspLegacyRngKind = TRUE) or options(jaspLegacyRngKind = FALSE) to use the correct method."
+  )
  }
 
 #' Test all analyses in the currently monitored modules.
@@ -94,7 +97,6 @@ testAll <- function(onlyPlots = FALSE) {
   }
 
   modulePaths <- getModulePathsForTesting()
-  fixRNGForTesting()
 
   testResults <- list(failedModules = c(), passedModules = c())
   for (modulePath in modulePaths) {
