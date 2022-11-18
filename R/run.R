@@ -68,7 +68,7 @@ runAnalysis <- function(name, dataset, options, view = TRUE, quiet = FALSE, make
   }
 
   if (isTRUE(.Options[["jaspLegacyRngKind"]]) || is.null(.Options[["jaspLegacyRngKind"]])) {
-    message("Legacy RNG is used by default. To use your `RNGkind()` settings instead, use `options(jaspLegacyRngKind = FALSE)`.")
+    warning("Legacy RNG is used by default. To use your `RNGkind()` settings instead, use `options(jaspLegacyRngKind = FALSE)`.", domain = NA)
   }
 
   if (insideTestEnvironment()) {
