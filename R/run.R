@@ -67,10 +67,6 @@ runAnalysis <- function(name, dataset, options, view = TRUE, quiet = FALSE, make
       stop("Please supply an analysis name")
   }
 
-  if (isTRUE(.Options[["jaspLegacyRngKind"]]) || is.null(.Options[["jaspLegacyRngKind"]])) {
-    warning("Legacy RNG is used by default. To use your `RNGkind()` settings instead, use `options(jaspLegacyRngKind = FALSE)`.", domain = NA)
-  }
-
   if (insideTestEnvironment()) {
     view  <- FALSE
     quiet <- TRUE
@@ -84,7 +80,7 @@ runAnalysis <- function(name, dataset, options, view = TRUE, quiet = FALSE, make
     setwd(oldWd)
     Sys.setenv(LANG = oldLang)
     Sys.setenv(LANGUAGE = oldLanguage)
-  })
+  }, add = TRUE)
 
   initAnalysisRuntime(dataset = dataset, makeTests = makeTests)
   args <- fetchRunArgs(name, options)
