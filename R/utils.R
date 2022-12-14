@@ -7,7 +7,7 @@ findCorrectFunction <- function(funName) {
     stop("Could not locate the module location for `", funName, "`")
   
   if (!endsWith(funName, "Internal")) {
-    funNameInternal <- paste0(funcName, "Internal")
+    funNameInternal <- paste0(funName, "Internal")
     if (rFunctionExistsInModule(funNameInternal, modulePath))
       funName <- funNameInternal
   }
