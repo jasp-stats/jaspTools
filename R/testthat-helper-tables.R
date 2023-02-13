@@ -6,6 +6,9 @@
 #' @param ref The reference table list created previously by applying \code{makeTestTable} to a JASP table returned from \code{runAnalysis}.
 #' @param label Used to customise failure messages.
 #'
+#' @details By default, numbers are compared using `signif(round(x, digits = 4), digits = 4)`. A custom function to use for rounding numeric values can be passed by setting
+#' `options("jaspRoundToPrecision")`. This function should return *numbers* rounded to the desired accuracy.
+#'
 #' @examples
 #'
 #' options <- analysisOptions("BinomialTest")
@@ -19,6 +22,18 @@
 #' expect_equal_tables(table,
 #'                     list("TRUE", 1, 58, 0, 0.492841460660175, 0.696739870156555, 0.58, 100, 1, "contBinom",
 #'                          "FALSE", 1, 42, 1, 0.336479745077558, 0.999903917924738, 0.42, 100, 1, "contBinom"))
+#'
+#' # illustration of custom tolerance
+#' expect_equal_tables(list(0.50001), list(0.50000))
+#' try(expect_equal_tables(list(0.51), list(0.50)))
+#'
+#' # increase tolerance
+#' options("jaspRoundToPrecision" = function(x) signif(round(x, digits = 1), digits = 1))
+#' expect_equal_tables(list(0.51), list(0.50))
+#'
+#' # reset tolerance to default
+#' options("jaspRoundToPrecision" = NULL) # reset default
+#' try(expect_equal_tables(list(0.51), list(0.50)))
 #'
 #' @export expect_equal_tables
 expect_equal_tables <- function(test, ref, label=NULL) {
@@ -58,8 +73,29 @@ expect_equal_tables <- function(test, ref, label=NULL) {
 }
 
 roundToPrecision <- function(x) {
-  if (is.numeric(x))  signif(round(x, digits=4), digits=4)
-  else                x
+  if (is.numeric(x))  {
+
+    userRounder <- getOption("jaspRoundToPrecision", default = NULL)
+    if (is.null(userRounder)) {
+
+      return(signif(round(x, digits = 4), digits = 4))
+
+    } else {
+
+      if (!is.function(userRounder))
+        stop("options(\"jaspRoundToPrecision\") should be a function!)", domain = NA)
+
+      result <- try(userRounder(x))
+      if (inherits(result, "try-error"))
+        stop("options(\"jaspRoundToPrecision\")(x) failed with error message:\n", result, domain = NA)
+      if (length(result) != length(x))
+        stop("length(options(\"jaspRoundToPrecision\")(x)) != length(x)")
+      if (!is.numeric(result))
+        stop("options(\"jaspRoundToPrecision\")(x)) is not numeric")
+
+      return(result)
+    }
+  } else x
 }
 
 isUnicodeMismatch <- function(mismatch) {

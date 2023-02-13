@@ -16,6 +16,10 @@ expect_equal_tables(test, ref, label = NULL)
 \description{
 This function compares a stored list of table data, to the table that is created when the tests are run.
 }
+\details{
+By default, numbers are compared using \code{signif(round(x, digits = 4), digits = 4)}. A custom function to use for rounding numeric values can be passed by setting
+\code{options("jaspRoundToPrecision")}. This function should return \emph{numbers} rounded to the desired accuracy.
+}
 \examples{
 
 options <- analysisOptions("BinomialTest")
@@ -29,5 +33,17 @@ table <- results[["results"]][["binomialTable"]][["data"]]
 expect_equal_tables(table,
                     list("TRUE", 1, 58, 0, 0.492841460660175, 0.696739870156555, 0.58, 100, 1, "contBinom",
                          "FALSE", 1, 42, 1, 0.336479745077558, 0.999903917924738, 0.42, 100, 1, "contBinom"))
+
+# illustration of custom tolerance
+expect_equal_tables(list(0.50001), list(0.50000))
+try(expect_equal_tables(list(0.51), list(0.50)))
+
+# increase tolerance
+options("jaspRoundToPrecision" = function(x) signif(round(x, digits = 1), digits = 1))
+expect_equal_tables(list(0.51), list(0.50))
+
+# reset tolerance to default
+options("jaspRoundToPrecision" = NULL) # reset default
+try(expect_equal_tables(list(0.51), list(0.50)))
 
 }
