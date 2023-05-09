@@ -300,7 +300,7 @@ downloadAllJaspModules <- function(force = FALSE, quiet = FALSE) {
   repos <- getJaspGithubRepos()
   result <- list(success = NULL, fail = NULL)
   for (repo in repos) {
-    if (!is.null(names(repo)) && c("name", "default_branch") %in% names(repo)) {
+    if (!is.null(names(repo)) && all(c("name", "default_branch") %in% names(repo))) {
       if (isRepoJaspModule(repo[["name"]], repo[["default_branch"]]) && (force || !force && !repo[["name"]] %in% installed.packages())) {
         success <- downloadJaspPkg(repo[["name"]], repo[["default_branch"]], quiet)
         if (success)
