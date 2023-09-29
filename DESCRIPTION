@@ -19,6 +19,9 @@ Imports:
   stringi,
   stringr,
   testthat (>= 3.0.3),
-  vdiffr (>= 1.0.2)
+  vdiffr (>= 1.0.2),
+  jaspBase
+Remotes:
+  jasp-stats/jaspBase
 RoxygenNote: 7.2.3
 Roxygen: list(markdown = TRUE)

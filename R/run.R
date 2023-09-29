@@ -139,7 +139,8 @@ initAnalysisRuntime <- function(dataset, makeTests, ...) {
   reinstallChangedModules()
 
   # dataset to be found in the analysis when it needs to be read
-  .setInternal("dataset", dataset)
+  dataset <- loadCorrectDataset(dataset)
+  jaspBase::setDataSet(dataset)
 
   # prevent the results from being translated (unless the user explicitly wants to)
   Sys.setenv(LANG = getPkgOption("language"))

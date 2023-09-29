@@ -15,8 +15,7 @@
   env[[".setColumnDataAsNominalText"]] <- function(...) return(TRUE)
 
   env[[".allColumnNamesDataset"]]      <- function(...) {
-    dataset <- .getInternal("dataset")
-    dataset <- loadCorrectDataset(dataset)
+    dataset <- jaspBase::getDataSet(dataset)
     return(colnames(dataset))
   }
 }
@@ -25,32 +24,6 @@
 .ppi <- 192
 
 .baseCitation <- "x"
-
-.readDatasetToEndNative <- function(columns = c(), columns.as.numeric = c(), columns.as.ordinal = c(),
-                                    columns.as.factor = c(), all.columns = FALSE) {
-
-  dataset <- .getInternal("dataset")
-  dataset <- loadCorrectDataset(dataset)
-
-  if (all.columns) {
-    columns <- colnames(dataset)
-    columns <- columns[columns != ""]
-  }
-  dataset <- jaspBase:::.vdf(dataset, columns, columns.as.numeric, columns.as.ordinal,
-                        columns.as.factor, all.columns, exclude.na.listwise = c())
-
-  return(dataset)
-}
-
-.readDataSetHeaderNative <- function(columns = c(), columns.as.numeric = c(), columns.as.ordinal = c(),
-                                     columns.as.factor = c(), all.columns = FALSE) {
-
-  dataset <- .readDatasetToEndNative(columns, columns.as.numeric, columns.as.ordinal,
-                                     columns.as.factor, all.columns)
-  dataset <- dataset[0, , drop = FALSE]
-
-  return(dataset)
-}
 
 .requestTempFileNameNative <- function(...) {
   root <- getTempOutputLocation("html")
