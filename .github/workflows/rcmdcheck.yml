@@ -38,6 +38,11 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install libarchive
 
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rcmdcheck
+          needs: check
+
 #      Ideally we use this, but jaspTools does a lot of things that anger the R CMD Check at the moment...
 #      - uses: r-lib/actions/check-r-package@v2
 
