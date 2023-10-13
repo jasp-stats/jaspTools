@@ -151,7 +151,7 @@ analysisOptionsFromJASPfile <- function(file) {
   fileIndex <- which(contents[["path"]] == "analyses.json")
 
   if (length(fileIndex) != 1L)
-    stop("Could not determine a file \"analyses.json\" inside the jasp file.")
+    stop("Could not find a file \"analyses.json\" inside the jasp file.")
 
   fileCon <- archive::archive_read(file, file = fileIndex, mode = "r")
   on.exit(close(fileCon))
