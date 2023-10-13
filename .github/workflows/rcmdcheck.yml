@@ -33,38 +33,38 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
-      - uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          extra-packages: any::rcmdcheck
-          needs: check
+# no longer needed if https://github.com/rstudio/r-system-requirements/issues/81 is resolved
+      - name: Install libarchive on macOS
+        if: runner.os == 'macOS'
+        run: brew install libarchive
 
 #      Ideally we use this, but jaspTools does a lot of things that anger the R CMD Check at the moment...
 #      - uses: r-lib/actions/check-r-package@v2
-      
+
       - name: Check
         run: |
           # ideally we use the one below (the default of r-lib/actions), but jaspTools has some warnings so we use something custom
           #rcmdcheck::rcmdcheck(args = c("--no-manual", "--as-cran"), error_on = "warning", check_dir = "check")
 
           result <- rcmdcheck::rcmdcheck(
-            args = c("--no-manual", "--as-cran", "--no-examples"), 
-            error_on = "never", 
+            args = c("--no-manual", "--as-cran", "--no-examples"),
+            error_on = "never",
             check_dir = "check"
           )
-          
+
           invalidWarnings <- function(warnings) {
-          
+
             if (length(warnings) == 0L)
               return(FALSE)
-          
+
             # there was one warning when this was created and it's not easy to fix
             if (length(warnings) == 1L && grepl(pattern = "imports not declared", warnings))
               return(FALSE)
-          
+
             # otherwise, new warnings got introduced
             return(TRUE)
           }
-          
+
           if (length(result[["errors"]]) > 0L || invalidWarnings(result[["warnings"]]))
             quit(save = "no", status = 1)
         shell: Rscript {0}
