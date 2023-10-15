@@ -146,7 +146,14 @@ analysisOptionsFromJSONString <- function(x) {
 }
 
 analysisOptionsFromJASPfile <- function(file) {
-  fileCon <- unz(file, "analyses.json")
+
+  contents <- archive::archive(file)
+  fileIndex <- which(contents[["path"]] == "analyses.json")
+
+  if (length(fileIndex) != 1L)
+    stop("Could not find a file \"analyses.json\" inside the jasp file.")
+
+  fileCon <- archive::archive_read(file, file = fileIndex, mode = "r")
   on.exit(close(fileCon))
   contents <- rjson::fromJSON(file = fileCon)
   analyses <- contents[["analyses"]]
