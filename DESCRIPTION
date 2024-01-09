@@ -1,7 +1,7 @@
 Package: jaspTools
 Type: Package
 Title: Helps preview and debug JASP analyses
-Version: 0.18.2
+Version: 0.18.3
 Author: Authors@R: c(
     person("Tim", "de Jong", role = "aut"),
     person("Don", "van den Bergh", role = c("ctb", "cre"), email = "d.vandenbergh@uva.nl"))
