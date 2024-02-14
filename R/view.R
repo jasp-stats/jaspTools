@@ -165,7 +165,7 @@ createHtmlFile <- function(json) {
   htmlDir <- getTempOutputLocation("html")
   moveJaspHtmlToDir(htmlDir)
 
-  templateHtmlFile <- file.path(htmlDir, "index.html")
+  templateHtmlFile <- file.path(htmlDir, "index-jasp.html")
   html <- readChar(templateHtmlFile, file.size(templateHtmlFile))
 
   insertedJS <- paste0(
