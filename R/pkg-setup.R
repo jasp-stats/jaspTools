@@ -162,6 +162,10 @@ fetchJaspDesktopDependencies <- function(jaspdesktopLoc = NULL, branch = "develo
       zipFile <- file.path(baseLoc, "jasp-desktop.zip")
       url <- sprintf("https://github.com/jasp-stats/jasp-desktop/archive/%s.zip", branch)
 
+      # increase the timeout because this sometimes fails on GitHub actions
+      oldTimeout <- getOption("timeout") # defaults to 60 seconds
+      on.exit({options(timeout = oldTimeout)})
+      options(timeout = 300) # 5 minutes
       res <- try(download.file(url = url, destfile = zipFile, quiet = quiet), silent = quiet)
       if (inherits(res, "try-error") || res != 0)
         return(invisible(FALSE))
