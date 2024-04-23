@@ -8,7 +8,7 @@ loadCorrectDataset <- function(x) {
 
     # check if it's a path to a file
     if (file.exists(x)) {
-      return(utils::read.csv(x, header = TRUE, check.names = FALSE))
+      return(utils::read.csv(x, header = TRUE, check.names = FALSE, stringsAsFactors = TRUE))
     }
 
     # check if it's a name of a JASP dataset
