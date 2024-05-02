@@ -24,7 +24,7 @@ loadCorrectDataset <- function(x) {
         if (length(match) > 1) {
           warning("Multiple datasets exists with the same name, choosing '", datasets[match[1]], "'")
         }
-        return(data.table::fread(fullPath, header = TRUE, check.names = FALSE, data.table = FALSE))
+        return(data.table::fread(fullPath, header = TRUE, check.names = FALSE, data.table = FALSE, stringsAsFactors = TRUE))
       }
       allDatasets <- c(allDatasets, basename(datasets))
 
