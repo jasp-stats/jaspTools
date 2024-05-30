@@ -51,3 +51,4 @@ state
 # RStudio files
 .Rproj.user/*
 .Rproj.user
+_processedLockFile.lock
