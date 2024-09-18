@@ -52,6 +52,10 @@
   return(dataset)
 }
 
+.readDataSetRequestedNative <- function() {
+  return(.getInternal("dataset"))
+}
+
 .requestTempFileNameNative <- function(...) {
   root <- getTempOutputLocation("html")
   numPlots <- length(list.files(file.path(root, "plots")))
