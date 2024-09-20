@@ -138,9 +138,8 @@ initAnalysisRuntime <- function(dataset, options, makeTests, ...) {
   # first we reinstall any changed modules in the personal library
   reinstallChangedModules()
 
-  preloadDataset(dataset, options)
   # dataset to be found in the analysis when it needs to be read
-  # .setInternal("dataset", dataset)
+  preloadDataset(dataset, options)
 
   # prevent the results from being translated (unless the user explicitly wants to)
   Sys.setenv(LANG = getPkgOption("language"))

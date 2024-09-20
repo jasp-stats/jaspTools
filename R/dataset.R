@@ -1,4 +1,4 @@
-loadCorrectDataset <- function(x, nrows = -1) {
+loadCorrectDataset <- function(x) {
   if (is.matrix(x) || is.data.frame(x)) {
     return(x)
   } else if (is.character(x)) {
@@ -8,10 +8,7 @@ loadCorrectDataset <- function(x, nrows = -1) {
 
     # check if it's a path to a file
     if (file.exists(x)) {
-      dataset <- utils::read.csv(x, header = TRUE, check.names = FALSE, stringsAsFactors = TRUE, nrows = nrows)
-      if (nrows == 0)
-        return(dataset[0, , drop = FALSE])
-      return(dataset)
+      return(utils::read.csv(x, header = TRUE, check.names = FALSE, stringsAsFactors = TRUE))
     }
 
     # check if it's a name of a JASP dataset
@@ -27,8 +24,7 @@ loadCorrectDataset <- function(x, nrows = -1) {
         if (length(match) > 1) {
           warning("Multiple datasets exists with the same name, choosing '", datasets[match[1]], "'")
         }
-        return(data.table::fread(fullPath, header = TRUE, check.names = FALSE, data.table = FALSE,
-                                 nrows = if (nrows == -1) Inf else nrows))
+        return(data.table::fread(fullPath, header = TRUE, check.names = FALSE, data.table = FALSE))
       }
       allDatasets <- c(allDatasets, basename(datasets))
 
