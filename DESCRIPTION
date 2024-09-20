@@ -1,8 +1,8 @@
 Package: jaspTools
 Type: Package
-Title: Helps preview and debug JASP analyses
+Title: Helps Preview and Debug JASP Analyses
 Version: 0.19.0
-Author: Authors@R: c(
+Authors@R: c(
     person("Tim", "de Jong", role = "aut"),
     person("Don", "van den Bergh", role = c("ctb", "cre"), email = "d.vandenbergh@uva.nl"))
 Maintainer: Don van den Bergh <d.vandenbergh@uva.nl>
