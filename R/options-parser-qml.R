@@ -186,6 +186,7 @@ extractData <- function (element, ...) {
   UseMethod("extractData", element)
 }
 
+#'@export
 extractData.IntegerField <- function(element, defaultValue = 0) {
   regMatch <- "default.*?:([+-]?([0-9]*[.])?[0-9]+)"
   matchTable <- stringr::str_match(element, regMatch)
@@ -196,10 +197,12 @@ extractData.IntegerField <- function(element, defaultValue = 0) {
   extractData.default(element, default)
 }
 
+#'@export
 extractData.DoubleField <- function(element, defaultValue = 0) {
   extractData.IntegerField(element, defaultValue)
 }
 
+#'@export
 extractData.PercentField <- function(element, defaultValue = 50) {
   regMatch <- "default.*?:([+-]?([0-9]*[.])?[0-9]+)"
   matchTable <- stringr::str_match(element, regMatch)
@@ -211,10 +214,12 @@ extractData.PercentField <- function(element, defaultValue = 50) {
   extractData.default(element, default)
 }
 
+#'@export
 extractData.CIField <- function(element, defaultValue = 95) {
   extractData.PercentField(element, defaultValue)
 }
 
+#'@export
 extractData.AssignedVariablesList <- function(element) {
   regMatch <- "name:(.*?)[;\\}]"
   matchTable <- stringr::str_match(element, regMatch)
@@ -234,10 +239,12 @@ extractData.AssignedVariablesList <- function(element) {
   return(result)
 }
 
+#'@export
 extractData.repeatedMeasuresFactorsList <- function(element) {
   return(extractData.AssignedVariablesList(element))
 }
 
+#'@export
 extractData.CheckBox <- function(element) {
   regMatch <- "checked.*?:(true)"
   matchTable <- stringr::str_match(element, regMatch)
@@ -249,10 +256,12 @@ extractData.CheckBox <- function(element) {
   extractData.default(element, checked)
 }
 
+#'@export
 extractData.Chi2TestTableView <- function(element) {
   extractData.default(element, list())
 }
 
+#'@export
 extractData.Slider <- function(element) {
   regMatch <- "value.*?:(\\d+)"
   matchTable <- stringr::str_match(element, regMatch)
@@ -260,6 +269,7 @@ extractData.Slider <- function(element) {
   extractData.default(element, value)
 }
 
+#'@export
 extractData.DropDown <- function(element) {
   regMatches <- c("indexDefaultValue:(\\d+)", "values:\\[(?!\\{)(.*?)\\]", "values:\\[(.*?)\\]")
   matchTable <- stringr::str_match_all(element, regMatches)
@@ -291,6 +301,7 @@ extractData.DropDown <- function(element) {
   extractData.default(element, value)
 }
 
+#'@export
 extractData.RadioButtonGroup <- function(element) {
   regMatch <- "RadioButton\\{[^\\}]*?checked:true"
   matchTable <- stringr::str_match(element, regMatch)
@@ -300,6 +311,7 @@ extractData.RadioButtonGroup <- function(element) {
   extractData.default(element, value)
 }
 
+#'@export
 extractData.default <- function(element, value = NA) {
   regMatch <- "name:(.*?)[;\\}]"
   matchTable <- stringr::str_match(element, regMatch)

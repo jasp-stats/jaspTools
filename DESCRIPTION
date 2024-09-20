@@ -23,5 +23,5 @@ Imports:
   stringr,
   testthat (>= 3.0.3),
   vdiffr (>= 1.0.7)
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.2
 Roxygen: list(markdown = TRUE)
