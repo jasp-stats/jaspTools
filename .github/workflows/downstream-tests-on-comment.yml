@@ -88,7 +88,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        r: [4.3.3]
+        r: [4.4.1]
         os: [ubuntu-latest, macOS-latest, windows-latest]
         # only common modules
         module: [jasp-stats/jaspDescriptives, jasp-stats/jaspTTests, jasp-stats/jaspAnova, jasp-stats/jaspRegression, jasp-stats/jaspFrequencies, jasp-stats/jaspFactor]
@@ -132,7 +132,7 @@ jobs:
         with:
           ref: ${{ needs.pr-info.outputs.commit }}
 
-      - uses: r-lib/actions/setup-r@master
+      - uses: r-lib/actions/setup-r@v2
         with:
          r-version: ${{ matrix.r }}
 
