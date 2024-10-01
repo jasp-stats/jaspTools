@@ -172,3 +172,42 @@ analysisOptionsFromJASPfile <- function(file) {
 
   return(options)
 }
+
+parsePreloadDataFromDescriptionQml <- function(analysisName) {
+
+  modulePath <- getModulePathFromRFunction(analysisName)
+  if (isBinaryPackage(modulePath)) {
+    instDir <- modulePath
+  } else { # source pkg
+    instDir <- file.path(modulePath, "inst")
+  }
+
+  pathToDescriptionQml <- file.path(instDir, "Description.qml")
+  if (!file.exists(pathToDescriptionQml)) {
+    warning("Could not locate Description.qml in ", modulePath, ". Assuming the module preloads data.")
+    return(TRUE)
+  }
+
+  # some more parsing of QML with regex, mostly to make Joris cry
+  raw <- trimws(readLines(pathToDescriptionQml))
+  idx <- grep(sprintf("\\s*func\\s*:\\s*\"%s\"", analysisName), raw)
+
+  if (length(idx) == 0) {
+    warning("Analysis ", analysisName, " not found in Description.qml. Assuming the module preloads data.")
+    return(TRUE)
+  }
+
+  previous_bracket <- grep("{", raw[1:idx], fixed = TRUE)
+  previous_bracket <- previous_bracket[length(previous_bracket)]
+  next_bracket <- grep("}", raw[idx:length(raw)], fixed = TRUE)
+  next_bracket <- next_bracket[1] + idx
+  idx_match <- grep("\\s*preloadData\\s*:\\s*(.*)[^;]{0,1}", raw[previous_bracket:next_bracket])
+  result <- gsub("\\s*preloadData\\s*:\\s*(.*)[^;]{0,1}", "\\1", raw[previous_bracket:next_bracket][idx_match])
+  preloadData <- identical(result, "true")
+
+  if (!preloadData)
+    warning("Analysis ", analysisName, " does not preload data. Please update the code.")
+
+  return(preloadData)
+
+}

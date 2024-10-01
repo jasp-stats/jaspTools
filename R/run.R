@@ -126,7 +126,8 @@ fetchRunArgs <- function(name, options) {
     options = jsonlite::toJSON(options),
     dataKey = "null",
     resultsMeta = "null",
-    stateKey = "null"
+    stateKey = "null",
+    preloadData = parsePreloadDataFromDescriptionQml(name)
   )
 
   runArgs <- formals(jaspBase::runJaspResults)
