@@ -53,7 +53,7 @@
 }
 
 .readDataSetRequestedNative <- function() {
-  return(.getInternal("dataset"))
+  return(.getInternal("preloadedDataset"))
 }
 
 .requestTempFileNameNative <- function(...) {

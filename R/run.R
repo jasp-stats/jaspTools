@@ -140,6 +140,7 @@ initAnalysisRuntime <- function(dataset, options, makeTests, ...) {
   reinstallChangedModules()
 
   # dataset to be found in the analysis when it needs to be read
+  .setInternal("dataset", dataset)
   preloadDataset(dataset, options)
 
   # prevent the results from being translated (unless the user explicitly wants to)
