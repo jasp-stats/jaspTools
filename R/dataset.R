@@ -59,7 +59,7 @@ preloadDataset <- function(datasetPathOrObject, options) {
 
   dataset <- convertToTypes(dataset[variables], types, datasetPathOrObject)
 
-  .setInternal("dataset", dataset)
+  .setInternal("preloadedDataset", dataset)
 
 }
 

@@ -299,7 +299,10 @@ parsePreloadDataFromDescriptionQml <- function(analysisName) {
 
   preloadData <- isTRUE(description[["Description"]][["preloadData"]]) || isTRUE(description[[analysisName]][["preloadData"]])
   if (!preloadData)
-    warning("Analysis ", analysisName, " does not preload data. Please update the code.")
+    lifecycle::deprecate_warn(
+      when = "0.19.2",
+      what = I(sprintf("The analysis `%s` does not preload data. Please update inst/Description.qml, add `preloadData: true`, and fix any minor issues.", analysisName))
+    )
 
   return(preloadData)
 
