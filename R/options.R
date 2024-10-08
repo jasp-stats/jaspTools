@@ -297,7 +297,7 @@ parsePreloadDataFromDescriptionQml <- function(analysisName) {
 
   description <- parseDescriptionQmlFromAnalysisName(analysisName)
 
-  preloadData <- isTRUE(description[["preloadData"]]) || isTRUE(description[[analysisName]][["preloadData"]])
+  preloadData <- isTRUE(description[["Description"]][["preloadData"]]) || isTRUE(description[[analysisName]][["preloadData"]])
   if (!preloadData)
     warning("Analysis ", analysisName, " does not preload data. Please update the code.")
 
