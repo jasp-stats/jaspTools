@@ -82,7 +82,7 @@ runAnalysis <- function(name, dataset, options, view = TRUE, quiet = FALSE, make
     Sys.setenv(LANGUAGE = oldLanguage)
   }, add = TRUE)
 
-  initAnalysisRuntime(dataset = dataset, makeTests = makeTests)
+  initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests)
   args <- fetchRunArgs(name, options)
 
   if (quiet) {
@@ -126,7 +126,8 @@ fetchRunArgs <- function(name, options) {
     options = jsonlite::toJSON(options),
     dataKey = "null",
     resultsMeta = "null",
-    stateKey = "null"
+    stateKey = "null",
+    preloadData = parsePreloadDataFromDescriptionQml(name)
   )
 
   runArgs <- formals(jaspBase::runJaspResults)
@@ -134,12 +135,12 @@ fetchRunArgs <- function(name, options) {
   return(possibleArgs[argNames])
 }
 
-initAnalysisRuntime <- function(dataset, makeTests, ...) {
+initAnalysisRuntime <- function(dataset, options, makeTests, ...) {
   # first we reinstall any changed modules in the personal library
   reinstallChangedModules()
 
   # dataset to be found in the analysis when it needs to be read
-  .setInternal("dataset", dataset)
+  preloadDataset(dataset, options)
 
   # prevent the results from being translated (unless the user explicitly wants to)
   Sys.setenv(LANG = getPkgOption("language"))

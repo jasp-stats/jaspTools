@@ -1,8 +1,8 @@
 Package: jaspTools
 Type: Package
-Title: Helps preview and debug JASP analyses
+Title: Helps Preview and Debug JASP Analyses
 Version: 0.19.0
-Author: Authors@R: c(
+Authors@R: c(
     person("Tim", "de Jong", role = "aut"),
     person("Don", "van den Bergh", role = c("ctb", "cre"), email = "d.vandenbergh@uva.nl"))
 Maintainer: Don van den Bergh <d.vandenbergh@uva.nl>
@@ -23,5 +23,5 @@ Imports:
   stringr,
   testthat (>= 3.0.3),
   vdiffr (>= 1.0.7)
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.2
 Roxygen: list(markdown = TRUE)
