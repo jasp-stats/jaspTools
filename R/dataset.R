@@ -51,6 +51,18 @@ findAllColumnNamesInOptions <- function(options, allColumnNames) {
 preloadDataset <- function(datasetPathOrObject, options) {
 
   dataset <- loadCorrectDataset(datasetPathOrObject)
+
+  # repair any names like "", which cause false positives in findAllColumnNamesAndTypes
+  # because empty options are often ""
+  cnms <- colnames(dataset)
+  if (any(cnms == "")) {
+
+    bad <- which(cnms == "")
+    newCnms <- make.names(cnms)
+    cnms[bad] <- newCnms[bad]
+    colnames(dataset) <- cnms
+
+  }
   # columns <- findAllColumnNamesInOptions(options, colnames(dataset))
   temp    <- findAllColumnNamesAndTypes(options, colnames(dataset))
 
