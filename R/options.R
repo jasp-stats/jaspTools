@@ -297,21 +297,16 @@ parsePreloadDataFromDescriptionQml <- function(analysisName) {
 
   description <- parseDescriptionQmlFromAnalysisName(analysisName)
 
-  # is the preloadData globally set to TRUE?
+  # is preloadData globally set to TRUE?
   preloadDataGlobal <- isTRUE(description[["Description"]][["preloadData"]])
-  # is the preloadData even set for this specific analysis?
+  # is preloadData even set for this specific analysis?
   specifiedPreloadData <- "preloadData" %in% names(description[[analysisName]])
-  # is the preloadData set to TRUE for this specific analysis?
+  # is preloadData set to TRUE for this specific analysis?
   preloadDataAnalysis <- specifiedPreloadData && isTRUE(description[[analysisName]][["preloadData"]])
-  # preloadData if set to TRUE for the analysis or if set globally to TRUE and not set for the analysis
+  # if preloadData set to TRUE for the analysis, or if set globally to TRUE and not set for the analysis
   preloadData <- preloadDataAnalysis || (preloadDataGlobal && !specifiedPreloadData)
 
-  #             global  analysis  -> result warning
-  # preloadData TRUE    TRUE      -> TRUE
-  #             TRUE    FALSE     -> FALSE
-  #             FALSE   TRUE      -> TRUE
-  #             FALSE   FALSE     -> FALSE
-
+  # show a warning but only if the preloadData is not set for the analysis
   if (!preloadData && !specifiedPreloadData)
     lifecycle::deprecate_warn(
       when = "0.19.2",
