@@ -2,7 +2,7 @@ loadCorrectDataset <- function(x) {
   if (is.matrix(x) || is.data.frame(x)) {
     return(x)
   } else if (is.character(x)) {
-    if (! endsWith(x, ".csv")) {
+    if (!endsWith(x, ".csv")) {
       x <- paste0(x, ".csv")
     }
 
@@ -49,6 +49,11 @@ findAllColumnNamesInOptions <- function(options, allColumnNames) {
 }
 
 preloadDataset <- function(datasetPathOrObject, options) {
+
+  if (is.null(datasetPathOrObject)) {
+    .setInternal("preloadedDataset", data.frame())
+    return()
+  }
 
   dataset <- loadCorrectDataset(datasetPathOrObject)
 

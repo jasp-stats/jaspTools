@@ -54,7 +54,7 @@
 #'
 #'
 #' @export runAnalysis
-runAnalysis <- function(name, dataset, options, view = TRUE, quiet = FALSE, makeTests = FALSE) {
+runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALSE, makeTests = FALSE) {
   if (is.list(options) && is.null(names(options)) && any(names(unlist(lapply(options, attributes))) == "analysisName"))
     stop("The provided list of options is not named. Did you mean to index in the options list (e.g., options[[1]])?")
 
