@@ -93,7 +93,7 @@ convertToTypes <- function(dataset, types, datasetPathOrObject) {
 
     dataset[[i]] <- switch(types[i],
            "scale"   = as.numeric(dataset[[i]]),
-           "ordered" = as.ordered(dataset[[i]]),
+           "ordinal" = as.ordered(dataset[[i]]),
            "nominal" = as.factor(dataset[[i]]),
            autodetectType(dataset[[i]], colnames(dataset)[i], typesEnv)
     )
