@@ -74,6 +74,11 @@ preloadDataset <- function(datasetPathOrObject, options) {
   variables <- temp[["variables"]]
   types     <- temp[["types"]]
 
+  # remove any duplicated variables for now
+  nonDuplicatedIdx <- !duplicated(variables)
+  variables <- variables[nonDuplicatedIdx]
+  types     <- types[nonDuplicatedIdx]
+
   dataset <- convertToTypes(dataset[variables], types, datasetPathOrObject)
 
   .setInternal("preloadedDataset", dataset)
