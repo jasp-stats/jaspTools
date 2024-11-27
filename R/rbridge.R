@@ -7,6 +7,7 @@
   env[[".decodeColNamesStrict"]]       <- function(x) return(x)
   env[[".encodeColNamesLax"]]          <- function(x) return(x)
   env[[".decodeColNamesLax"]]          <- function(x) return(x)
+  env[[".decodeColTypes"]]             <- function(x) return(x)
   env[[".encodeColNamesStrict"]]       <- function(x) return(x)
 
   env[[".setColumnDataAsScale"]]       <- function(...) return(TRUE)
