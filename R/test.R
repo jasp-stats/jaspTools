@@ -18,8 +18,8 @@ runTestsTravis <- function(modulePath) {
     codeCoverage <- identical(Sys.getenv("R_COVR"), "true")
 
     # only install the pkg if we're not running on covr, because covr also installs it
-    if (!codeCoverage)
-      remotes::install_local(modulePath, upgrade = "never", force = FALSE, INSTALL_opts = "--no-multiarch")
+    #if (!codeCoverage)
+    #  remotes::install_local(modulePath, upgrade = "never", force = FALSE, INSTALL_opts = "--no-multiarch")
 
     testingStatus <- testAll()
 
