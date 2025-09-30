@@ -74,7 +74,7 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
     stop("jaspTools setup could not be completed. Reason: could not fetch the jasp-stats/jasp-desktop repo and as a result the required dependencies are not installed.\n
             If this problem persists clone jasp-stats/jasp-desktop manually.")
 
-  if (on_ci) {
+  if (on_ci()) {
     message("Skipping installation of jaspBase and jaspGraphs on CI.\n")
   } else {
   
