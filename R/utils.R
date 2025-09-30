@@ -293,3 +293,12 @@ getGithubHeader <- function() {
   httr::add_headers(Authorization = sprintf("token %s", pat),
                     Accept = "application/vnd.github.golden-comet-preview+json")
 }
+
+# same as the internals in testthat
+env_var_is_true <- function(x) {
+  as.logical(Sys.getenv(x, "false"))
+}
+
+on_ci <- function() {
+  env_var_is_true("CI")
+}
