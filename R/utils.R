@@ -5,13 +5,13 @@ findCorrectFunction <- function(funName) {
   modulePath <- getModulePathFromRFunction(funName)
   if (is.null(modulePath))
     stop("Could not locate the module location for `", funName, "`")
-  
+
   if (!endsWith(funName, "Internal")) {
     funNameInternal <- paste0(funName, "Internal")
     if (rFunctionExistsInModule(funNameInternal, modulePath))
       funName <- funNameInternal
   }
-  
+
   return(paste(getModuleName(modulePath), funName, sep = "::"))
 }
 
@@ -301,4 +301,8 @@ env_var_is_true <- function(x) {
 
 on_ci <- function() {
   env_var_is_true("CI")
+}
+
+on_github_actions <- function() {
+  !identical(Sys.getenv("GITHUB_ACTIONS", unset = ""), "")
 }
