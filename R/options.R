@@ -339,8 +339,12 @@ parsePreloadDataFromDescriptionQml <- function(analysisName) {
   # if preloadData set to TRUE for the analysis, or if set globally to TRUE and not set for the analysis
   preloadData <- preloadDataAnalysis || (preloadDataGlobal && !specifiedPreloadData)
 
-  # show a warning but only if the preloadData is not set for the analysis
-  if (!preloadData && !specifiedPreloadData)
+  # new default, if not specified set to TRUE
+  if (!specifiedPreloadData)
+    preloadData <- TRUE
+
+  # show a warning but if preloadData is not set for the analysis
+  if (!preloadData)
     lifecycle::deprecate_warn(
       when = "0.19.2",
       what = I(sprintf("The analysis `%s` does not preload data. Please update inst/Description.qml, add `preloadData: true`, and fix any minor issues.", analysisName))
