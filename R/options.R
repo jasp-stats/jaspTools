@@ -239,8 +239,8 @@ fixOptionsForVariableTypes <- function(options) {
     if (!is.character(optionKey) || length(optionKey) != 1)
       return(FALSE)
     
-    # types should be a character vector
-    if (!is.character(types))
+    # types should be a character vector or an empty list
+    if (!is.character(types) && !(is.list(types) && length(types) == 0))
       return(FALSE)
     
     # value should be a list
@@ -285,22 +285,27 @@ fixOptionsForVariableTypes <- function(options) {
           # part of the final options structure that R functions receive
           flattenedList <- lapply(value, fixRecursive)
           
-          # Replace the entire structure with the flattened list
-          obj[[nm]] <- flattenedList
+          # If the list is empty, wrap it in a named list using optionKey
+          # Otherwise, return the flattened list directly
+          if (length(flattenedList) == 0) {
+            obj[[nm]] <- setNames(list(flattenedList), optionKey)
+          } else {
+            obj[[nm]] <- flattenedList
+          }
         } else if (subOptionNeedsFixing(subObj)) {
           types <- subObj[["types"]]
           value <- subObj[["value"]]
           
+          # Convert empty list types to empty string
+          if (length(types) == 0 && is.list(types))
+            types <- ""
+          
+          # Convert empty list value to empty string
+          if (length(value) == 0 && is.list(value))
+            value <- ""
+          
           # Handle simple character vector case
           if (is.character(types) && is.character(value)) {
-            # Convert empty list to empty string
-            if (length(types) == 0 && is.list(types))
-              types <- ""
-            
-            # Convert empty list value to empty list (keep as list for list fields)
-            if (length(value) == 0 && is.list(value))
-              value <- list()
-            
             obj[[paste0(nm, ".types")]] <- types
             obj[[nm]]                   <- value
           } else if (is.list(types) && is.list(value)) {
