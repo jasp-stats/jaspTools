@@ -262,16 +262,10 @@ fixOptionsForVariableTypes <- function(options) {
           types <- subObj[["types"]]
           value <- subObj[["value"]]
           
-          # Create flattened list: each item gets the type attached to its component
-          flattenedList <- vector("list", length(value))
-          for (i in seq_along(value)) {
-            item <- value[[i]]
-            if (is.list(item) && optionKey %in% names(item)) {
-              # Add the type to this item's component
-              item[[paste0(optionKey, ".types")]] <- types[i]
-            }
-            flattenedList[[i]] <- item
-          }
+          # Create flattened list: just return the value list without the wrapper
+          # Note: types are used by JASP internally for data encoding but are not
+          # part of the final options structure that R functions receive
+          flattenedList <- lapply(value, fixRecursive)
           
           # Replace the entire structure with the flattened list
           obj[[nm]] <- flattenedList
