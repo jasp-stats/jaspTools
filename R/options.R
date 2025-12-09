@@ -206,6 +206,35 @@ fixOptionsForVariableTypes <- function(options) {
     # Otherwise, check that lengths match
     length(types) == length(value)
   }
+  
+  subOptionNeedsFlatteningWithOptionKey <- function(subOption) {
+    # Check if this is a structure with optionKey, types, and value
+    # where value is a list of items that need types attached
+    if (!is.list(subOption) || !all(c("optionKey", "types", "value") %in% names(subOption)))
+      return(FALSE)
+    
+    optionKey <- subOption[["optionKey"]]
+    types <- subOption[["types"]]
+    value <- subOption[["value"]]
+    
+    # optionKey should be a string
+    if (!is.character(optionKey) || length(optionKey) != 1)
+      return(FALSE)
+    
+    # types should be a character vector
+    if (!is.character(types))
+      return(FALSE)
+    
+    # value should be a list
+    if (!is.list(value))
+      return(FALSE)
+    
+    # The length of types should match the length of value
+    if (length(types) != length(value))
+      return(FALSE)
+    
+    return(TRUE)
+  }
 
   fixRecursive <- function(obj) {
     if (!is.list(obj))
@@ -226,7 +255,27 @@ fixOptionsForVariableTypes <- function(options) {
       
       # If this is a list, check if it needs fixing
       if (is.list(subObj)) {
-        if (subOptionNeedsFixing(subObj)) {
+        if (subOptionNeedsFlatteningWithOptionKey(subObj)) {
+          # Special handling for options with optionKey
+          # Extract the components
+          optionKey <- subObj[["optionKey"]]
+          types <- subObj[["types"]]
+          value <- subObj[["value"]]
+          
+          # Create flattened list: each item gets the type attached to its component
+          flattenedList <- vector("list", length(value))
+          for (i in seq_along(value)) {
+            item <- value[[i]]
+            if (is.list(item) && optionKey %in% names(item)) {
+              # Add the type to this item's component
+              item[[paste0(optionKey, ".types")]] <- types[i]
+            }
+            flattenedList[[i]] <- item
+          }
+          
+          # Replace the entire structure with the flattened list
+          obj[[nm]] <- flattenedList
+        } else if (subOptionNeedsFixing(subObj)) {
           types <- subObj[["types"]]
           value <- subObj[["value"]]
           
