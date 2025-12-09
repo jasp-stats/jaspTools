@@ -190,6 +190,10 @@ fixOptionsForVariableTypes <- function(options) {
     if (length(types) == 0 && is.list(types))
       types <- character(0)
     
+    # Handle empty value (can be list() or character(0))
+    if (length(value) == 0 && is.list(value))
+      value <- character(0)
+    
     # Check that both are character vectors
     if (!is.character(types) || !is.character(value))
       return(FALSE)
@@ -203,27 +207,50 @@ fixOptionsForVariableTypes <- function(options) {
     length(types) == length(value)
   }
 
-  # Check all options for types/value structure, not just those with hasTypes in metadata
-  for (nm in names(options)) {
-    # Skip .meta entry
-    if (nm == ".meta")
-      next
+  fixRecursive <- function(obj) {
+    if (!is.list(obj))
+      return(obj)
     
-    subOpt <- options[[nm]]
-    if (subOptionNeedsFixing(subOpt)) {
-      types <- subOpt[["types"]]
-      value <- subOpt[["value"]]
-      
-      # Convert empty list to empty string to match the value
-      if (length(types) == 0 && is.list(types))
-        types <- ""
-      
-      options[[paste0(nm, ".types")]] <- types
-      options[[nm]]                   <- value
+    # Check if this is an unnamed list (a list of items, like variables)
+    # In that case, recursively fix each item
+    if (is.null(names(obj)) || all(names(obj) == "")) {
+      return(lapply(obj, fixRecursive))
     }
+    
+    # Process each named element
+    for (nm in names(obj)) {
+      if (nm == ".meta")
+        next
+      
+      subObj <- obj[[nm]]
+      
+      # If this is a list, check if it needs fixing
+      if (is.list(subObj)) {
+        if (subOptionNeedsFixing(subObj)) {
+          types <- subObj[["types"]]
+          value <- subObj[["value"]]
+          
+          # Convert empty list to empty string
+          if (length(types) == 0 && is.list(types))
+            types <- ""
+          
+          # Convert empty list value to empty list (keep as list for list fields)
+          if (length(value) == 0 && is.list(value))
+            value <- list()
+          
+          obj[[paste0(nm, ".types")]] <- types
+          obj[[nm]]                   <- value
+        } else {
+          # Recursively fix nested structures
+          obj[[nm]] <- fixRecursive(subObj)
+        }
+      }
+    }
+    
+    return(obj)
   }
 
-  return(options)
+  return(fixRecursive(options))
 
 }
 
