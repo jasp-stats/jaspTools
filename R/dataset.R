@@ -126,6 +126,18 @@ autodetectType <- function(column, name, typesEnv) {
 
   }
 
+  # If column is already numeric/integer/double, leave it as is
+  if (is.numeric(column)) {
+    devcat(sprintf("Leaving numeric column '%s' as is.\n", name))
+    return(column)
+  }
+  
+  # If column is already a factor or ordered, leave it as is
+  if (is.factor(column) || is.ordered(column)) {
+    devcat(sprintf("Leaving factor/ordered column '%s' as is.\n", name))
+    return(column)
+  }
+
   if (is.character(column)) {
     devcat(sprintf("Converting column '%s' from character to factor.\n", name))
     return(as.factor(column))
@@ -255,10 +267,10 @@ recursivelyLoopOptions <- function(x, allColumnNames, resultEnv) {
 
       for (i in seq_along(idx2)) {
         if (idx2[i]) {
-          idx3 <- paste0(nm[idx[i]], ".types")
+          idx3 <- paste0(nm[i], ".types")
           resultEnv$types <- c(resultEnv$types, unlist(x[idx3], use.names = FALSE))
         } else {
-          resultEnv$types <- c(resultEnv$types, rep(NA_character_, length(x[idx[i]])))
+          resultEnv$types <- c(resultEnv$types, rep(NA_character_, length(x[[idx[i]]])))
         }
       }
 

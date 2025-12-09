@@ -198,43 +198,41 @@ addPlotSpecificLines <- function(test, name, plotPrefix = NULL) {
   return(paste(gettingPlotName, gettingPlot, comparingPlots, sep="\n"))
 }
 
-addOptionSpecificationLines <- function(name, options) {
-  settingOfOptions <- paste0('options <- analysisOptions("', name, '")')
+addOptionSpecificationLines <- function(name, options, useDefaultOptions = FALSE) {
+  # Ensure dput wraps lines to avoid hitting console input limits
+  op <- options(width = 80)
+  on.exit(options(op))
 
-  nonDefaultOpts <- getNonDefaultOptions(name, options)
-  if (length(nonDefaultOpts) > 0) {
-    nonDefaults <- paste0("options$", names(nonDefaultOpts), " <- ", nonDefaultOpts, collapse="\n")
-    settingOfOptions <- paste0(settingOfOptions, "\n", nonDefaults)
+  if (useDefaultOptions) {
+    settingOfOptions <- paste0('options <- analysisOptions("', name, '")')
+    namesVec <- paste(capture.output(dput(names(options))), collapse = "\n")
+    subsetLine <- paste0("options <- options[names(options) %in% ", namesVec, "]")
+    settingOfOptions <- paste0(settingOfOptions, "\n", subsetLine)
+  } else {
+    settingOfOptions <- paste0('options <- list()')
+  }
+
+  formattedOpts <- NULL
+  for (optName in names(options)) {
+    optValue <- options[[optName]]
+    formattedVal <- prepOptionValueForPrinting(optValue)
+    formattedOpts <- c(formattedOpts, formattedVal)
+  }
+  names(formattedOpts) <- names(options)
+
+  if (length(formattedOpts) > 0) {
+    optLines <- paste0("options$", names(formattedOpts), " <- ", formattedOpts, collapse="\n")
+    settingOfOptions <- paste0(settingOfOptions, "\n", optLines)
   }
 
   return(settingOfOptions)
 }
 
-getNonDefaultOptions <- function(name, options) {
-  defaultOpts <- analysisOptions(name)
-  if (!is.list(defaultOpts) || is.null(names(defaultOpts)))
-    stop("Couldn't find the default analysis options for this analysis")
-
-  nonDefaultOpts <- NULL
-  for (optName in names(options)) {
-    optValue <- options[[optName]]
-    if (!isTRUE(all.equal(defaultOpts[[optName]], optValue))) {
-      options[[optName]] <- prepOptionValueForPrinting(optValue)
-      nonDefaultOpts <- c(nonDefaultOpts, options[optName])
-    }
-  }
-
-  return(nonDefaultOpts)
-}
-
 prepOptionValueForPrinting <- function(value) {
-  if (is.list(value))
-    result <- paste(capture.output(dput(value)), collapse="\n")
-  else if (is.character(value) && length(value) == 1 && !startsWith(value, "\""))
-    result <- paste0("\"", value, "\"")
-  else
-    result <- value
-
+  # Ensure dput wraps lines
+  op <- options(width = 80)
+  on.exit(options(op))
+  result <- paste(capture.output(dput(value)), collapse="\n")
   return(result)
 }
 
