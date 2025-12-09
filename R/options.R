@@ -178,25 +178,48 @@ fixOptionsForVariableTypes <- function(options) {
   # jasp does this internally before passing the options to R.
   # however, when reading the options from a file this hasn't been done yet
 
-  meta <- options[[".meta"]]
-  if (is.null(meta))
-    return(options)
-
-  nms2fix <- names(vapply(meta, \(x) isTRUE(x[["hasTypes"]]), logical(1L)))
-
   subOptionNeedsFixing <- function(subOption) {
     # all the checks I could think of
-    is.list(subOption) &&
-      all(c("types", "value") %in% names(subOption)) &&
-      length(subOption[["types"]]) == length(subOption[["value"]]) &&
-      is.character(subOption[["types"]]) &&
-      is.character(subOption[["value"]])
+    if (!is.list(subOption) || !all(c("types", "value") %in% names(subOption)))
+      return(FALSE)
+    
+    types <- subOption[["types"]]
+    value <- subOption[["value"]]
+    
+    # Handle empty types (can be list() or character(0))
+    if (length(types) == 0 && is.list(types))
+      types <- character(0)
+    
+    # Check that both are character vectors
+    if (!is.character(types) || !is.character(value))
+      return(FALSE)
+    
+    # Handle the case where types is empty character(0) and value is empty string ""
+    # Both represent "no values", so convert value to character(0) for consistency
+    if (length(types) == 0 && length(value) == 1 && value == "")
+      return(TRUE)
+    
+    # Otherwise, check that lengths match
+    length(types) == length(value)
   }
 
-  for (nm in nms2fix) {
-    if (subOptionNeedsFixing(options[[nm]])) {
-      options[[paste0(nm, ".types")]] <- options[[nm]][["types"]]
-      options[[nm]]                   <- options[[nm]][["value"]]
+  # Check all options for types/value structure, not just those with hasTypes in metadata
+  for (nm in names(options)) {
+    # Skip .meta entry
+    if (nm == ".meta")
+      next
+    
+    subOpt <- options[[nm]]
+    if (subOptionNeedsFixing(subOpt)) {
+      types <- subOpt[["types"]]
+      value <- subOpt[["value"]]
+      
+      # Convert empty list to empty string to match the value
+      if (length(types) == 0 && is.list(types))
+        types <- ""
+      
+      options[[paste0(nm, ".types")]] <- types
+      options[[nm]]                   <- value
     }
   }
 
