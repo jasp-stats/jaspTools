@@ -180,12 +180,19 @@ addTableSpecificLines <- function(test) {
   return(paste(gettingTable, comparingTables, sep="\n"))
 }
 
-addPlotSpecificLines <- function(test, name) {
+addPlotSpecificLines <- function(test, name, plotPrefix = NULL) {
   gettingPlotName <- paste0('\tplotName <- results[["results"]]', test$index)
 
   gettingPlot <- paste0('\ttestPlot <- results[["state"]][["figures"]][[plotName]][["obj"]]')
 
+  # Create plot name from title
   title <- gsub("-+", "-", gsub("\\W", "-", tolower(test$title)))
+  
+  # Add prefix if provided to avoid naming conflicts
+  if (!is.null(plotPrefix) && plotPrefix != "") {
+    title <- paste0(plotPrefix, "-", title)
+  }
+  
   comparingPlots <- paste0('\tjaspTools::expect_equal_plots(testPlot, "', title, '")')
 
   return(paste(gettingPlotName, gettingPlot, comparingPlots, sep="\n"))
@@ -354,8 +361,9 @@ makeTestFromExamples <- function(path, sanitize = FALSE) {
       }
 
       # Generate test code for this analysis
+      # Wrap the entire analysis in a test_that block with the analysis name
       testCode <- tryCatch({
-        makeExpectations(tests, analysisName, options, datasetToUse)
+        makeExpectationsForExample(tests, analysisName, options, datasetToUse, jaspFile)
       }, error = function(e) {
         warning("Failed to create expectations for ", analysisName, ": ", e$message)
         return(NULL)
@@ -418,6 +426,54 @@ makeTestFromExamples <- function(path, sanitize = FALSE) {
   }
 
   return(invisible(createdFiles))
+}
+
+makeExpectationsForExample <- function(tests, name, options, dataset, jaspFile = NULL) {
+  # For example files, wrap everything in a single test_that block with the analysis name
+  # Each table/plot becomes an expect_equal_tables/expect_equal_plots within that block
+  
+  # Start with test_that block using analysis name
+  openingLine <- paste0('test_that("', name, ' works", {')
+  
+  # Add preamble (options, seed, runAnalysis)
+  preamble <- addPreambleLines(name, options, dataset)
+  preamble <- gsub("\n", "\n\t", paste0("\t", preamble))
+  
+  # Create plot name prefix from JASP filename and analysis name
+  plotPrefix <- NULL
+  if (!is.null(jaspFile)) {
+    jaspBaseName <- tools::file_path_sans_ext(basename(jaspFile))
+    # Sanitize the JASP filename and analysis name for use in plot names
+    sanitizedJasp <- gsub("\\W", "-", tolower(jaspBaseName))
+    sanitizedJasp <- gsub("-+", "-", sanitizedJasp)
+    sanitizedAnalysis <- gsub("\\W", "-", tolower(name))
+    sanitizedAnalysis <- gsub("-+", "-", sanitizedAnalysis)
+    plotPrefix <- paste0(sanitizedJasp, "-", sanitizedAnalysis)
+  }
+  
+  # Add expectations for each test (table/plot)
+  expectations <- character(0)
+  for (test in tests) {
+    if (!test$type %in% c("table", "plot"))
+      stop("Unknown test type extracted from results, cannot continue: ", test$type)
+    
+    if (test$type == "table") {
+      testLines <- addTableSpecificLines(test)
+    } else if (test$type == "plot") {
+      testLines <- addPlotSpecificLines(test, name, plotPrefix)
+    }
+    
+    expectations <- c(expectations, testLines)
+  }
+  
+  # Combine all expectations with proper indentation
+  allExpectations <- paste(expectations, collapse = "\n\n")
+  
+  closingLine <- "})"
+  
+  result <- paste(openingLine, preamble, allExpectations, closingLine, sep = "\n")
+  
+  return(result)
 }
 
 #' Extract dataset from a JASP file
