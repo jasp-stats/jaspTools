@@ -194,17 +194,35 @@ fixOptionsForVariableTypes <- function(options) {
     if (length(value) == 0 && is.list(value))
       value <- character(0)
     
-    # Check that both are character vectors
-    if (!is.character(types) || !is.character(value))
-      return(FALSE)
+    # Check if both are character vectors (simple case)
+    if (is.character(types) && is.character(value)) {
+      # Handle the case where types is empty character(0) and value is empty string ""
+      # Both represent "no values", so convert value to character(0) for consistency
+      if (length(types) == 0 && length(value) == 1 && value == "")
+        return(TRUE)
+      
+      # Otherwise, check that lengths match
+      return(length(types) == length(value))
+    }
     
-    # Handle the case where types is empty character(0) and value is empty string ""
-    # Both represent "no values", so convert value to character(0) for consistency
-    if (length(types) == 0 && length(value) == 1 && value == "")
+    # Check if both are lists (nested case: list of character vectors)
+    if (is.list(types) && is.list(value)) {
+      # Check that lengths match
+      if (length(types) != length(value))
+        return(FALSE)
+      
+      # Check that each element is a character vector with matching lengths
+      for (i in seq_along(types)) {
+        if (!is.character(types[[i]]) || !is.character(value[[i]]))
+          return(FALSE)
+        if (length(types[[i]]) != length(value[[i]]))
+          return(FALSE)
+      }
+      
       return(TRUE)
+    }
     
-    # Otherwise, check that lengths match
-    length(types) == length(value)
+    return(FALSE)
   }
   
   subOptionNeedsFlatteningWithOptionKey <- function(subOption) {
@@ -273,16 +291,24 @@ fixOptionsForVariableTypes <- function(options) {
           types <- subObj[["types"]]
           value <- subObj[["value"]]
           
-          # Convert empty list to empty string
-          if (length(types) == 0 && is.list(types))
-            types <- ""
-          
-          # Convert empty list value to empty list (keep as list for list fields)
-          if (length(value) == 0 && is.list(value))
-            value <- list()
-          
-          obj[[paste0(nm, ".types")]] <- types
-          obj[[nm]]                   <- value
+          # Handle simple character vector case
+          if (is.character(types) && is.character(value)) {
+            # Convert empty list to empty string
+            if (length(types) == 0 && is.list(types))
+              types <- ""
+            
+            # Convert empty list value to empty list (keep as list for list fields)
+            if (length(value) == 0 && is.list(value))
+              value <- list()
+            
+            obj[[paste0(nm, ".types")]] <- types
+            obj[[nm]]                   <- value
+          } else if (is.list(types) && is.list(value)) {
+            # Handle nested list case (list of character vectors)
+            # Keep as lists but ensure they're properly structured
+            obj[[paste0(nm, ".types")]] <- types
+            obj[[nm]]                   <- value
+          }
         } else {
           # Recursively fix nested structures
           obj[[nm]] <- fixRecursive(subObj)
