@@ -230,3 +230,275 @@ prepOptionValueForPrinting <- function(value) {
 
   return(result)
 }
+
+#' Create test files from JASP example files
+#'
+#' \code{makeTestFromExamples} transforms a folder of JASP example files into unit test files.
+#'
+#' @param path String path to directory containing JASP example files. All .jasp files in this directory will be processed.
+#' @param sanitize Logical. If TRUE, sanitizes test filenames by replacing non-word characters with hyphens. If FALSE (default), preserves original spacing and characters in filenames.
+#'
+#' @details
+#' This function processes all .jasp files in the specified directory and generates corresponding test files
+#' in the module's tests/testthat directory. Each JASP file becomes a single test file named
+#' "test-example-{basename}.R", where {basename} is the original JASP filename without the .jasp extension.
+#'
+#' If a JASP file contains multiple analyses, they are included as separate test_that() blocks within
+#' the same test file. Each test block is self-contained with its own options, seed setting, and runAnalysis call.
+#'
+#' The function locates the appropriate module directory for each analysis and creates the tests/testthat
+#' directory if it doesn't exist.
+#'
+#' **Prerequisites:**
+#' - \code{setupJaspTools()} must be run before using this function to configure module paths
+#' - Packages 'DBI' and 'RSQLite' are required for extracting data from JASP files
+#' - The module(s) containing the analyses must be available in \code{getPkgOption("module.dirs")}
+#'
+#' @return Invisibly returns a character vector of created test file paths.
+#'
+#' @examples
+#' \dontrun{
+#' # Setup jaspTools first
+#' library(jaspTools)
+#' setupJaspTools()
+#' setPkgOption("module.dirs", "path/to/your/module")
+#'
+#' # Create tests from all JASP files in a directory
+#' makeTestFromExamples("path/to/examples")
+#'
+#' # Sanitize filenames (e.g., "My Example.jasp" -> "test-example-My-Example.R")
+#' makeTestFromExamples("path/to/examples", sanitize = TRUE)
+#' }
+#'
+#' @export makeTestFromExamples
+makeTestFromExamples <- function(path, sanitize = FALSE) {
+  if (!dir.exists(path))
+    stop("The specified path does not exist: ", path)
+
+  # Find all JASP files in the directory
+  jaspFiles <- list.files(path, pattern = "\\.jasp$", full.names = TRUE)
+
+  if (length(jaspFiles) == 0) {
+    warning("No .jasp files found in directory: ", path)
+    return(invisible(character(0)))
+  }
+
+  createdFiles <- character(0)
+
+  # Process each JASP file
+  for (jaspFile in jaspFiles) {
+    message("Processing: ", basename(jaspFile))
+
+    # Extract all analyses from the JASP file
+    # Call analysisOptionsFromJASPfile directly to avoid the bug in analysisOptions()
+    # where it checks for JSON regex pattern before checking if source is a file path
+    optionsList <- tryCatch({
+      analysisOptionsFromJASPfile(jaspFile)
+    }, error = function(e) {
+      warning("Failed to extract options from ", basename(jaspFile), ": ", e$message)
+      return(NULL)
+    })
+
+    if (is.null(optionsList))
+      next
+
+    # Ensure optionsList is always a list of options (even if single analysis)
+    # Check if it's a single options list (has analysisName attribute) or a list of option lists
+    if (!is.null(attr(optionsList, "analysisName"))) {
+      # Single analysis - wrap it in a list
+      optionsList <- list(optionsList)
+    }
+
+    # Extract the actual data from the JASP file
+    # This returns a data.frame or stops with error if extraction fails
+    datasetToUse <- extractDatasetFromJASPfile(jaspFile, exportDir = NULL)
+
+    # Collect all test code for this JASP file
+    allTestCode <- character(0)
+
+    # Process each analysis in the JASP file
+    for (i in seq_along(optionsList)) {
+      options <- optionsList[[i]]
+      analysisName <- attr(options, "analysisName")
+
+      if (is.null(analysisName)) {
+        warning("Analysis at index ", i, " in ", basename(jaspFile), " has no name, skipping")
+        next
+      }
+
+      message("  - Generating test for analysis: ", analysisName)
+
+      # Run the analysis to get results
+      results <- tryCatch({
+        runAnalysis(analysisName, dataset = datasetToUse, options = options,
+                   view = FALSE, quiet = TRUE)
+      }, error = function(e) {
+        warning("Failed to run analysis ", analysisName, " from ", basename(jaspFile), ": ", e$message)
+        return(NULL)
+      })
+
+      if (is.null(results))
+        next
+
+      # Generate test expectations
+      tests <- tryCatch({
+        getTests(results$results)
+      }, error = function(e) {
+        warning("Failed to extract tests from ", analysisName, ": ", e$message)
+        return(NULL)
+      })
+
+      if (is.null(tests) || length(tests) == 0) {
+        warning("No tests generated for ", analysisName, " in ", basename(jaspFile))
+        next
+      }
+
+      # Generate test code for this analysis
+      testCode <- tryCatch({
+        makeExpectations(tests, analysisName, options, datasetToUse)
+      }, error = function(e) {
+        warning("Failed to create expectations for ", analysisName, ": ", e$message)
+        return(NULL)
+      })
+
+      if (!is.null(testCode)) {
+        allTestCode <- c(allTestCode, testCode)
+      }
+    }
+
+    # Write test file if we have any test code
+    if (length(allTestCode) > 0) {
+      # Get first analysis name to determine module path
+      firstAnalysisName <- attr(optionsList[[1]], "analysisName")
+      modulePath <- tryCatch({
+        getModulePathFromRFunction(firstAnalysisName)
+      }, error = function(e) {
+        warning("Could not locate module for ", firstAnalysisName, ": ", e$message)
+        return(NULL)
+      })
+
+      if (is.null(modulePath)) {
+        warning("Skipping test file creation for ", basename(jaspFile), " - no module path found")
+        next
+      }
+
+      # Create tests/testthat directory if it doesn't exist
+      testsDir <- file.path(modulePath, "tests", "testthat")
+      if (!dir.exists(testsDir)) {
+        dir.create(testsDir, recursive = TRUE)
+      }
+
+      # Create test filename
+      baseName <- tools::file_path_sans_ext(basename(jaspFile))
+      if (sanitize) {
+        baseName <- gsub("\\W", "-", baseName)
+        baseName <- gsub("-+", "-", baseName)
+      }
+      testFileName <- paste0("test-example-", baseName, ".R")
+      testFilePath <- file.path(testsDir, testFileName)
+
+      # Combine all test code
+      fullTestContent <- paste(allTestCode, collapse = "\n\n")
+
+      # Write test file
+      tryCatch({
+        writeLines(fullTestContent, testFilePath)
+        message("Created test file: ", testFilePath)
+        createdFiles <- c(createdFiles, testFilePath)
+      }, error = function(e) {
+        warning("Failed to write test file ", testFilePath, ": ", e$message)
+      })
+    }
+  }
+
+  if (length(createdFiles) > 0) {
+    message("\nSuccessfully created ", length(createdFiles), " test file(s)")
+  } else {
+    warning("No test files were created")
+  }
+
+  return(invisible(createdFiles))
+}
+
+extractDatasetFromJASPfile <- function(file, exportDir = NULL) {
+  # Extract the actual dataset from a JASP file's internal.sqlite database
+  # Returns either a data.frame (if exportDir is NULL) or path to exported CSV
+  
+  if (!requireNamespace("DBI", quietly = TRUE) || !requireNamespace("RSQLite", quietly = TRUE)) {
+    stop("Packages 'DBI' and 'RSQLite' are required to extract data from JASP files. ",
+         "Install them with: install.packages(c('DBI', 'RSQLite'))")
+  }
+  
+  # Create temporary directory for extraction
+  tmpDir <- tempfile("jasp_extract_")
+  dir.create(tmpDir)
+  on.exit(unlink(tmpDir, recursive = TRUE), add = TRUE)
+  
+  # Extract JASP archive to temp directory
+  archive::archive_extract(file, dir = tmpDir)
+  
+  # Connect to SQLite database
+  dbPath <- file.path(tmpDir, "internal.sqlite")
+  if (!file.exists(dbPath)) {
+    stop("No internal.sqlite found in JASP file: ", basename(file))
+  }
+  
+  db <- DBI::dbConnect(RSQLite::SQLite(), dbPath)
+  on.exit(DBI::dbDisconnect(db), add = TRUE)
+  
+  # Find the dataset table (typically DataSet_1, DataSet_2, etc.)
+  tables <- DBI::dbListTables(db)
+  datasetTables <- grep("^DataSet_[0-9]+$", tables, value = TRUE)
+  
+  if (length(datasetTables) == 0) {
+    stop("No DataSet table found in JASP SQLite database for file: ", basename(file))
+  }
+  
+  # Use the first dataset table (typically DataSet_1)
+  datasetTable <- datasetTables[1]
+  
+  # Read the dataset
+  dataset <- DBI::dbReadTable(db, datasetTable)
+  
+  # Get column metadata to map Column_N to actual names
+  if ("Columns" %in% tables) {
+    columnsMeta <- DBI::dbGetQuery(db, "SELECT name, colIdx FROM Columns ORDER BY colIdx")
+    
+    # Map Column_N_DBL columns to their actual names
+    # The dataset has columns like: rowNumber, Filter_1, Column_1_DBL, Column_1_INT, ...
+    # We want to rename Column_N_DBL columns to their actual names from metadata
+    
+    for (i in seq_len(nrow(columnsMeta))) {
+      oldColName <- paste0("Column_", i, "_DBL")
+      if (oldColName %in% colnames(dataset)) {
+        colnames(dataset)[colnames(dataset) == oldColName] <- columnsMeta$name[i]
+      }
+    }
+  }
+  
+  # Remove JASP-internal columns (rowNumber, Filter_*, Column_*_INT)
+  internalCols <- grep("^(rowNumber|Filter_|Column_.*_INT)$", colnames(dataset))
+  if (length(internalCols) > 0) {
+    dataset <- dataset[, -internalCols, drop = FALSE]
+  }
+  
+  # If exportDir is provided, save to CSV and return path
+  if (!is.null(exportDir)) {
+    if (!dir.exists(exportDir)) {
+      dir.create(exportDir, recursive = TRUE)
+    }
+    
+    # Generate CSV filename from JASP filename
+    baseName <- tools::file_path_sans_ext(basename(file))
+    csvPath <- file.path(exportDir, paste0(baseName, ".csv"))
+    
+    # Write CSV
+    utils::write.csv(dataset, csvPath, row.names = FALSE)
+    message("  - Extracted data to: ", csvPath)
+    
+    return(csvPath)
+  } else {
+    # Return the dataset directly
+    return(dataset)
+  }
+}
