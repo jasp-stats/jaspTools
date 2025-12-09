@@ -420,6 +420,49 @@ makeTestFromExamples <- function(path, sanitize = FALSE) {
   return(invisible(createdFiles))
 }
 
+#' Extract dataset from a JASP file
+#'
+#' \code{extractDatasetFromJASPfile} extracts the data.frame from a JASP file's internal SQLite database,
+#' properly handling factor columns with their labels.
+#'
+#' @param file String path to a .jasp file.
+#' @param exportDir Optional string path to a directory. If provided, the dataset will be saved as a CSV file
+#'   in this directory and the path to the CSV will be returned. If NULL (default), returns a data.frame directly.
+#'
+#' @details
+#' This function extracts the dataset stored in a JASP file by:
+#' \itemize{
+#'   \item Unpacking the .jasp archive (which is a zip file)
+#'   \item Reading the internal.sqlite database
+#'   \item Converting Column_N_DBL and Column_N_INT columns to properly named columns
+#'   \item Mapping factor levels from the Labels table to create proper R factors
+#'   \item Handling both explicitly nominal columns and columns with label mappings
+#' }
+#'
+#' Factor columns are automatically detected by checking if:
+#' \itemize{
+#'   \item The column is marked as "nominal" in the Columns table, OR
+#'   \item The column has labels defined in the Labels table AND the _DBL column contains only "nan" values
+#' }
+#'
+#' **Prerequisites:**
+#' - Packages 'DBI' and 'RSQLite' are required and will be loaded automatically
+#' - Package 'archive' is required for extracting the .jasp file
+#'
+#' @return If \code{exportDir} is NULL, returns a data.frame with the extracted dataset.
+#'   If \code{exportDir} is provided, returns the file path to the exported CSV file.
+#'
+#' @examples
+#' \dontrun{
+#' # Extract as data.frame
+#' dataset <- extractDatasetFromJASPfile("path/to/file.jasp")
+#' str(dataset)
+#'
+#' # Export to CSV
+#' csvPath <- extractDatasetFromJASPfile("path/to/file.jasp", exportDir = "output")
+#' }
+#'
+#' @export extractDatasetFromJASPfile
 extractDatasetFromJASPfile <- function(file, exportDir = NULL) {
   # Extract the actual dataset from a JASP file's internal.sqlite database
   # Returns either a data.frame (if exportDir is NULL) or path to exported CSV
@@ -460,24 +503,81 @@ extractDatasetFromJASPfile <- function(file, exportDir = NULL) {
   # Read the dataset
   dataset <- DBI::dbReadTable(db, datasetTable)
   
-  # Get column metadata to map Column_N to actual names
+  # Get column metadata to determine column types and names
   if ("Columns" %in% tables) {
-    columnsMeta <- DBI::dbGetQuery(db, "SELECT name, colIdx FROM Columns ORDER BY colIdx")
+    columnsMeta <- DBI::dbGetQuery(db, "SELECT name, colIdx, columnType FROM Columns ORDER BY colIdx")
     
-    # Map Column_N_DBL columns to their actual names
-    # The dataset has columns like: rowNumber, Filter_1, Column_1_DBL, Column_1_INT, ...
-    # We want to rename Column_N_DBL columns to their actual names from metadata
+    # Get label data for mapping factor levels
+    labels <- NULL
+    labelsPerColumn <- list()
+    if ("Labels" %in% tables) {
+      labels <- DBI::dbGetQuery(db, "SELECT columnId, value, label FROM Labels ORDER BY columnId, value")
+      # Group labels by columnId for easier lookup
+      for (colId in unique(labels$columnId)) {
+        labelsPerColumn[[as.character(colId)]] <- labels[labels$columnId == colId, ]
+      }
+    }
     
+    # Process each column
     for (i in seq_len(nrow(columnsMeta))) {
-      oldColName <- paste0("Column_", i, "_DBL")
-      if (oldColName %in% colnames(dataset)) {
-        colnames(dataset)[colnames(dataset) == oldColName] <- columnsMeta$name[i]
+      colName <- columnsMeta$name[i]
+      colType <- columnsMeta$columnType[i]
+      colIdx <- columnsMeta$colIdx[i] + 1  # colIdx is 0-based, R is 1-based
+      
+      dblColName <- paste0("Column_", colIdx, "_DBL")
+      intColName <- paste0("Column_", colIdx, "_INT")
+      
+      # Check if this column has labels defined (indicating it might be nominal even if marked as scale)
+      hasLabels <- as.character(colIdx) %in% names(labelsPerColumn) && 
+                   nrow(labelsPerColumn[[as.character(colIdx)]]) > 0
+      
+      # For nominal columns OR columns with labels where _DBL contains "nan", use _INT column and map to labels
+      if (intColName %in% colnames(dataset)) {
+        dblValues <- if (dblColName %in% colnames(dataset)) dataset[[dblColName]] else NULL
+        intValues <- dataset[[intColName]]
+        
+        # Check if _DBL column contains only "nan" strings (indicating categorical data stored as integers)
+        dblIsNan <- !is.null(dblValues) && is.character(dblValues) && all(dblValues == "nan" | is.na(dblValues))
+        
+        # Use integer column with label mapping if:
+        # 1. Column is marked as nominal, OR
+        # 2. Column has labels defined AND _DBL contains only "nan"
+        if ((!is.na(colType) && colType == "nominal") || (hasLabels && dblIsNan)) {
+          colLabels <- labelsPerColumn[[as.character(colIdx)]]
+          
+          if (!is.null(colLabels) && nrow(colLabels) > 0) {
+            # Create a mapping from integer value to label
+            labelMap <- setNames(colLabels$label, colLabels$value)
+            
+            # Map the integer values to labels
+            factorValues <- labelMap[as.character(intValues)]
+            
+            # Create a factor with the correct levels (ordered by value in Labels table)
+            orderedLevels <- colLabels$label[order(colLabels$value)]
+            dataset[[colName]] <- factor(factorValues, levels = orderedLevels)
+          } else {
+            # No labels found, just use the integer values as-is
+            dataset[[colName]] <- intValues
+          }
+        }
+        # For scale columns with numeric data, use _DBL column
+        else if (!is.null(dblValues) && !dblIsNan) {
+          dataset[[colName]] <- dblValues
+        }
+        # Fallback: if _DBL doesn't exist or is all nan, use _INT
+        else {
+          dataset[[colName]] <- intValues
+        }
+      }
+      # If only _DBL exists (no _INT), use it
+      else if (dblColName %in% colnames(dataset)) {
+        dataset[[colName]] <- dataset[[dblColName]]
       }
     }
   }
   
-  # Remove JASP-internal columns (rowNumber, Filter_*, Column_*_INT)
-  internalCols <- grep("^(rowNumber|Filter_|Column_.*_INT)$", colnames(dataset))
+  # Remove JASP-internal columns (rowNumber, Filter_*, Column_*_INT, Column_*_DBL)
+  internalCols <- grep("^(rowNumber|Filter_|Column_.*_(INT|DBL))$", colnames(dataset))
   if (length(internalCols) > 0) {
     dataset <- dataset[, -internalCols, drop = FALSE]
   }
