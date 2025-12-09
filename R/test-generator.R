@@ -555,7 +555,8 @@ extractDatasetFromJASPfile <- function(file, exportDir = NULL) {
   datasetTable <- datasetTables[1]
   
   # Read the dataset
-  dataset <- DBI::dbReadTable(db, datasetTable)
+  # Suppress warnings about mixed types - we handle the conversion properly afterward
+  dataset <- suppressWarnings(DBI::dbReadTable(db, datasetTable))
   
   # Get column metadata to determine column types and names
   if ("Columns" %in% tables) {
@@ -616,7 +617,9 @@ extractDatasetFromJASPfile <- function(file, exportDir = NULL) {
         }
         # For scale columns with numeric data, use _DBL column
         else if (!is.null(dblValues) && !dblIsNan) {
-          dataset[[colName]] <- dblValues
+          # Convert "nan" strings to NA and coerce to numeric
+          dblValues[dblValues == "nan"] <- NA
+          dataset[[colName]] <- as.numeric(dblValues)
         }
         # Fallback: if _DBL doesn't exist or is all nan, use _INT
         else {
@@ -625,7 +628,14 @@ extractDatasetFromJASPfile <- function(file, exportDir = NULL) {
       }
       # If only _DBL exists (no _INT), use it
       else if (dblColName %in% colnames(dataset)) {
-        dataset[[colName]] <- dataset[[dblColName]]
+        dblValues <- dataset[[dblColName]]
+        # Convert "nan" strings to NA and coerce to numeric
+        if (is.character(dblValues)) {
+          dblValues[dblValues == "nan"] <- NA
+          dataset[[colName]] <- as.numeric(dblValues)
+        } else {
+          dataset[[colName]] <- dblValues
+        }
       }
     }
   }
