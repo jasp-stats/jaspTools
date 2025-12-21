@@ -54,7 +54,7 @@
 #'
 #'
 #' @export runAnalysis
-runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALSE, makeTests = FALSE) {
+runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALSE, makeTests = FALSE, encodedDataset = FALSE) {
   if (is.list(options) && is.null(names(options)) && any(names(unlist(lapply(options, attributes))) == "analysisName"))
     stop("The provided list of options is not named. Did you mean to index in the options list (e.g., options[[1]])?")
 
@@ -82,7 +82,7 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
     Sys.setenv(LANGUAGE = oldLanguage)
   }, add = TRUE)
 
-  initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests)
+  initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests, encodedDataset = encodedDataset)
   args <- fetchRunArgs(name, options)
 
   if (quiet) {
@@ -135,13 +135,13 @@ fetchRunArgs <- function(name, options) {
   return(possibleArgs[argNames])
 }
 
-initAnalysisRuntime <- function(dataset, options, makeTests, ...) {
+initAnalysisRuntime <- function(dataset, options, makeTests, encodedDataset = FALSE, ...) {
   # first we reinstall any changed modules in the personal library
   reinstallChangedModules()
 
   # dataset to be found in the analysis when it needs to be read
   .setInternal("dataset", dataset)
-  preloadDataset(dataset, options)
+  preloadDataset(dataset, options, encodedDataset = encodedDataset)
 
   # prevent the results from being translated (unless the user explicitly wants to)
   Sys.setenv(LANG = getPkgOption("language"))

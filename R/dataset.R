@@ -253,7 +253,7 @@ findAllColumnNamesInOptions <- function(options, allColumnNames) {
   })
 }
 
-preloadDataset <- function(datasetPathOrObject, options) {
+preloadDataset <- function(datasetPathOrObject, options, encodedDataset = FALSE) {
 
   if (is.null(datasetPathOrObject)) {
     .setInternal("preloadedDataset", data.frame())
@@ -262,29 +262,33 @@ preloadDataset <- function(datasetPathOrObject, options) {
 
   dataset <- loadCorrectDataset(datasetPathOrObject)
 
-  # repair any names like "", which cause false positives in findAllColumnNamesAndTypes
-  # because empty options are often ""
-  cnms <- colnames(dataset)
-  if (any(cnms == "")) {
+  # If encodedDataset is TRUE, the dataset is already encoded and typed correctly
+  # so we skip the column name repair and type detection logic
+  if (!encodedDataset) {
+    # repair any names like "", which cause false positives in findAllColumnNamesAndTypes
+    # because empty options are often ""
+    cnms <- colnames(dataset)
+    if (any(cnms == "")) {
 
-    bad <- which(cnms == "")
-    newCnms <- make.names(cnms)
-    cnms[bad] <- newCnms[bad]
-    colnames(dataset) <- cnms
+      bad <- which(cnms == "")
+      newCnms <- make.names(cnms)
+      cnms[bad] <- newCnms[bad]
+      colnames(dataset) <- cnms
 
+    }
+    # columns <- findAllColumnNamesInOptions(options, colnames(dataset))
+    temp    <- findAllColumnNamesAndTypes(options, colnames(dataset))
+
+    variables <- temp[["variables"]]
+    types     <- temp[["types"]]
+
+    # remove any duplicated variables for now
+    nonDuplicatedIdx <- !duplicated(variables)
+    variables <- variables[nonDuplicatedIdx]
+    types     <- types[nonDuplicatedIdx]
+
+    dataset <- convertToTypes(dataset[variables], types, datasetPathOrObject)
   }
-  # columns <- findAllColumnNamesInOptions(options, colnames(dataset))
-  temp    <- findAllColumnNamesAndTypes(options, colnames(dataset))
-
-  variables <- temp[["variables"]]
-  types     <- temp[["types"]]
-
-  # remove any duplicated variables for now
-  nonDuplicatedIdx <- !duplicated(variables)
-  variables <- variables[nonDuplicatedIdx]
-  types     <- types[nonDuplicatedIdx]
-
-  dataset <- convertToTypes(dataset[variables], types, datasetPathOrObject)
 
   .setInternal("preloadedDataset", dataset)
 
