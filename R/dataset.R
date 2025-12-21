@@ -490,7 +490,290 @@ findAllColumnNamesAndTypes <- function(options, allColumnNames) {
 
 devcat <- function(..., file = "", sep = " ", fill = FALSE, labels = NULL,
                    append = FALSE) {
+
   if (getOption("jasptools_devcat", FALSE))
     return(cat(..., file = file, sep = sep, fill = fill, labels = labels, append = append))
   invisible(NULL)
+}
+
+
+#' Encode Options and Dataset for JASP Analysis
+#'
+#' This function processes options with `.types` properties and creates an
+#' encoded version of both the options and the dataset. Variables are encoded
+#' to generic names like "jaspColumn1", "jaspColumn2", etc., and the dataset
+#' is filtered and formatted according to the specified types.
+#'
+#' @param options A named list of analysis options, typically from \code{analysisOptions()}.
+#' @param dataset A data.frame or the name/path of a dataset to be encoded.
+#'
+#' @return A list with three components:
+#' \itemize{
+#'   \item \code{options}: The encoded options with variable names replaced by "jaspColumnN".
+#'   \item \code{dataset}: The encoded dataset containing only the relevant columns,
+#'     renamed and formatted according to their types.
+#'   \item \code{encodingMap}: A data.frame with columns \code{original}, \code{encoded},
+#'     and \code{type} showing the mapping from original variable names to encoded names.
+#' }
+#'
+#' @details
+#' The function performs the following steps:
+#' \enumerate{
+#'   \item Scans all options for those with a parallel \code{.types} entry
+#'     (e.g., \code{variables} and \code{variables.types}).
+#'   \item Extracts unique variable-type combinations.
+#'   \item Creates an encoding map from original names to "jaspColumn1", "jaspColumn2", etc.
+#'   \item Replaces all variable references in the options with their encoded names.
+#'   \item Subsets and transforms the dataset to contain only the encoded columns,
+#'     applying type coercion:
+#'     \itemize{
+#'       \item \code{"nominal"}: Converted to factor via \code{as.factor()}.
+#'       \item \code{"ordinal"}: Converted to ordered factor.
+#'       \item \code{"scale"}: Converted to numeric via \code{as.numeric()}.
+#'     }
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' options <- analysisOptions("BinomialTest")
+#' options$variables <- "contBinom"
+#' options$variables.types <- "nominal"
+#'
+#' result <- encodeOptionsAndDataset(options, "debug.csv")
+#' # result$options$variables is now "jaspColumn1"
+#' # result$dataset has column "jaspColumn1" as a factor
+#' # result$encodingMap shows the mapping
+#' }
+#'
+#' @export
+encodeOptionsAndDataset <- function(options, dataset) {
+
+  # Load the dataset if it's a path or name
+  dataset <- loadCorrectDataset(dataset)
+  allColumnNames <- colnames(dataset)
+
+  # Step 1 & 2: Find all variable-type pairs from options
+  varTypePairs <- extractVariableTypePairs(options, allColumnNames)
+
+  if (nrow(varTypePairs) == 0) {
+    warning("No variable-type pairs found in options. Returning original options and dataset.")
+    return(list(
+      options     = options,
+      dataset     = dataset,
+      encodingMap = data.frame(original = character(0), encoded = character(0), type = character(0))
+    ))
+  }
+
+  # Step 3: Keep only unique variable-type combinations and create encoding map
+  uniquePairs <- unique(varTypePairs)
+  uniquePairs$encoded <- paste0("jaspColumn", seq_len(nrow(uniquePairs)))
+
+  encodingMap <- uniquePairs[, c("variable", "encoded", "type")]
+  names(encodingMap)[1] <- "original"
+
+  # Step 4: Encode the options
+  encodedOptions <- encodeOptionsWithMap(options, encodingMap, allColumnNames)
+
+  # Step 5: Create the encoded dataset
+  encodedDataset <- createEncodedDataset(dataset, encodingMap)
+
+  return(list(
+    options     = encodedOptions,
+    dataset     = encodedDataset,
+    encodingMap = encodingMap
+  ))
+}
+
+
+#' Extract Variable-Type Pairs from Options
+#'
+#' Internal function that scans options for variable references with associated types.
+#'
+#' @param options The options list.
+#' @param allColumnNames Vector of valid column names in the dataset.
+#'
+#' @return A data.frame with columns \code{variable} and \code{type}.
+#' @keywords internal
+extractVariableTypePairs <- function(options, allColumnNames) {
+
+  result <- data.frame(variable = character(0), type = character(0), stringsAsFactors = FALSE)
+
+  # Find all options that have a parallel .types entry
+  optionNames <- names(options)
+  optionNames <- optionNames[!grepl("\\.types$", optionNames) & optionNames != ".meta"]
+
+  for (nm in optionNames) {
+    typesKey <- paste0(nm, ".types")
+
+    if (typesKey %in% names(options)) {
+      # This option has a .types entry
+      values <- options[[nm]]
+      types  <- options[[typesKey]]
+
+      pairs <- extractPairsFromValueAndType(values, types, allColumnNames)
+      if (nrow(pairs) > 0) {
+        result <- rbind(result, pairs)
+      }
+    }
+  }
+
+  return(result)
+}
+
+
+#' Extract Pairs from Value and Type Structures
+#'
+#' Recursively extracts variable-type pairs from potentially nested value and type structures.
+#'
+#' @param values The values (can be character vector, list, or nested structure).
+#' @param types The parallel types structure.
+#' @param allColumnNames Vector of valid column names.
+#'
+#' @return A data.frame with columns \code{variable} and \code{type}.
+#' @keywords internal
+extractPairsFromValueAndType <- function(values, types, allColumnNames) {
+
+  result <- data.frame(variable = character(0), type = character(0), stringsAsFactors = FALSE)
+
+  # Simple case: both are character vectors of same length
+
+  if (is.character(values) && is.character(types) && length(values) == length(types)) {
+    # Filter to only include valid column names
+    validIdx <- values %in% allColumnNames
+    if (any(validIdx)) {
+      result <- data.frame(
+        variable = values[validIdx],
+        type     = types[validIdx],
+        stringsAsFactors = FALSE
+      )
+    }
+    return(result)
+  }
+
+  # Simple case: values is a single character matching a column name
+  if (is.character(values) && length(values) == 1 && values %in% allColumnNames) {
+    if (is.character(types) && length(types) == 1) {
+      return(data.frame(variable = values, type = types, stringsAsFactors = FALSE))
+    }
+  }
+
+  # Complex case: both are lists (parallel structure)
+  if (is.list(values) && is.list(types) && length(values) == length(types)) {
+    for (i in seq_along(values)) {
+      subPairs <- extractPairsFromValueAndType(values[[i]], types[[i]], allColumnNames)
+      if (nrow(subPairs) > 0) {
+        result <- rbind(result, subPairs)
+      }
+    }
+    return(result)
+  }
+
+  # Named list case: match by names
+  if (is.list(values) && !is.null(names(values)) && is.list(types) && !is.null(names(types))) {
+    commonNames <- intersect(names(values), names(types))
+    for (nm in commonNames) {
+      subPairs <- extractPairsFromValueAndType(values[[nm]], types[[nm]], allColumnNames)
+      if (nrow(subPairs) > 0) {
+        result <- rbind(result, subPairs)
+      }
+    }
+    return(result)
+  }
+
+  return(result)
+}
+
+
+#' Encode Options Using Encoding Map
+#'
+#' Replaces variable names in options with their encoded equivalents.
+#'
+#' @param options The options list.
+#' @param encodingMap Data.frame with columns \code{original}, \code{encoded}, \code{type}.
+#' @param allColumnNames Vector of valid column names.
+#'
+#' @return The options list with encoded variable names.
+#' @keywords internal
+encodeOptionsWithMap <- function(options, encodingMap, allColumnNames) {
+
+  # Create lookup from original to encoded
+  lookup <- stats::setNames(encodingMap$encoded, encodingMap$original)
+
+  # Recursively encode values
+  encodeValue <- function(x) {
+    if (is.character(x)) {
+      # Replace any values that match column names in our encoding map
+      idx <- x %in% names(lookup)
+      if (any(idx)) {
+        x[idx] <- lookup[x[idx]]
+      }
+      return(x)
+    } else if (is.list(x)) {
+      # Recursively process list elements
+      for (i in seq_along(x)) {
+        x[[i]] <- encodeValue(x[[i]])
+      }
+      return(x)
+    } else {
+      return(x)
+    }
+  }
+
+  # Process all options except .meta and .types entries
+  optionNames <- names(options)
+  for (nm in optionNames) {
+    if (nm == ".meta" || grepl("\\.types$", nm)) {
+      next
+    }
+    options[[nm]] <- encodeValue(options[[nm]])
+  }
+
+  return(options)
+}
+
+
+#' Create Encoded Dataset
+#'
+#' Creates a new dataset with encoded column names and proper type coercion.
+#'
+#' @param dataset The original dataset.
+#' @param encodingMap Data.frame with columns \code{original}, \code{encoded}, \code{type}.
+#'
+#' @return A data.frame with encoded column names and proper types.
+#' @keywords internal
+createEncodedDataset <- function(dataset, encodingMap) {
+
+  # Create new data.frame with encoded columns
+  encodedDataset <- data.frame(row.names = seq_len(nrow(dataset)))
+
+  for (i in seq_len(nrow(encodingMap))) {
+    origName    <- encodingMap$original[i]
+    encodedName <- encodingMap$encoded[i]
+    colType     <- encodingMap$type[i]
+
+    if (!origName %in% colnames(dataset)) {
+      warning("Column '", origName, "' not found in dataset. Skipping.")
+      next
+    }
+
+    col <- dataset[[origName]]
+
+    # Apply type coercion
+    col <- switch(colType,
+      "nominal" = as.factor(col),
+      "ordinal" = {
+        if (is.factor(col)) {
+          factor(col, levels = levels(col), ordered = TRUE)
+        } else {
+          factor(col, ordered = TRUE)
+        }
+      },
+      "scale" = as.numeric(col),
+      col  # default: keep as-is
+    )
+
+    encodedDataset[[encodedName]] <- col
+  }
+
+  return(encodedDataset)
 }
