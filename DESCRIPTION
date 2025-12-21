@@ -23,5 +23,8 @@ Imports:
   stringr,
   testthat (>= 3.0.3),
   vdiffr (>= 1.0.7)
+Suggests:
+  DBI,
+  RSQLite
 RoxygenNote: 7.3.2
 Roxygen: list(markdown = TRUE)

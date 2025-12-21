@@ -6,7 +6,7 @@
 \usage{
 runAnalysis(
   name,
-  dataset,
+  dataset = NULL,
   options,
   view = TRUE,
   quiet = FALSE,
