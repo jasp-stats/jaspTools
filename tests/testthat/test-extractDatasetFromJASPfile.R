@@ -165,3 +165,33 @@ test_that("extractDatasetFromJASPfile handles ordinal columns correctly", {
   expect_equal(df[["facFive"]], csv[["facFive"]],
                info = "facFive values should match CSV")
 })
+
+test_that("extractDatasetFromJASPfile works for BCG Vaccine dataset", {
+
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles",
+                        "Effectiveness of the BCG Vaccine Against Tuberculosis.jasp")
+  csvFile <- file.path(testthat::test_path(), "..", "JASPFiles",
+                       "Effectiveness of the BCG Vaccine Against Tuberculosis.csv")
+
+  skip_if_not(file.exists(jaspFile), "BCG Vaccine JASP file not found")
+  skip_if_not(file.exists(csvFile), "BCG Vaccine CSV file not found")
+
+  df <- extractDatasetFromJASPfile(jaspFile)
+  csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
+
+  # Check dimensions match
+  expect_equal(nrow(df), nrow(csv), info = "Row count should match")
+  expect_equal(ncol(df), ncol(csv), info = "Column count should match")
+  expect_equal(names(df), names(csv), info = "Column names should match")
+
+  # Check all columns match
+  for (col in names(csv)) {
+    if (is.numeric(csv[[col]])) {
+      expect_equal(df[[col]], csv[[col]], tolerance = 1e-6,
+                   info = paste("Column", col, "should match"))
+    } else {
+      expect_equal(df[[col]], csv[[col]],
+                   info = paste("Column", col, "should match"))
+    }
+  }
+})
