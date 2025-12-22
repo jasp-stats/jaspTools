@@ -31,14 +31,14 @@
 #' @examples
 #' \dontrun{
 #' # Extract dataset from a JASP file
-#' df <- extractDatasetFromJASPfile("path/to/analysis.jasp")
+#' df <- extractDatasetFromJASPFile("path/to/analysis.jasp")
 #'
 #' # View the structure
 #' str(df)
 #' }
 #'
 #' @export
-extractDatasetFromJASPfile <- function(jaspFile, dataSetIndex = 1L) {
+extractDatasetFromJASPFile <- function(jaspFile, dataSetIndex = 1L) {
 
   if (!file.exists(jaspFile)) {
     stop("File not found: ", jaspFile)

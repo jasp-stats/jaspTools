@@ -10,7 +10,8 @@ runAnalysis(
   options,
   view = TRUE,
   quiet = FALSE,
-  makeTests = FALSE
+  makeTests = FALSE,
+  encodedDataset = FALSE
 )
 }
 \arguments{

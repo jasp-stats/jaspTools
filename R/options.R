@@ -58,18 +58,25 @@ analysisOptions <- function(source) {
     stop("Expecting a character input of length 1 as source")
 
   source <- trimws(source)
-  if (grepl("[{}\":]", source)) { # json string
+
+  # Normalize path separators for cross-platform compatibility
+  normalizedSource <- normalizePath(source, winslash = "/", mustWork = FALSE)
+
+  # First check if it's a .jasp file path (before JSON check, since Windows paths contain ':')
+  if (grepl("\\.jasp$", normalizedSource, ignore.case = TRUE) && file.exists(normalizedSource)) {
+    options <- analysisOptionsFromJASPFile(normalizedSource)
+  } else if (grepl("[{}\":]", source)) { # json string
     if (!grepl("^\\{.*\\}$", source))
       stop("Your json is invalid, please copy the entire message
            including the outer braces { } that was send to R in the Qt terminal.
            Remember to use single quotes around the message.")
 
     options <- analysisOptionsFromJSONString(source)
-  } else if (file.exists(source)) { # .jasp file
+  } else if (file.exists(source)) { # other file types
     if (!endsWith(source, ".jasp"))
       stop("The file you provided exists, but it is not a .jasp file")
 
-    options <- analysisOptionsFromJASPfile(source)
+    options <- analysisOptionsFromJASPFile(source)
   } else { # analysis name
     options <- analysisOptionsFromQMLFile(source)
   }
@@ -145,7 +152,7 @@ analysisOptionsFromJSONString <- function(x) {
   return(options)
 }
 
-analysisOptionsFromJASPfile <- function(file) {
+analysisOptionsFromJASPFile <- function(file) {
 
   contents <- archive::archive(file)
   fileIndex <- which(contents[["path"]] == "analyses.json")

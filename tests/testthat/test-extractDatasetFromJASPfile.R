@@ -1,6 +1,6 @@
-context("extractDatasetFromJASPfile")
+context("extractDatasetFromJASPFile")
 
-test_that("extractDatasetFromJASPfile extracts dataset correctly from JASP file", {
+test_that("extractDatasetFromJASPFile extracts dataset correctly from JASP file", {
 
   # Path to test JASP file and expected CSV
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.jasp")
@@ -10,7 +10,7 @@ test_that("extractDatasetFromJASPfile extracts dataset correctly from JASP file"
   skip_if_not(file.exists(csvFile), "Expected CSV file not found")
 
   # Extract dataset from JASP file
-  df <- extractDatasetFromJASPfile(jaspFile)
+  df <- extractDatasetFromJASPFile(jaspFile)
 
   # Read expected CSV
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
@@ -23,14 +23,14 @@ test_that("extractDatasetFromJASPfile extracts dataset correctly from JASP file"
 
 })
 
-test_that("extractDatasetFromJASPfile handles numeric columns correctly", {
+test_that("extractDatasetFromJASPFile handles numeric columns correctly", {
 
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.jasp")
   csvFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.csv")
 
   skip_if_not(file.exists(jaspFile), "Test JASP file not found")
 
-  df <- extractDatasetFromJASPfile(jaspFile)
+  df <- extractDatasetFromJASPFile(jaspFile)
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
   # Check numeric columns match (with tolerance)
@@ -45,14 +45,14 @@ test_that("extractDatasetFromJASPfile handles numeric columns correctly", {
   }
 })
 
-test_that("extractDatasetFromJASPfile handles categorical columns correctly", {
+test_that("extractDatasetFromJASPFile handles categorical columns correctly", {
 
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.jasp")
   csvFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.csv")
 
   skip_if_not(file.exists(jaspFile), "Test JASP file not found")
 
-  df <- extractDatasetFromJASPfile(jaspFile)
+  df <- extractDatasetFromJASPFile(jaspFile)
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
   # Check categorical columns match
@@ -63,14 +63,14 @@ test_that("extractDatasetFromJASPfile handles categorical columns correctly", {
   }
 })
 
-test_that("extractDatasetFromJASPfile handles binary columns correctly", {
+test_that("extractDatasetFromJASPFile handles binary columns correctly", {
 
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.jasp")
   csvFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.csv")
 
   skip_if_not(file.exists(jaspFile), "Test JASP file not found")
 
-  df <- extractDatasetFromJASPfile(jaspFile)
+  df <- extractDatasetFromJASPFile(jaspFile)
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
   # Binary columns like contBinom should have correct 0/1 values
@@ -85,14 +85,14 @@ test_that("extractDatasetFromJASPfile handles binary columns correctly", {
                info = "debBinMiss20 values should match CSV")
 })
 
-test_that("extractDatasetFromJASPfile handles infinity correctly", {
+test_that("extractDatasetFromJASPFile handles infinity correctly", {
 
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.jasp")
   csvFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.csv")
 
   skip_if_not(file.exists(jaspFile), "Test JASP file not found")
 
-  df <- extractDatasetFromJASPfile(jaspFile)
+  df <- extractDatasetFromJASPFile(jaspFile)
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
   # debInf should be character with infinity symbol
@@ -101,14 +101,14 @@ test_that("extractDatasetFromJASPfile handles infinity correctly", {
   expect_equal(df[["debInf"]], csv[["debInf"]], info = "debInf should match CSV")
 })
 
-test_that("extractDatasetFromJASPfile handles NaN/NA correctly", {
+test_that("extractDatasetFromJASPFile handles NaN/NA correctly", {
 
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.jasp")
   csvFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.csv")
 
   skip_if_not(file.exists(jaspFile), "Test JASP file not found")
 
-  df <- extractDatasetFromJASPfile(jaspFile)
+  df <- extractDatasetFromJASPFile(jaspFile)
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
   # debNaN should be all NA
@@ -123,40 +123,40 @@ test_that("extractDatasetFromJASPfile handles NaN/NA correctly", {
                info = "debMiss30 NA positions should match CSV")
 })
 
-test_that("extractDatasetFromJASPfile handles Unicode correctly", {
+test_that("extractDatasetFromJASPFile handles Unicode correctly", {
 
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.jasp")
   csvFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.csv")
 
   skip_if_not(file.exists(jaspFile), "Test JASP file not found")
 
-  df <- extractDatasetFromJASPfile(jaspFile)
+  df <- extractDatasetFromJASPFile(jaspFile)
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
   # Unicode column should match CSV exactly
   expect_equal(df[["unicode"]], csv[["unicode"]], info = "Unicode column should match CSV")
 })
 
-test_that("extractDatasetFromJASPfile validates input", {
+test_that("extractDatasetFromJASPFile validates input", {
 
   # Non-existent file
-  expect_error(extractDatasetFromJASPfile("nonexistent.jasp"), "File not found")
+  expect_error(extractDatasetFromJASPFile("nonexistent.jasp"), "File not found")
 
   # Wrong extension
   csvFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.csv")
   if (file.exists(csvFile)) {
-    expect_error(extractDatasetFromJASPfile(csvFile), "must have a .jasp extension")
+    expect_error(extractDatasetFromJASPFile(csvFile), "must have a .jasp extension")
   }
 })
 
-test_that("extractDatasetFromJASPfile handles ordinal columns correctly", {
+test_that("extractDatasetFromJASPFile handles ordinal columns correctly", {
 
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.jasp")
   csvFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.csv")
 
   skip_if_not(file.exists(jaspFile), "Test JASP file not found")
 
-  df <- extractDatasetFromJASPfile(jaspFile)
+  df <- extractDatasetFromJASPFile(jaspFile)
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
   # facFive is ordinal with values 1-5
@@ -166,7 +166,7 @@ test_that("extractDatasetFromJASPfile handles ordinal columns correctly", {
                info = "facFive values should match CSV")
 })
 
-test_that("extractDatasetFromJASPfile works for BCG Vaccine dataset", {
+test_that("extractDatasetFromJASPFile works for BCG Vaccine dataset", {
 
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles",
                         "Effectiveness of the BCG Vaccine Against Tuberculosis.jasp")
@@ -176,7 +176,7 @@ test_that("extractDatasetFromJASPfile works for BCG Vaccine dataset", {
   skip_if_not(file.exists(jaspFile), "BCG Vaccine JASP file not found")
   skip_if_not(file.exists(csvFile), "BCG Vaccine CSV file not found")
 
-  df <- extractDatasetFromJASPfile(jaspFile)
+  df <- extractDatasetFromJASPFile(jaspFile)
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
   # Check dimensions match
