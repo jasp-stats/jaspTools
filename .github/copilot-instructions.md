@@ -57,6 +57,70 @@ runAnalysis("BinomialTest", "debug.csv", options)
 
 **Dataset Handling**: Pass data.frame, matrix, string path, or JASP dataset name (e.g., "debug.csv"). Bundled datasets are in `inst/extdata/`.
 
+### Extracting Data from JASP Files
+
+```r
+# Extract dataset from a saved .jasp file
+dataset <- extractDatasetFromJASPFile("path/to/analysis.jasp")
+
+# Extract options from a .jasp file
+options <- analysisOptions("path/to/analysis.jasp")  # Returns list if multiple analyses
+
+# For single-analysis files, options are returned directly
+# For multi-analysis files, access by index: options[[1]], options[[2]], etc.
+```
+
+### Encoding Options and Datasets
+
+For reproducible testing, use `encodeOptionsAndDataset()` to standardize variable names and types:
+
+```r
+# Encode options and dataset for reproducible testing
+options <- analysisOptions("path/to/file.jasp")
+dataset <- extractDatasetFromJASPFile("path/to/file.jasp")
+
+encoded <- encodeOptionsAndDataset(options, dataset)
+# encoded$options: Options with variables renamed to jaspColumn1, jaspColumn2, etc.
+# encoded$dataset: Dataset with matching column names and proper type coercion
+# encoded$encodingMap: Mapping from original names to encoded names
+
+# Run with encoded data (skip type detection)
+runAnalysis("AnalysisName", encoded$dataset, encoded$options, encodedDataset = TRUE)
+```
+
+The encoding process:
+1. Scans options for variables with `.types` metadata (e.g., `variables` and `variables.types`)
+2. Creates unique variable-type pairs and maps them to `jaspColumn1`, `jaspColumn2`, etc.
+3. Applies type coercion: `"nominal"` → factor, `"ordinal"` → ordered, `"scale"` → numeric
+
+### Generating Tests from JASP Example Files
+
+Use `makeTestsFromExamples()` to automatically generate test files from JASP example files:
+ 
+```r
+# Generate tests from JASP files in the module's examples/ folder
+# Uses working directory as module by default
+makeTestsFromExamples()
+
+# Specify module directory explicitly
+makeTestsFromExamples(module.dir = "path/to/jaspModule")
+
+# Import JASP files from external path, copy to examples/, and generate tests
+makeTestsFromExamples(path = "path/to/jasp/files", module.dir = "path/to/module")
+
+# Overwrite existing test files
+makeTestsFromExamples(overwrite = TRUE)
+
+# Sanitize filenames (replace spaces/special chars with hyphens)
+makeTestsFromExamples(sanitize = TRUE)
+```
+
+Generated test files:
+- Named `test-example-{filename}.R` in `tests/testthat/`
+- Load options and data from JASP files at runtime
+- Include table expectations via `expect_equal_tables()`
+- Include plot expectations via `expect_equal_plots()` with unique names: `analysis-1_figure-1_plot-title`
+
 ### Testing Workflow
 
 ```r
@@ -120,13 +184,14 @@ Check versions with `.checkUpdatesJaspCorePkgs()` on package load.
 
 ## File Organization
 
-- `R/run.R`: Analysis execution, RCPP mask setup, JSON conversion
+- `R/run.R`: Analysis execution, RCPP mask setup, JSON conversion. Supports `encodedDataset` parameter for pre-encoded data.
 - `R/test.R`: Testing infrastructure, `testAnalysis()`, `testAll()`
-- `R/options.R`: Option parsing from QML/JASP/JSON
+- `R/options.R`: Option parsing from QML/JASP/JSON. Cross-platform path handling for `.jasp` files.
+- `R/dataset.R`: Dataset loading, type conversion, `extractDatasetFromJASPFile()`, `encodeOptionsAndDataset()`
 - `R/rbridge.R`: RCPP bridge replacements (`.readDatasetToEndNative`, `.requestTempFileNameNative`, etc.)
 - `R/pkg-setup.R`: Initial setup, dependency fetching
 - `R/utils.R`: Module path resolution, validation, helper functions
-- `R/test-generator.R`: Auto-generate test expectations from results
+- `R/test-generator.R`: Auto-generate test expectations from results, `makeTestsFromExamples()`
 - `R/testthat-helper-*.R`: Custom `expect_equal_tables()` and `expect_equal_plots()`
 
 ## Debugging Tips
