@@ -4,13 +4,16 @@
 \alias{makeTestsFromExamples}
 \title{Create test files from JASP example files}
 \usage{
-makeTestsFromExamples(path, sanitize = FALSE, overwrite = FALSE)
+makeTestsFromExamples(path, module.dir, sanitize = FALSE, overwrite = FALSE)
 }
 \arguments{
 \item{path}{Optional string path to a directory containing JASP example files.
-If provided, the JASP files at this path will be copied to the appropriate module's
+If provided, the JASP files at this path will be copied to the module's
 \code{examples/} folder before generating tests. If missing, the function processes
-JASP files already present in each module's \code{examples/} folder.}
+JASP files already present in the module's \code{examples/} folder.}
+
+\item{module.dir}{String path to the module directory. If missing, uses the current
+working directory.}
 
 \item{sanitize}{Logical. If TRUE, sanitizes test filenames by replacing non-word characters
 with hyphens. If FALSE (default), preserves original spacing and characters in filenames.}
@@ -27,21 +30,20 @@ Invisibly returns a character vector of created/processed test file paths.
 \details{
 This function processes JASP example files and generates corresponding test files in
 the module's \code{tests/testthat} directory. Each JASP file becomes a single test file
-named "examples - {basename}.R", where {basename} is the original JASP filename without
+named "test-example-{basename}.R", where {basename} is the original JASP filename without
 the .jasp extension.
 
 The JASP example files must be located in the module's \code{examples/} folder for the
 generated tests to work at runtime. When \code{path} is provided, files are automatically
-copied to the correct module's \code{examples/} folder based on the analyses they contain.
+copied to the module's \code{examples/} folder.
 
 If a JASP file contains multiple analyses, they are included as separate \code{test_that()}
 blocks within the same test file.
 
 \strong{Prerequisites:}
 \itemize{
-\item \code{setupJaspTools()} must be run before using this function to configure module paths
+\item \code{setupJaspTools()} must be run before using this function
 \item Packages 'DBI' and 'RSQLite' are required for extracting data from JASP files
-\item The module(s) containing the analyses must be available in \code{getPkgOption("module.dirs")}
 }
 }
 \examples{
@@ -49,13 +51,16 @@ blocks within the same test file.
 # Setup jaspTools first
 library(jaspTools)
 setupJaspTools()
-setPkgOption("module.dirs", "path/to/your/module")
 
 # Create tests from JASP files already in the module's examples/ folder
+# (uses working directory as module)
 makeTestsFromExamples()
 
+# Specify the module directory explicitly
+makeTestsFromExamples(module.dir = "path/to/your/module")
+
 # Import JASP files from another directory, copy to examples/, and generate tests
-makeTestsFromExamples("path/to/jasp/files")
+makeTestsFromExamples(path = "path/to/jasp/files", module.dir = "path/to/module")
 
 # Overwrite existing test files
 makeTestsFromExamples(overwrite = TRUE)

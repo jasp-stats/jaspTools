@@ -6,6 +6,7 @@
 \usage{
 makeTestsFromSingleJASPFile(
   jaspFile,
+  module.dir,
   sanitize = FALSE,
   overwrite = FALSE,
   copyToExamples = FALSE
@@ -13,6 +14,8 @@ makeTestsFromSingleJASPFile(
 }
 \arguments{
 \item{jaspFile}{Path to the .jasp file.}
+
+\item{module.dir}{Path to the module directory.}
 
 \item{sanitize}{Whether to sanitize the filename.}
 
