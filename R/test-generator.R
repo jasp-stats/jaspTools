@@ -1,3 +1,454 @@
+#' Create test files from JASP example files
+#'
+#' \code{makeTestsFromExamples} transforms JASP example files into unit test files.
+#'
+#' @param path Optional string path to a directory containing JASP example files.
+#'   If provided, the JASP files at this path will be copied to the module's
+#'   \code{examples/} folder before generating tests. If missing, the function processes
+#'   JASP files already present in the module's \code{examples/} folder.
+#' @param module.dir String path to the module directory. If missing, uses the current
+#'   working directory.
+#' @param sanitize Logical. If TRUE, sanitizes test filenames by replacing non-word characters
+#'   with hyphens. If FALSE (default), preserves original spacing and characters in filenames.
+#' @param overwrite Logical. If TRUE, overwrites existing test files. If FALSE (default),
+#'   skips files that already exist.
+#'
+#' @details
+#' This function processes JASP example files and generates corresponding test files in
+#' the module's \code{tests/testthat} directory. Each JASP file becomes a single test file
+#' named "test-example-{basename}.R", where {basename} is the original JASP filename without
+#' the .jasp extension.
+#'
+#' The JASP example files must be located in the module's \code{examples/} folder for the
+#' generated tests to work at runtime. When \code{path} is provided, files are automatically
+#' copied to the module's \code{examples/} folder.
+#'
+#' If a JASP file contains multiple analyses, they are included as separate \code{test_that()}
+#' blocks within the same test file.
+#'
+#' **Prerequisites:**
+#' - \code{setupJaspTools()} must be run before using this function
+#' - Packages 'DBI' and 'RSQLite' are required for extracting data from JASP files
+#'
+#' @return Invisibly returns a character vector of created/processed test file paths.
+#'
+#' @examples
+#' \dontrun{
+#' # Setup jaspTools first
+#' library(jaspTools)
+#' setupJaspTools()
+#'
+#' # Create tests from JASP files already in the module's examples/ folder
+#' # (uses working directory as module)
+#' makeTestsFromExamples()
+#'
+#' # Specify the module directory explicitly
+#' makeTestsFromExamples(module.dir = "path/to/your/module")
+#'
+#' # Import JASP files from another directory, copy to examples/, and generate tests
+#' makeTestsFromExamples(path = "path/to/jasp/files", module.dir = "path/to/module")
+#'
+#' # Overwrite existing test files
+#' makeTestsFromExamples(overwrite = TRUE)
+#' }
+#'
+#' @export makeTestsFromExamples
+makeTestsFromExamples <- function(path, module.dir, sanitize = FALSE, overwrite = FALSE) {
+
+  # Determine module directory
+
+  if (missing(module.dir)) {
+    module.dir <- getwd()
+    message("Using working directory as module: ", module.dir)
+  }
+
+  if (!dir.exists(module.dir))
+    stop("Module directory does not exist: ", module.dir)
+
+  # Collect JASP files to process
+  jaspFiles <- character(0)
+  copyToExamples <- FALSE
+
+  if (!missing(path)) {
+    # Path provided: collect files from this path and mark them for copying
+    if (!dir.exists(path))
+      stop("Directory does not exist: ", path)
+
+    jaspFiles <- list.files(path, pattern = "\\.jasp$", full.names = TRUE)
+    if (length(jaspFiles) == 0)
+      stop("No .jasp files found in directory: ", path)
+
+    copyToExamples <- TRUE
+    message("Will copy JASP files to module examples/ folder before generating tests.\n")
+
+  } else {
+    # No path provided: collect files from module's examples/ folder
+    examplesDir <- file.path(module.dir, "examples")
+    if (dir.exists(examplesDir)) {
+      jaspFiles <- list.files(examplesDir, pattern = "\\.jasp$", full.names = TRUE)
+    }
+
+    if (length(jaspFiles) == 0)
+      stop("No .jasp files found in module's examples/ folder: ", examplesDir)
+  }
+
+  createdFiles <- character(0)
+  skippedFiles <- character(0)
+  copiedFiles <- character(0)
+
+  for (jaspFile in jaspFiles) {
+    message("Processing: ", basename(jaspFile))
+
+    tryCatch({
+      result <- makeTestsFromSingleJASPFile(jaspFile, module.dir = module.dir,
+                                             sanitize = sanitize, overwrite = overwrite,
+                                             copyToExamples = copyToExamples)
+      if (!is.null(result)) {
+        if (!is.null(attr(result, "copiedTo"))) {
+          copiedFiles <- c(copiedFiles, attr(result, "copiedTo"))
+        }
+        if (isTRUE(attr(result, "skipped"))) {
+          skippedFiles <- c(skippedFiles, result)
+          message("  Skipped (already exists): ", result)
+        } else {
+          createdFiles <- c(createdFiles, result)
+          message("  Created: ", result)
+        }
+      }
+    }, error = function(e) {
+      warning("Failed to process ", basename(jaspFile), ": ", e$message, call. = FALSE)
+    })
+  }
+
+  if (length(createdFiles) == 0 && length(skippedFiles) == 0) {
+    warning("No test files were created.")
+  } else {
+    if (length(copiedFiles) > 0)
+      message("\nCopied ", length(copiedFiles), " JASP file(s) to module examples/ folder(s).")
+    if (length(createdFiles) > 0)
+      message("Created ", length(createdFiles), " test file(s).")
+    if (length(skippedFiles) > 0)
+      message("Skipped ", length(skippedFiles), " existing test file(s). Use overwrite = TRUE to regenerate.")
+  }
+
+  invisible(createdFiles)
+}
+
+
+#' Create a test file from a single JASP file
+#'
+#' Internal function that processes a single JASP file and generates a test file.
+#'
+#' @param jaspFile Path to the .jasp file.
+#' @param module.dir Path to the module directory.
+#' @param sanitize Whether to sanitize the filename.
+#' @param overwrite Whether to overwrite existing test files.
+#' @param copyToExamples Whether to copy the JASP file to the module's examples folder.
+#'
+#' @return The path to the created test file (with attr "skipped" if skipped,
+#'   and attr "copiedTo" if copied), or NULL if failed.
+#' @keywords internal
+makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sanitize = FALSE,
+                                         overwrite = FALSE, copyToExamples = FALSE) {
+
+  # Extract options from the JASP file
+  allOptions <- analysisOptions(jaspFile)
+
+  # Ensure it's a list of options (even if single analysis)
+  if (!is.null(attr(allOptions, "analysisName"))) {
+    # Single analysis - wrap in list
+    allOptions <- list(allOptions)
+  }
+
+  if (length(allOptions) == 0)
+    stop("No analyses found in JASP file")
+
+  # Extract dataset from the JASP file
+  dataset <- extractDatasetFromJASPFile(jaspFile)
+
+  # Get the base name for the test file
+  baseName <- tools::file_path_sans_ext(basename(jaspFile))
+  if (sanitize) {
+    sanitizedName <- gsub("\\W+", "-", baseName)
+    sanitizedName <- gsub("^-+|-+$", "", sanitizedName)  # trim leading/trailing hyphens
+  } else {
+    sanitizedName <- baseName
+  }
+
+  # Track if we copied the file
+  copiedTo <- NULL
+
+  # Copy JASP file to module's examples folder if requested
+  if (copyToExamples) {
+    examplesDir <- file.path(module.dir, "examples")
+    if (!dir.exists(examplesDir)) {
+      dir.create(examplesDir, recursive = TRUE)
+      message("  Created directory: ", examplesDir)
+    }
+    destFile <- file.path(examplesDir, basename(jaspFile))
+    file.copy(jaspFile, destFile, overwrite = TRUE)
+    copiedTo <- destFile
+    message("  Copied to: ", destFile)
+  }
+
+  # Create tests/testthat directory if needed
+  testDir <- file.path(module.dir, "tests", "testthat")
+
+  if (!dir.exists(testDir)) {
+    dir.create(testDir, recursive = TRUE)
+    message("  Created directory: ", testDir)
+  }
+
+  # Determine test file path using "test-example-Name.R" format
+  testFileName <- paste0("test-example-", sanitizedName, ".R")
+  testFilePath <- file.path(testDir, testFileName)
+
+  # Check if file already exists
+  if (file.exists(testFilePath) && !overwrite) {
+    result <- testFilePath
+    attr(result, "skipped") <- TRUE
+    attr(result, "copiedTo") <- copiedTo
+    return(result)
+  }
+
+  # Run each analysis and generate test expectations
+  testBlocks <- list()
+
+  for (i in seq_along(allOptions)) {
+    opts <- allOptions[[i]]
+    analysisName <- attr(opts, "analysisName")
+
+    if (is.null(analysisName)) {
+      warning("Analysis ", i, " has no name, skipping")
+      next
+    }
+
+    message("  Running analysis ", i, "/", length(allOptions), ": ", analysisName)
+
+    # Encode options and dataset
+    encoded <- encodeOptionsAndDataset(opts, dataset)
+
+    # Run the analysis to get results
+    tryCatch({
+      set.seed(1)
+      results <- runAnalysis(analysisName, encoded$dataset, encoded$options,
+                             view = FALSE, quiet = TRUE, encodedDataset = TRUE)
+
+      # Generate test block with expectations from results
+      testBlock <- generateExampleTestBlock(
+        analysisName = analysisName,
+        analysisIndex = i,
+        totalAnalyses = length(allOptions),
+        jaspFileName = basename(jaspFile),
+        results = results
+      )
+
+      testBlocks <- c(testBlocks, list(testBlock))
+
+    }, error = function(e) {
+      warning("  Failed to run analysis ", analysisName, ": ", e$message, call. = FALSE)
+      # Generate a basic test block that just checks for no error
+      testBlock <- generateExampleTestBlockBasic(
+        analysisName = analysisName,
+        analysisIndex = i,
+        totalAnalyses = length(allOptions),
+        jaspFileName = basename(jaspFile)
+      )
+      testBlocks <<- c(testBlocks, list(testBlock))
+    })
+  }
+
+  # Generate the test file content
+  testContent <- generateExampleTestFileContent(baseName, sanitizedName, testBlocks)
+
+  # Write the test file
+  writeLines(testContent, testFilePath)
+
+  # Add copiedTo attribute if applicable
+  attr(testFilePath, "copiedTo") <- copiedTo
+
+  return(testFilePath)
+}
+
+
+#' Generate test file content for example-based tests
+#'
+#' @param baseName Original JASP file name without extension.
+#' @param sanitizedName Sanitized name for use in code.
+#' @param testBlocks List of test block strings.
+#'
+#' @return Character string with complete test file content.
+#' @keywords internal
+generateExampleTestFileContent <- function(baseName, sanitizedName, testBlocks) {
+
+  lines <- character(0)
+
+  # Header
+  lines <- c(lines, paste0('context("Example: ', baseName, '")'))
+  lines <- c(lines, "")
+
+  # Helper comment
+  lines <- c(lines, "# This test file was auto-generated from a JASP example file.")
+  lines <- c(lines, "# The JASP file is stored in the module's examples/ folder.")
+  lines <- c(lines, "")
+
+  # Add each test block
+  for (block in testBlocks) {
+    lines <- c(lines, block, "")
+  }
+
+  return(paste(lines, collapse = "\n"))
+}
+
+
+#' Generate a test block with expectations from analysis results
+#'
+#' @param analysisName Name of the analysis function.
+#' @param analysisIndex Index of this analysis in the JASP file.
+#' @param totalAnalyses Total number of analyses in the file.
+#' @param jaspFileName Name of the JASP file.
+#' @param results The analysis results.
+#'
+#' @return Character string with the test_that block.
+#' @keywords internal
+generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses, jaspFileName, results) {
+
+  # Extract tests from results
+  tests <- tryCatch({
+    getTests(results$results)
+  }, error = function(e) {
+    list()
+  })
+
+  # Build the test block
+  lines <- character(0)
+
+  # Test description
+  if (totalAnalyses > 1) {
+    testDesc <- paste0(analysisName, " (analysis ", analysisIndex, ") results match")
+  } else {
+    testDesc <- paste0(analysisName, " results match")
+  }
+
+  lines <- c(lines, paste0('test_that("', testDesc, '", {'))
+  lines <- c(lines, "")
+
+  # Extract from JASP file in module's examples folder
+  lines <- c(lines, "  # Load from JASP example file")
+  lines <- c(lines, paste0('  jaspFile <- testthat::test_path("..", "..", "examples", "', jaspFileName, '")'))
+
+  # Generate appropriate options extraction based on number of analyses
+  if (totalAnalyses == 1) {
+    # Single analysis: analysisOptions returns options directly (not in a list)
+    lines <- c(lines, "  opts <- jaspTools::analysisOptions(jaspFile)")
+  } else {
+    # Multiple analyses: analysisOptions returns a list
+    lines <- c(lines, paste0("  opts <- jaspTools::analysisOptions(jaspFile)[[", analysisIndex, "]]"))
+  }
+
+  lines <- c(lines, "  dataset <- jaspTools::extractDatasetFromJASPFile(jaspFile)")
+  lines <- c(lines, "")
+
+  # Encode and run
+  lines <- c(lines, "  # Encode and run analysis")
+  lines <- c(lines, "  encoded <- jaspTools:::encodeOptionsAndDataset(opts, dataset)")
+  lines <- c(lines, "  set.seed(1)")
+  lines <- c(lines, paste0('  results <- jaspTools::runAnalysis("', analysisName, '", encoded$dataset, encoded$options, encodedDataset = TRUE)'))
+  lines <- c(lines, "")
+
+  # Add expectations
+  if (length(tests) > 0) {
+    # Add table and plot expectations
+    figureNumber <- 0
+    for (test in tests) {
+      if (test$type == "table") {
+        lines <- c(lines, paste0('  table <- results[["results"]]', test$index))
+        # Format table data nicely - add proper indentation
+        tableData <- gsub("\n\t", "\n    ", test$data)  # Convert tabs to spaces
+        lines <- c(lines, paste0("  jaspTools::expect_equal_tables(table,"))
+        lines <- c(lines, paste0("    ", tableData, ")"))
+        lines <- c(lines, "")
+      } else if (test$type == "plot") {
+        figureNumber <- figureNumber + 1
+        lines <- c(lines, paste0('  plotName <- results[["results"]]', test$index))
+        lines <- c(lines, '  testPlot <- results[["state"]][["figures"]][[plotName]][["obj"]]')
+        # Prefix with analysis-N_figure-M_name to avoid duplicates
+        plotTitle <- gsub("-+", "-", gsub("\\W", "-", tolower(test$title)))
+        plotTitle <- paste0("analysis-", analysisIndex, "_figure-", figureNumber, "_", plotTitle)
+        lines <- c(lines, paste0('  jaspTools::expect_equal_plots(testPlot, "', plotTitle, '")'))
+        lines <- c(lines, "")
+      }
+    }
+  } else {
+    # Fallback: just check no error
+    lines <- c(lines, "  # Basic check - analysis runs without error")
+    lines <- c(lines, '  expect_false(isTRUE(results[["status"]] == "error"),')
+    lines <- c(lines, '               info = results[["results"]][["error"]])')
+  }
+
+  lines <- c(lines, "})")
+
+  return(paste(lines, collapse = "\n"))
+}
+
+
+#' Generate a basic test block (fallback when analysis fails)
+#'
+#' @param analysisName Name of the analysis function.
+#' @param analysisIndex Index of this analysis in the JASP file.
+#' @param totalAnalyses Total number of analyses in the file.
+#' @param jaspFileName Name of the JASP file.
+#'
+#' @return Character string with the test_that block.
+#' @keywords internal
+generateExampleTestBlockBasic <- function(analysisName, analysisIndex, totalAnalyses, jaspFileName) {
+
+  lines <- character(0)
+
+  # Test description
+  if (totalAnalyses > 1) {
+    testDesc <- paste0(analysisName, " (analysis ", analysisIndex, ") runs without error")
+  } else {
+    testDesc <- paste0(analysisName, " runs without error")
+  }
+
+  lines <- c(lines, paste0('test_that("', testDesc, '", {'))
+  lines <- c(lines, "")
+
+  # Extract from JASP file in module's examples folder
+  lines <- c(lines, "  # Load from JASP example file")
+  lines <- c(lines, paste0('  jaspFile <- testthat::test_path("..", "..", "examples", "', jaspFileName, '")'))
+
+  # Generate appropriate options extraction based on number of analyses
+  if (totalAnalyses == 1) {
+    # Single analysis: analysisOptions returns options directly (not in a list)
+    lines <- c(lines, "  opts <- jaspTools::analysisOptions(jaspFile)")
+  } else {
+    # Multiple analyses: analysisOptions returns a list
+    lines <- c(lines, paste0("  opts <- jaspTools::analysisOptions(jaspFile)[[", analysisIndex, "]]"))
+  }
+
+  lines <- c(lines, "  dataset <- jaspTools::extractDatasetFromJASPFile(jaspFile)")
+  lines <- c(lines, "")
+
+  # Encode and run
+  lines <- c(lines, "  # Encode and run analysis")
+  lines <- c(lines, "  encoded <- jaspTools:::encodeOptionsAndDataset(opts, dataset)")
+  lines <- c(lines, "  set.seed(1)")
+  lines <- c(lines, paste0('  results <- jaspTools::runAnalysis("', analysisName, '", encoded$dataset, encoded$options, encodedDataset = TRUE)'))
+  lines <- c(lines, "")
+
+  # Basic expectation
+  lines <- c(lines, "  # Check analysis runs without error")
+  lines <- c(lines, '  expect_false(isTRUE(results[["status"]] == "error"),')
+  lines <- c(lines, '               info = results[["results"]][["error"]])')
+
+  lines <- c(lines, "})")
+
+  return(paste(lines, collapse = "\n"))
+}
+
+
 makeUnitTestsFromResults <- function(results, name, dataset, options) {
   if (!is.list(results) || is.null(names(results)) || results$status == "error")
     stop("Can't make unit test from results: not a results list")

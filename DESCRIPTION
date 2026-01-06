@@ -1,10 +1,11 @@
 Package: jaspTools
 Type: Package
 Title: Helps Preview and Debug JASP Analyses
-Version: 0.20.0
+Version: 0.20.1
 Authors@R: c(
     person("Tim", "de Jong", role = "aut"),
-    person("Don", "van den Bergh", role = c("ctb", "cre"), email = "d.vandenbergh@uva.nl"))
+    person("Don", "van den Bergh", role = c("ctb", "cre"), email = "d.vandenbergh@uva.nl"),
+    person("František", "Bartoš", role = "ctb"))
 Maintainer: Don van den Bergh <d.vandenbergh@uva.nl>
 Description: This package assists JASP developers when writing R code. It removes the necessity of building JASP every time a change is made. Rather, analyses can be called directly in R and be debugged interactively.
 License: GNU General Public License
@@ -23,5 +24,8 @@ Imports:
   stringr,
   testthat (>= 3.0.3),
   vdiffr (>= 1.0.7)
-RoxygenNote: 7.3.2
+Suggests:
+  DBI,
+  RSQLite
+RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)

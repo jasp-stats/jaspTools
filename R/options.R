@@ -58,18 +58,25 @@ analysisOptions <- function(source) {
     stop("Expecting a character input of length 1 as source")
 
   source <- trimws(source)
-  if (grepl("[{}\":]", source)) { # json string
+
+  # Normalize path separators for cross-platform compatibility
+  normalizedSource <- normalizePath(source, winslash = "/", mustWork = FALSE)
+
+  # First check if it's a .jasp file path (before JSON check, since Windows paths contain ':')
+  if (grepl("\\.jasp$", normalizedSource, ignore.case = TRUE) && file.exists(normalizedSource)) {
+    options <- analysisOptionsFromJASPFile(normalizedSource)
+  } else if (grepl("[{}\":]", source)) { # json string
     if (!grepl("^\\{.*\\}$", source))
       stop("Your json is invalid, please copy the entire message
            including the outer braces { } that was send to R in the Qt terminal.
            Remember to use single quotes around the message.")
 
     options <- analysisOptionsFromJSONString(source)
-  } else if (file.exists(source)) { # .jasp file
+  } else if (file.exists(source)) { # other file types
     if (!endsWith(source, ".jasp"))
       stop("The file you provided exists, but it is not a .jasp file")
 
-    options <- analysisOptionsFromJASPfile(source)
+    options <- analysisOptionsFromJASPFile(source)
   } else { # analysis name
     options <- analysisOptionsFromQMLFile(source)
   }
@@ -145,7 +152,7 @@ analysisOptionsFromJSONString <- function(x) {
   return(options)
 }
 
-analysisOptionsFromJASPfile <- function(file) {
+analysisOptionsFromJASPFile <- function(file) {
 
   contents <- archive::archive(file)
   fileIndex <- which(contents[["path"]] == "analyses.json")
@@ -179,25 +186,154 @@ fixOptionsForVariableTypes <- function(options) {
   # however, when reading the options from a file this hasn't been done yet
 
   meta <- options[[".meta"]]
-  if (is.null(meta))
-    return(options)
 
-  nms2fix <- names(vapply(meta, \(x) isTRUE(x[["hasTypes"]]), logical(1L)))
-
-  subOptionNeedsFixing <- function(subOption) {
-    # all the checks I could think of
-    is.list(subOption) &&
-      all(c("types", "value") %in% names(subOption)) &&
-      length(subOption[["types"]]) == length(subOption[["value"]]) &&
-      is.character(subOption[["types"]]) &&
-      is.character(subOption[["value"]])
+  # Check if an option has the types/value structure that needs flattening
+  needsFlattening <- function(opt) {
+    is.list(opt) &&
+      !is.null(names(opt)) &&
+      all(c("types", "value") %in% names(opt))
   }
 
-  for (nm in nms2fix) {
-    if (subOptionNeedsFixing(options[[nm]])) {
-      options[[paste0(nm, ".types")]] <- options[[nm]][["types"]]
-      options[[nm]]                   <- options[[nm]][["value"]]
+  # Build parallel types structure for complex nested values
+  buildTypesStructure <- function(types, value, optionKey = NULL) {
+    # If types is empty or NULL, return as-is
+    if (length(types) == 0) {
+      return(list())
     }
+
+    # Simple case: types is a single character and value is atomic
+    if (is.character(types) && length(types) == 1 && !is.list(value)) {
+      return(types)
+    }
+
+    # Simple case: types is character vector matching atomic value vector length
+    if (is.character(types) && is.character(value) && length(types) == length(value)) {
+      return(types)
+    }
+
+    # Complex case: value is a list of lists (e.g., for model terms)
+    # Build a parallel structure: each element in value gets corresponding type
+    if (is.list(value) && length(types) == length(value)) {
+      if (!is.null(optionKey)) {
+        # Each value element is a list with optionKey, mirror structure with types
+        result <- vector("list", length(value))
+        for (i in seq_along(value)) {
+          if (is.list(value[[i]]) && optionKey %in% names(value[[i]])) {
+            result[[i]] <- stats::setNames(list(types[[i]]), optionKey)
+          } else {
+            result[[i]] <- types[[i]]
+          }
+        }
+        return(result)
+      } else {
+        return(types)
+      }
+    }
+
+    # Default: return types as-is
+    return(types)
+  }
+
+  # Recursively flatten a nested list structure, extracting types into a parallel structure
+  # Returns a list with $value (the flattened value) and $types (the parallel types structure)
+  flattenRecursive <- function(obj) {
+    if (!is.list(obj)) {
+      return(list(value = obj, types = NULL))
+    }
+
+    # If this object needs flattening (has types/value structure)
+    if (needsFlattening(obj)) {
+      types <- obj[["types"]]
+      value <- obj[["value"]]
+      optionKey <- obj[["optionKey"]]
+
+      # Build types structure
+      typesStructure <- buildTypesStructure(types, value, optionKey)
+
+      # Recursively process the value in case it contains nested structures
+      if (is.list(value)) {
+        result <- flattenRecursive(value)
+        # If recursive call found more types, we need to merge
+        if (!is.null(result$types)) {
+          return(list(value = result$value, types = result$types))
+        }
+      }
+
+      return(list(value = value, types = typesStructure))
+    }
+
+    # Not a types/value structure, but may contain nested structures
+    # Process each element recursively
+    hasTypes <- FALSE
+    newObj <- obj
+    typesObj <- NULL
+
+    nms <- names(obj)
+    if (!is.null(nms)) {
+      # Named list - process each named element
+      typesObj <- list()
+      for (nm in nms) {
+        if (nm == ".meta") next
+
+        result <- flattenRecursive(obj[[nm]])
+        newObj[[nm]] <- result$value
+
+        if (!is.null(result$types)) {
+          hasTypes <- TRUE
+          typesObj[[nm]] <- result$types
+        }
+      }
+    } else if (length(obj) > 0) {
+      # Unnamed list - process each element by index
+      typesObj <- vector("list", length(obj))
+      for (i in seq_along(obj)) {
+        result <- flattenRecursive(obj[[i]])
+        newObj[[i]] <- result$value
+
+        if (!is.null(result$types)) {
+          hasTypes <- TRUE
+          typesObj[[i]] <- result$types
+        }
+      }
+      # Clean up NULL entries if no types found
+      if (!hasTypes) {
+        typesObj <- NULL
+      }
+    }
+
+    if (hasTypes) {
+      return(list(value = newObj, types = typesObj))
+    } else {
+      return(list(value = newObj, types = NULL))
+    }
+  }
+
+  # Find all options that need processing
+  nms <- names(options)
+  nms <- nms[nms != ".meta"]
+
+  for (nm in nms) {
+    opt <- options[[nm]]
+
+    # Use recursive flattening for all list options
+    if (is.list(opt)) {
+      result <- flattenRecursive(opt)
+      options[[nm]] <- result$value
+
+      if (!is.null(result$types)) {
+        options[[paste0(nm, ".types")]] <- result$types
+
+        # Update .meta if it exists to include the .types entry
+        if (!is.null(meta) && nm %in% names(meta)) {
+          meta[[paste0(nm, ".types")]] <- meta[[nm]]
+        }
+      }
+    }
+  }
+
+  # Update the meta in options
+  if (!is.null(meta)) {
+    options[[".meta"]] <- meta
   }
 
   return(options)
