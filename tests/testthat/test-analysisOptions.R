@@ -5,7 +5,7 @@ test_that("analysisOptions flattens simple types/value structures", {
   # Raw structure: $split$types = list(), $split$value = ""
   # Expected: $split = "", $split.types = list()
 
-  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness of the BCG Vaccine Against Tuberculosis.jasp")
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.jasp")
   opts <- jaspTools::analysisOptions(jaspFile)[[2]]
 
 
@@ -36,7 +36,7 @@ test_that("analysisOptions flattens complex types/value structures with optionKe
   #   $effectSizeModelTerms = list(list(components="ablat"), list(components="alloc"))
   #   $effectSizeModelTerms.types = list(list(components="scale"), list(components="nominal"))
 
-  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness of the BCG Vaccine Against Tuberculosis.jasp")
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.jasp")
   opts <- jaspTools::analysisOptions(jaspFile)[[3]]
 
   # The effectSizeModelTerms should be flattened to just the value (a list)
@@ -66,7 +66,7 @@ test_that("analysisOptions flattens deeply nested types/value structures", {
   #   $variables[[1]]$coefficientAlpha = ""
   #   $variables.types[[1]]$coefficientAlpha = list()
 
-  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness of the BCG Vaccine Against Tuberculosis.jasp")
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.jasp")
   opts <- jaspTools::analysisOptions(jaspFile)[[1]]
 
   # The coefficientAlpha inside variables[[1]] should be flattened to just the value

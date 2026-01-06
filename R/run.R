@@ -21,6 +21,7 @@
 #' @param quiet Boolean indicating whether to suppress messages from the
 #' analysis.
 #' @param makeTests Boolean indicating whether to create testthat unit tests and print them to the terminal.
+#' @param encodedDataset Boolean indicating whether to assume that the dataset is already encoded.
 #' @examples
 #'
 #' options <- analysisOptions("BinomialTest")

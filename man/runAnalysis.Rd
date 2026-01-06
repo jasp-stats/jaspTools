@@ -31,6 +31,8 @@ By default the directory in Resources is checked first, unless called within a t
 analysis.}
 
 \item{makeTests}{Boolean indicating whether to create testthat unit tests and print them to the terminal.}
+
+\item{encodedDataset}{Boolean indicating whether to assume that the dataset is already encoded.}
 }
 \description{
 \code{runAnalysis} makes it possible to execute a JASP analysis in R. Usually this

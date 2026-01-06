@@ -169,9 +169,9 @@ test_that("extractDatasetFromJASPFile handles ordinal columns correctly", {
 test_that("extractDatasetFromJASPFile works for BCG Vaccine dataset", {
 
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles",
-                        "Effectiveness of the BCG Vaccine Against Tuberculosis.jasp")
+                        "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.jasp")
   csvFile <- file.path(testthat::test_path(), "..", "JASPFiles",
-                       "Effectiveness of the BCG Vaccine Against Tuberculosis.csv")
+                       "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.csv")
 
   skip_if_not(file.exists(jaspFile), "BCG Vaccine JASP file not found")
   skip_if_not(file.exists(csvFile), "BCG Vaccine CSV file not found")

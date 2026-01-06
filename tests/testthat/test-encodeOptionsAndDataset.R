@@ -2,8 +2,8 @@ context("encodeOptionsAndDataset")
 
 test_that("encodeOptionsAndDataset encodes BCG Vaccine analysis options and dataset", {
 
-  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness of the BCG Vaccine Against Tuberculosis.jasp")
-  csvFile  <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness of the BCG Vaccine Against Tuberculosis.csv")
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.jasp")
+  csvFile  <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.csv")
 
   skip_if_not(file.exists(jaspFile), "Test JASP file not found")
   skip_if_not(file.exists(csvFile), "Expected CSV file not found")
@@ -137,8 +137,8 @@ test_that("encodeOptionsAndDataset encodes debug-descriptives analysis options a
 
 test_that("encodeOptionsAndDataset produces unique variable-type combinations", {
 
-  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness of the BCG Vaccine Against Tuberculosis.jasp")
-  csvFile  <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness of the BCG Vaccine Against Tuberculosis.csv")
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.jasp")
+  csvFile  <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.csv")
 
   skip_if_not(file.exists(jaspFile), "Test JASP file not found")
   skip_if_not(file.exists(csvFile), "Expected CSV file not found")
@@ -185,8 +185,8 @@ test_that("encodeOptionsAndDataset handles empty types gracefully", {
 
 test_that("encodeOptionsAndDataset correctly encodes nested option structures", {
 
-  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness of the BCG Vaccine Against Tuberculosis.jasp")
-  csvFile  <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness of the BCG Vaccine Against Tuberculosis.csv")
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.jasp")
+  csvFile  <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.csv")
 
   skip_if_not(file.exists(jaspFile), "Test JASP file not found")
   skip_if_not(file.exists(csvFile), "Expected CSV file not found")
