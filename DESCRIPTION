@@ -1,7 +1,7 @@
 Package: jaspTools
 Type: Package
 Title: Helps Preview and Debug JASP Analyses
-Version: 0.20.1
+Version: 0.21.0
 Authors@R: c(
     person("Tim", "de Jong", role = "aut"),
     person("Don", "van den Bergh", role = c("ctb", "cre"), email = "d.vandenbergh@uva.nl"),
@@ -14,10 +14,12 @@ LazyData: true
 Imports:
   archive (>= 1.1.6),
   data.table,
+  gh,
   httr,
   jsonlite,
   lifecycle,
   pkgload,
+  rappdirs,
   remotes,
   rjson,
   stringi,

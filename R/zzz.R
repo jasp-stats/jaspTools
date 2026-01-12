@@ -4,12 +4,15 @@
                     state             = list(),
                     modulesMd5Sums    = list()
                ),
-  pkgOptions = list(module.dirs       = "",
-                    reinstall.modules = TRUE,
-                    view.in.rstudio   = TRUE,
-                    html.dir          = "",
-                    data.dirs         = "",
-                    language          = "en"
+  pkgOptions = list(module.dirs          = "",
+                    reinstall.modules    = TRUE,
+                    module.load.strategy = "install",
+                    view.in.rstudio      = TRUE,
+                    html.dir             = "",
+                    data.dirs            = "",
+                    language             = "en",
+                    update.clone         = "ask",
+                    restore.lockfile     = "ask"
                )
   ), parent = emptyenv())
 
