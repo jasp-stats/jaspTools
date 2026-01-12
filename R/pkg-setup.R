@@ -185,11 +185,13 @@ checkRenvLockfile <- function(modulePath = NULL) {
       status <- renv::status(project = modPath)
       if (!is.null(status) && isFALSE(status$synchronized)) {
         moduleName <- getModuleName(modPath)
-        response <- menu(c("Yes", "No"),
-          title = sprintf("The library for %s does not match the renv lockfile. Would you like to restore it? (You can also run `renv::restore()` manually later.)", moduleName))
+        response <- menu(c("Yes, show me how", "No"),
+          title = sprintf("The library for %s does not match the renv lockfile. Would you like instructions to restore it?", moduleName))
 
         if (response == 1) {
-          message("To restore the lockfile, please run: renv::restore(project = '", modPath, "')")
+          # Per issue requirements, we do not automatically restore - user must run renv::restore() manually
+          message("\nTo restore the lockfile, run the following command in R:\n")
+          message("  renv::restore(project = '", modPath, "')\n")
         }
       }
     }, error = function(e) {

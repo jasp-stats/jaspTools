@@ -235,7 +235,7 @@ getOS <- function() {
 getJaspGithubRepos <- function() {
   # Use gh package for GitHub API interactions
   tryCatch({
-    repos <- gh::gh("/orgs/{owner}/repos", owner = "jasp-stats", type = "public", per_page = 100, .limit = 1000)
+    repos <- gh::gh("/orgs/{owner}/repos", owner = "jasp-stats", type = "public", per_page = 100, .limit = Inf)
     repos
   }, error = function(e) {
     # Fallback to httr if gh fails
