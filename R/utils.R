@@ -276,6 +276,7 @@ addParamsToUrl <- function(url, params) {
 
 getGithubPAT <- function() {
   # First try to get PAT from gh package (which handles various auth methods)
+  # Note: For public repositories, authentication is optional but helps with rate limits
   pat <- tryCatch({
     gh::gh_token()
   }, error = function(e) {
@@ -289,6 +290,7 @@ getGithubPAT <- function() {
       pat <- patEnv
   }
 
+  # Return empty string if no PAT found - unauthenticated access works for public repos
   return(pat)
 }
 

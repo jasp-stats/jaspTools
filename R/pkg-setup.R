@@ -183,7 +183,7 @@ checkRenvLockfile <- function(modulePath = NULL) {
     # Check if library matches lockfile
     tryCatch({
       status <- renv::status(project = modPath)
-      if (!is.null(status) && isTRUE(status$synchronized == FALSE)) {
+      if (!is.null(status) && isFALSE(status$synchronized)) {
         moduleName <- getModuleName(modPath)
         response <- menu(c("Yes", "No"),
           title = sprintf("The library for %s does not match the renv lockfile. Would you like to restore it? (You can also run `renv::restore()` manually later.)", moduleName))
@@ -319,14 +319,8 @@ updateDesktopClone <- function(branch = "development", quiet = FALSE) {
 }
 
 getJaspDesktopArchiveUrl <- function(branch) {
-  # Use gh package for GitHub API interactions
-  tryCatch({
-    # First try using gh package
-    sprintf("https://github.com/jasp-stats/jasp-desktop/archive/%s.zip", branch)
-  }, error = function(e) {
-    # Fallback to direct URL
-    sprintf("https://github.com/jasp-stats/jasp-desktop/archive/%s.zip", branch)
-  })
+  # Direct URL for GitHub archive download - no API call needed
+  sprintf("https://github.com/jasp-stats/jasp-desktop/archive/%s.zip", branch)
 }
 
 shouldUpdateClone <- function(clonePath) {

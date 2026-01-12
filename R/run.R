@@ -195,6 +195,8 @@ loadChangedModules <- function() {
           pkgload::unload(moduleName, quiet = TRUE)
 
         message("Loading ", moduleName, " with pkgload::load_all()")
+        # export_all = FALSE to only export functions declared in NAMESPACE,
+        # matching the behavior of an installed package
         pkgload::load_all(modulePath, quiet = TRUE, export_all = FALSE)
         md5Sums[[modulePath]] <- newMd5Sums
 
