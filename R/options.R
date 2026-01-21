@@ -468,11 +468,12 @@ parsePreloadDataFromDescriptionQml <- function(analysisName) {
 
   # is preloadData globally set to TRUE?
   preloadDataGlobalSpecified <-  "preloadData" %in% names(description[["Description"]])
-  preloadGlobalValue         <-  isTRUE(description[["Description"]][["preloadData"]])
+  preloadGlobalValue         <-  preloadDataGlobalSpecified && isTRUE(description[["Description"]][["preloadData"]])
   # is preloadData even set for this specific analysis?
   specifiedPreloadDataLocal  <- "preloadData" %in% names(description[[analysisName]])
   # is preloadData set to TRUE for this specific analysis?
-  preloadDataAnalysis <- specifiedPreloadData && isTRUE(description[[analysisName]][["preloadData"]])
+  
+  preloadDataAnalysis <- specifiedPreloadDataLocal && isTRUE(description[[analysisName]][["preloadData"]])
   # if preloadData set to TRUE for the analysis, or if set globally to TRUE and not set for the analysis
   preloadData <- preloadDataAnalysis || (preloadDataGlobalSpecified && preloadDataGlobal)
 
