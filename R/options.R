@@ -467,16 +467,18 @@ parsePreloadDataFromDescriptionQml <- function(analysisName) {
   description <- parseDescriptionQmlFromAnalysisName(analysisName)
 
   # is preloadData globally set to TRUE?
-  preloadDataGlobal <- isTRUE(description[["Description"]][["preloadData"]])
+  preloadDataGlobalSpecified <-  "preloadData" %in% names(description[["Description"]])
+  preloadGlobalValue         <-  preloadDataGlobalSpecified && isTRUE(description[["Description"]][["preloadData"]])
   # is preloadData even set for this specific analysis?
-  specifiedPreloadData <- "preloadData" %in% names(description[[analysisName]])
+  specifiedPreloadDataLocal  <- "preloadData" %in% names(description[[analysisName]])
   # is preloadData set to TRUE for this specific analysis?
-  preloadDataAnalysis <- specifiedPreloadData && isTRUE(description[[analysisName]][["preloadData"]])
+  
+  preloadDataAnalysis <- specifiedPreloadDataLocal && isTRUE(description[[analysisName]][["preloadData"]])
   # if preloadData set to TRUE for the analysis, or if set globally to TRUE and not set for the analysis
-  preloadData <- preloadDataAnalysis || (preloadDataGlobal && !specifiedPreloadData)
+  preloadData <- (specifiedPreloadDataLocal && preloadDataAnalysis) || (!specifiedPreloadDataLocal && preloadDataGlobalSpecified && preloadDataGlobal)
 
   # new default, if not specified set to TRUE
-  if (!specifiedPreloadData)
+  if (!specifiedPreloadDataLocal && !preloadDataGlobalSpecified)
     preloadData <- TRUE
 
   # show a warning but if preloadData is not set for the analysis
