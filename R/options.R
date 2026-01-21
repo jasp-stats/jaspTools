@@ -477,7 +477,7 @@ parsePreloadDataFromDescriptionQml <- function(analysisName) {
   preloadData <- preloadDataAnalysis || (preloadDataGlobalSpecified && preloadDataGlobal)
 
   # new default, if not specified set to TRUE
-  if (!specifiedPreloadData && !preloadDataGlobalSpecified)
+  if (!specifiedPreloadDataLocal && !preloadDataGlobalSpecified)
     preloadData <- TRUE
 
   # show a warning but if preloadData is not set for the analysis
