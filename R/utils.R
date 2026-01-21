@@ -233,7 +233,14 @@ getOS <- function() {
 }
 
 getJaspGithubRepos <- function() {
-  githubGET(asGithubOrganizationUrl("jasp-stats", "repos", params = list(type = "public", per_page = 1e3)))
+  # Use gh package for GitHub API interactions
+  tryCatch({
+    repos <- gh::gh("/orgs/{owner}/repos", owner = "jasp-stats", type = "public", per_page = 100, .limit = Inf)
+    repos
+  }, error = function(e) {
+    # Fallback to httr if gh fails
+    githubGET(asGithubOrganizationUrl("jasp-stats", "repos", params = list(type = "public", per_page = 1e3)))
+  })
 }
 
 asGithubOrganizationUrl <- function(owner, urlSegments = NULL, params = list()) {
@@ -268,30 +275,53 @@ addParamsToUrl <- function(url, params) {
 }
 
 getGithubPAT <- function() {
-  pat <- paste0("5334959d", "c3906be2", "0391aa5d", "cecf1492", "55d38d6f") # default public key
-  patEnv <- Sys.getenv("GITHUB_PAT")
-  if (nzchar(patEnv))
-    pat <- patEnv
+  # First try to get PAT from gh package (which handles various auth methods)
+  # Note: For public repositories, authentication is optional but helps with rate limits
+  pat <- tryCatch({
+    gh::gh_token()
+  }, error = function(e) {
+    ""
+  })
 
+  # Fallback to environment variable
+  if (!nzchar(pat)) {
+    patEnv <- Sys.getenv("GITHUB_PAT")
+    if (nzchar(patEnv))
+      pat <- patEnv
+  }
+
+  # Return empty string if no PAT found - unauthenticated access works for public repos
   return(pat)
 }
 
 githubGET <- function(url) {
-  response <- httr::GET(url = url, config = getGithubHeader())
+  # Try using gh package first
+  tryCatch({
+    # Parse URL to extract endpoint
+    endpoint <- sub("https://api.github.com", "", url)
+    gh::gh(endpoint)
+  }, error = function(e) {
+    # Fallback to httr
+    response <- httr::GET(url = url, config = getGithubHeader())
 
-  if (response$status_code == 404)
-    stop("Could not locate GitHub repository resource at \"", url, "\" did you specify the owner and repo correctly?")
+    if (response$status_code == 404)
+      stop("Could not locate GitHub repository resource at \"", url, "\" did you specify the owner and repo correctly?")
 
-  if (response$status_code != 200)
-    stop("Could not retrieve information from \"", url, "\" at this time")
+    if (response$status_code != 200)
+      stop("Could not retrieve information from \"", url, "\" at this time")
 
-  suppressMessages(httr::parsed_content(response))
+    suppressMessages(httr::parsed_content(response))
+  })
 }
 
 getGithubHeader <- function() {
   pat <- getGithubPAT()
-  httr::add_headers(Authorization = sprintf("token %s", pat),
-                    Accept = "application/vnd.github.golden-comet-preview+json")
+  if (nzchar(pat)) {
+    httr::add_headers(Authorization = sprintf("token %s", pat),
+                      Accept = "application/vnd.github.golden-comet-preview+json")
+  } else {
+    httr::add_headers(Accept = "application/vnd.github.golden-comet-preview+json")
+  }
 }
 
 # same as the internals in testthat

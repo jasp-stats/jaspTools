@@ -20,10 +20,34 @@
 #' @details \code{reinstall.modules}:
 #' When you run an analysis or test it, jaspTools calls the *installed* version of the module.
 #' This option specifies if the installed version should be reinstalled automatically when you make any changes to your module.
+#' This option is deprecated in favor of \code{module.load.strategy}.
+#'
+#' @details \code{module.load.strategy}:
+#' Controls how modules are loaded when running analyses. Options are:
+#' \itemize{
+#'   \item "pkgload": Uses \code{pkgload::load_all()} to load the module in development mode (fastest for iterative development).
+#'   \item "install": Reinstalls the module when source files change (default, ensures installed package is up-to-date).
+#'   \item "nothing": Does not reload or reinstall modules (uses currently installed version).
+#' }
 #'
 #' @details \code{module.dirs}:
 #' The directories that hold the source for the JASP module(s) you are working on.
 #' These module directories are used to find the R functions etc. in \code{runAnalysis} and the various testing functions.
+#'
+#' @details \code{update.clone}:
+#' Controls whether the jasp-desktop clone should be updated. Options are:
+#' \itemize{
+#'   \item "always": Always update the clone when \code{setupJaspTools()} is called.
+#'   \item "ask": Ask the user whether to update (default in interactive mode).
+#'   \item "never": Never update the clone automatically.
+#' }
+#'
+#' @details \code{restore.lockfile}:
+#' Controls whether to restore the renv lockfile if the library does not match. Options are:
+#' \itemize{
+#'   \item "ask": Ask the user whether to restore (default).
+#'   \item "never": Never ask about restoring (user should run \code{renv::restore()} manually if needed).
+#' }
 #'
 #' @return A print of the configurable options.
 #' @export viewPkgOptions
@@ -65,6 +89,25 @@ setPkgOption <- function(name, value) {
 
   if (!name %in% names(.pkgenv[["pkgOptions"]]))
     stop(name, " is not a valid option to set")
+
+  # validate options with fixed choices
+  if (name == "module.load.strategy") {
+    valid <- c("pkgload", "install", "nothing")
+    if (!value %in% valid)
+      stop("Invalid value for module.load.strategy. Must be one of: ", paste(valid, collapse = ", "))
+  }
+
+  if (name == "update.clone") {
+    valid <- c("always", "ask", "never")
+    if (!value %in% valid)
+      stop("Invalid value for update.clone. Must be one of: ", paste(valid, collapse = ", "))
+  }
+
+  if (name == "restore.lockfile") {
+    valid <- c("ask", "never")
+    if (!value %in% valid)
+      stop("Invalid value for restore.lockfile. Must be one of: ", paste(valid, collapse = ", "))
+  }
 
   # set relative paths to absolute paths to ensure they will work if the wd changes
   if (any(endsWith(name, c(".dir", ".dirs")))) {

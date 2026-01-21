@@ -137,8 +137,8 @@ fetchRunArgs <- function(name, options) {
 }
 
 initAnalysisRuntime <- function(dataset, options, makeTests, encodedDataset = FALSE, ...) {
-  # first we reinstall any changed modules in the personal library
-  reinstallChangedModules()
+  # first we handle module loading based on strategy
+  loadChangedModules()
 
   # dataset to be found in the analysis when it needs to be read
   .setInternal("dataset", dataset)
@@ -156,9 +156,19 @@ initAnalysisRuntime <- function(dataset, options, makeTests, encodedDataset = FA
     set.seed(1)
 }
 
-reinstallChangedModules <- function() {
+loadChangedModules <- function() {
   modulePaths <- getModulePaths()
-  if (isFALSE(getPkgOption("reinstall.modules")) || length(modulePaths) == 0)
+  if (length(modulePaths) == 0)
+    return()
+
+  # Get the module loading strategy
+  strategy <- getPkgOption("module.load.strategy")
+
+  # Handle legacy reinstall.modules option
+  if (isFALSE(getPkgOption("reinstall.modules")))
+    strategy <- "nothing"
+
+  if (strategy == "nothing")
     return()
 
   md5Sums <- .getInternal("modulesMd5Sums")
@@ -178,25 +188,45 @@ reinstallChangedModules <- function() {
     newMd5Sums <- tools::md5sum(srcFiles)
     if (length(md5Sums) == 0 || !modulePath %in% names(md5Sums) || !all(newMd5Sums %in% md5Sums[[modulePath]])) {
       moduleName <- getModuleName(modulePath)
-      if (moduleName %in% loadedNamespaces())
-        pkgload::unload(moduleName, quiet = TRUE)
 
-      message("Installing ", moduleName, " from source")
-      suppressWarnings(install.packages(modulePath, type = "source", repos = NULL, quiet = TRUE, INSTALL_opts = "--no-multiarch"))
+      if (strategy == "pkgload") {
+        # Use pkgload::load_all for faster iterative development
+        if (moduleName %in% loadedNamespaces())
+          pkgload::unload(moduleName, quiet = TRUE)
 
-      if (moduleName %in% installed.packages()) {
+        message("Loading ", moduleName, " with pkgload::load_all()")
+        # export_all = FALSE ensures only functions explicitly exported in NAMESPACE
+        # are available via ::, similar to installed package behavior
+        pkgload::load_all(modulePath, quiet = TRUE, export_all = FALSE)
         md5Sums[[modulePath]] <- newMd5Sums
+
       } else {
-        # to prevent the installation output from cluttering the console on each analysis run, we do this quietly.
-        # however, it is kinda nice to show errors, so we call the function again here and allow it to print this time (tryCatch/sink doesn't catch the installation failure reason).
-        install.packages(modulePath, type = "source", repos = NULL, INSTALL_opts = "--no-multiarch")
-        if (!moduleName %in% installed.packages())
-          stop("The installation of ", moduleName, " failed; you will need to fix the issue that prevents `install.packages()` from installing the module before any analysis will work")
+        # Default "install" strategy - reinstall the module
+        if (moduleName %in% loadedNamespaces())
+          pkgload::unload(moduleName, quiet = TRUE)
+
+        message("Installing ", moduleName, " from source")
+        suppressWarnings(install.packages(modulePath, type = "source", repos = NULL, quiet = TRUE, INSTALL_opts = "--no-multiarch"))
+
+        if (moduleName %in% installed.packages()) {
+          md5Sums[[modulePath]] <- newMd5Sums
+        } else {
+          # to prevent the installation output from cluttering the console on each analysis run, we do this quietly.
+          # however, it is kinda nice to show errors, so we call the function again here and allow it to print this time (tryCatch/sink doesn't catch the installation failure reason).
+          install.packages(modulePath, type = "source", repos = NULL, INSTALL_opts = "--no-multiarch")
+          if (!moduleName %in% installed.packages())
+            stop("The installation of ", moduleName, " failed; you will need to fix the issue that prevents `install.packages()` from installing the module before any analysis will work")
+        }
       }
     }
   }
 
   .setInternal("modulesMd5Sums", md5Sums)
+}
+
+# Keep the old function name as an alias for backwards compatibility
+reinstallChangedModules <- function() {
+  loadChangedModules()
 }
 
 initializeCoreJaspPackages <- function() {

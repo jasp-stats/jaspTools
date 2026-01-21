@@ -5,13 +5,12 @@
 #' If no parameters are supplied the function will interactively ask for the location of these dependencies.
 #'
 #' @param pathJaspDesktop (optional) Character path to the root of jasp-desktop if present on the system.
-#' @param installJaspModules (optional) Boolean. Should jaspTools install all the JASP analysis modules as R packages (e.g., jaspAnova, jaspFrequencies)?
 #' @param installJaspCorePkgs (optional) Boolean. Should jaspTools install jaspBase, jaspResults and jaspGraphs?
 #' @param quiet (optional) Boolean. Should the installation of R packages produce output?
 #' @param force (optional) Boolean. Should a fresh installation of jaspResults, jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.
 #'
 #' @export setupJaspTools
-setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, installJaspCorePkgs = TRUE, quiet = FALSE, force = TRUE) {
+setupJaspTools <- function(pathJaspDesktop = NULL, installJaspCorePkgs = TRUE, quiet = FALSE, force = TRUE) {
 
   argsMissing <- FALSE
   if (interactive()) {
@@ -21,7 +20,7 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
       if (continue != 1) return(message("Setup aborted."))
     }
 
-    if (missing(installJaspModules) || missing(pathJaspDesktop))
+    if (missing(pathJaspDesktop))
       argsMissing <- TRUE
 
     if (argsMissing)
@@ -33,13 +32,6 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
 
       if (hasJaspdesktop == 1)
         pathJaspDesktop <- validateJaspResourceDir(readline(prompt = "Please provide path/to/jasp-desktop: \n"), isJaspDesktopDir, "jasp-desktop")
-    }
-
-    if (missing(installJaspModules)) {
-      wantsInstallJaspModules  <- menu(c("Yes", "No"), title = "- Would you like jaspTools to install all the JASP analysis modules located at github.com/jasp-stats? This is useful if the module(s) you are working on requires functions from other JASP analysis modules.")
-      if (wantsInstallJaspModules == 0) return(message("Setup aborted."))
-
-      installJaspModules <- wantsInstallJaspModules == 1
     }
 
     if (missing(installJaspCorePkgs)) {
@@ -55,13 +47,13 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
     }
   }
 
-  .setupJaspTools(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force)
+  .setupJaspTools(pathJaspDesktop, installJaspCorePkgs, quiet, force)
 
   if (argsMissing)
-    printSetupArgs(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force)
+    printSetupArgs(pathJaspDesktop, installJaspCorePkgs, quiet, force)
 }
 
-.setupJaspTools <- function(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force) {
+.setupJaspTools <- function(pathJaspDesktop, installJaspCorePkgs, quiet, force) {
   pathJaspDesktop <- validateJaspResourceDir(pathJaspDesktop, isJaspDesktopDir, "jasp-desktop")
 
   if (.isSetupComplete()) # in case the setup is performed multiple times
@@ -87,21 +79,18 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
 
     }
 
-    if (isTRUE(installJaspModules))
-      installJaspModules(force = force, quiet = quiet)
-
   }
 
   .finalizeSetup()
 }
 
-printSetupArgs <- function(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force) {
+printSetupArgs <- function(pathJaspDesktop, installJaspCorePkgs, quiet, force) {
   if (is.character(pathJaspDesktop))
     showPathJasp <- paste0("\"", pathJaspDesktop, "\"")
   else
     showPathJasp <- "NULL"
 
-  message("\nIn the future you can skip the interactive part of the setup by calling `setupJaspTools(pathJaspDesktop = ", showPathJasp, ", installJaspModules = ", installJaspModules, ", installJaspCorePkgs = ", installJaspCorePkgs, ", quiet = ", quiet, ", force = ", force, ")`")
+  message("\nIn the future you can skip the interactive part of the setup by calling `setupJaspTools(pathJaspDesktop = ", showPathJasp, ", installJaspCorePkgs = ", installJaspCorePkgs, ", quiet = ", quiet, ", force = ", force, ")`")
 }
 
 validateJaspResourceDir <- function(path, validationFn, title) {
@@ -142,7 +131,75 @@ getSetupCompleteFileName <- function() {
   .initInternalPaths()
   .initOutputDirs()
 
+  # Check if renv lockfile should be restored
+  checkRenvLockfile()
+
   message("jaspTools setup complete")
+}
+
+#' Check if renv lockfile needs to be restored
+#'
+#' Checks if the module has an renv lockfile and if the library doesn't match,
+#' optionally prompts the user to restore it (based on restore.lockfile setting).
+#'
+#' @param modulePath Optional path to a specific module to check. If NULL, checks all modules.
+checkRenvLockfile <- function(modulePath = NULL) {
+  # Only check in interactive mode
+  if (!interactive())
+    return(invisible(FALSE))
+
+  # Get the restore.lockfile setting
+  restoreSetting <- tryCatch(
+    .pkgenv[["pkgOptions"]][["restore.lockfile"]],
+    error = function(e) "ask"
+  )
+
+  if (is.null(restoreSetting) || restoreSetting == "never")
+    return(invisible(FALSE))
+
+  # Get module paths to check
+  if (is.null(modulePath)) {
+    modulePaths <- tryCatch(
+      getModulePaths(),
+      error = function(e) NULL
+    )
+  } else {
+    modulePaths <- modulePath
+  }
+
+  if (is.null(modulePaths) || length(modulePaths) == 0)
+    return(invisible(FALSE))
+
+  for (modPath in modulePaths) {
+    lockfilePath <- file.path(modPath, "renv.lock")
+
+    if (!file.exists(lockfilePath))
+      next
+
+    # Check if renv is available
+    if (!requireNamespace("renv", quietly = TRUE))
+      next
+
+    # Check if library matches lockfile
+    tryCatch({
+      status <- renv::status(project = modPath)
+      if (!is.null(status) && isFALSE(status$synchronized)) {
+        moduleName <- getModuleName(modPath)
+        response <- menu(c("Yes, show me how", "No"),
+          title = sprintf("The library for %s does not match the renv lockfile. Would you like instructions to restore it?", moduleName))
+
+        if (response == 1) {
+          # Per issue requirements, we do not automatically restore - user must run renv::restore() manually
+          message("\nTo restore the lockfile, run the following command in R:\n")
+          message("  renv::restore(project = '", modPath, "')\n")
+        }
+      }
+    }, error = function(e) {
+      # Silently ignore errors from renv::status
+    })
+  }
+
+  invisible(TRUE)
 }
 
 .setSetupComplete <- function() {
@@ -162,23 +219,35 @@ getSetupCompleteFileName <- function() {
 # javascript and datasets
 fetchJaspDesktopDependencies <- function(jaspdesktopLoc = NULL, branch = "development", quiet = FALSE, force = FALSE) {
   if (is.null(jaspdesktopLoc) || !isJaspDesktopDir(jaspdesktopLoc)) {
-    baseLoc <- tempdir()
+    # Use rappdirs for persistent storage instead of tempdir
+    baseLoc <- getJaspDesktopCloneDir()
     jaspdesktopLoc <- file.path(baseLoc, paste0("jasp-desktop-", branch))
-    if (!dir.exists(jaspdesktopLoc)) {
+
+    shouldUpdate <- shouldUpdateClone(jaspdesktopLoc)
+
+    if (!dir.exists(jaspdesktopLoc) || shouldUpdate) {
       zipFile <- file.path(baseLoc, "jasp-desktop.zip")
-      url <- sprintf("https://github.com/jasp-stats/jasp-desktop/archive/%s.zip", branch)
+      # Use gh package to get the archive URL
+      archiveUrl <- getJaspDesktopArchiveUrl(branch)
 
       # increase the timeout because this sometimes fails on GitHub actions
       oldTimeout <- getOption("timeout") # defaults to 60 seconds
       on.exit({options(timeout = oldTimeout)})
       options(timeout = 300) # 5 minutes
-      res <- try(download.file(url = url, destfile = zipFile, quiet = quiet), silent = quiet)
+      res <- try(download.file(url = archiveUrl, destfile = zipFile, quiet = quiet), silent = quiet)
       if (inherits(res, "try-error") || res != 0)
         return(invisible(FALSE))
 
       if (file.exists(zipFile)) {
+        # Remove old directory if updating
+        if (dir.exists(jaspdesktopLoc))
+          unlink(jaspdesktopLoc, recursive = TRUE)
+
         unzip(zipfile = zipFile, exdir = baseLoc)
         unlink(zipFile)
+
+        # Record the update time
+        recordCloneUpdateTime(jaspdesktopLoc)
       }
     }
   }
@@ -190,6 +259,113 @@ fetchJaspDesktopDependencies <- function(jaspdesktopLoc = NULL, branch = "develo
   fetchDatasets(jaspdesktopLoc)
 
   return(invisible(TRUE))
+}
+
+#' Get the directory where jasp-desktop clone is stored
+#'
+#' Uses rappdirs to get a platform-agnostic user data directory.
+#'
+#' @return Character path to the jasp-desktop clone directory
+getJaspDesktopCloneDir <- function() {
+  cacheDir <- rappdirs::user_cache_dir("jaspTools", "jasp-stats")
+  if (!dir.exists(cacheDir))
+    dir.create(cacheDir, recursive = TRUE)
+  return(cacheDir)
+}
+
+#' Update the jasp-desktop clone
+#'
+#' Updates the cached jasp-desktop clone from GitHub. This downloads the latest
+#' version of the jasp-desktop repository to get updated datasets and HTML resources.
+#'
+#' @param branch Character. The branch to download (default: "development").
+#' @param quiet Boolean. Should download output be suppressed?
+#'
+#' @export updateDesktopClone
+updateDesktopClone <- function(branch = "development", quiet = FALSE) {
+  if (!.isSetupComplete())
+    stop("jaspTools is not configured yet. Did you run `setupJaspTools()`?")
+
+  baseLoc <- getJaspDesktopCloneDir()
+  jaspdesktopLoc <- file.path(baseLoc, paste0("jasp-desktop-", branch))
+  zipFile <- file.path(baseLoc, "jasp-desktop.zip")
+
+  message("Updating jasp-desktop clone from GitHub...")
+
+  archiveUrl <- getJaspDesktopArchiveUrl(branch)
+
+  oldTimeout <- getOption("timeout")
+  on.exit({options(timeout = oldTimeout)})
+  options(timeout = 300)
+
+  res <- try(download.file(url = archiveUrl, destfile = zipFile, quiet = quiet), silent = quiet)
+  if (inherits(res, "try-error") || res != 0)
+    stop("Failed to download jasp-desktop archive from GitHub")
+
+  if (file.exists(zipFile)) {
+    if (dir.exists(jaspdesktopLoc))
+      unlink(jaspdesktopLoc, recursive = TRUE)
+
+    unzip(zipfile = zipFile, exdir = baseLoc)
+    unlink(zipFile)
+
+    recordCloneUpdateTime(jaspdesktopLoc)
+    message("jasp-desktop clone updated successfully")
+
+    # Re-fetch resources
+    fetchJavaScript(jaspdesktopLoc)
+    fetchDatasets(jaspdesktopLoc)
+  }
+
+  invisible(TRUE)
+}
+
+getJaspDesktopArchiveUrl <- function(branch) {
+  # Direct URL for GitHub archive download - no API call needed
+  sprintf("https://github.com/jasp-stats/jasp-desktop/archive/%s.zip", branch)
+}
+
+shouldUpdateClone <- function(clonePath) {
+  if (!dir.exists(clonePath))
+    return(TRUE)
+
+  # Check the update.clone setting
+  # Need to check if setup is complete first to avoid errors
+  updateSetting <- tryCatch(
+    .pkgenv[["pkgOptions"]][["update.clone"]],
+    error = function(e) "ask"
+  )
+
+  if (is.null(updateSetting))
+    updateSetting <- "ask"
+
+  if (updateSetting == "never")
+    return(FALSE)
+
+  if (updateSetting == "always")
+    return(TRUE)
+
+  # "ask" - check if update is needed and prompt user
+  if (interactive()) {
+    updateFile <- file.path(clonePath, ".jasptools_updated")
+    if (file.exists(updateFile)) {
+      lastUpdate <- as.POSIXct(readLines(updateFile, n = 1))
+      daysSinceUpdate <- as.numeric(difftime(Sys.time(), lastUpdate, units = "days"))
+
+      if (daysSinceUpdate > 7) {
+        response <- menu(c("Yes", "No"),
+          title = sprintf("The jasp-desktop clone was last updated %.0f days ago. Would you like to update it?", daysSinceUpdate))
+        return(response == 1)
+      }
+    }
+  }
+
+  return(FALSE)
+}
+
+recordCloneUpdateTime <- function(clonePath) {
+  updateFile <- file.path(clonePath, ".jasptools_updated")
+  writeLines(as.character(Sys.time()), updateFile)
 }
 
 getJavascriptLocation <- function(rootOnly = FALSE) {
