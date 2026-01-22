@@ -133,6 +133,8 @@ makeTestsFromExamples <- function(path, module.dir, sanitize = FALSE, overwrite 
             createdFiles <- c(createdFiles, result)
             message("  Created: ", result)
           }
+        } else {
+          message("  No tests created (all analyses were skipped)")
         }
       },
       error = function(e) {
