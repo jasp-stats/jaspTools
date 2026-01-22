@@ -23,8 +23,7 @@ Imports:
   stringi,
   stringr,
   testthat (>= 3.0.3),
-  vdiffr (>= 1.0.7)
-Suggests:
+  vdiffr (>= 1.0.7),
   DBI,
   RSQLite
 RoxygenNote: 7.3.3

@@ -63,14 +63,6 @@ extractDatasetFromJASPFile <- function(jaspFile, dataSetIndex = 1L) {
     stop("No internal.sqlite found in the JASP file. The file may be corrupted or from an incompatible version.")
   }
 
-  # Connect to the SQLite database
-  if (!requireNamespace("DBI", quietly = TRUE)) {
-    stop("Package 'DBI' is required. Install it with install.packages('DBI')")
-  }
-  if (!requireNamespace("RSQLite", quietly = TRUE)) {
-    stop("Package 'RSQLite' is required. Install it with install.packages('RSQLite')")
-  }
-
   con <- DBI::dbConnect(RSQLite::SQLite(), sqlitePath)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
