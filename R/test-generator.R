@@ -74,7 +74,7 @@ makeTestsFromExamples <- function(path, module.dir, sanitize = FALSE, overwrite 
 
   if (file.exists(qmlPath)) {
     qmlContent <- parseDescriptionQmlFromPath(qmlPath)
-    pkgAnalyses <- names(qmlContent)
+    pkgAnalyses <- setdiff(names(qmlContent), "Description")
   }
 
 
