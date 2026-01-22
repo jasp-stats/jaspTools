@@ -175,7 +175,8 @@ makeTestsFromExamples <- function(path, module.dir, sanitize = FALSE, overwrite 
 #'   If provided, analyses not in this list will be skipped.
 #'
 #' @return The path to the created test file (with attr "skipped" if skipped,
-#'   and attr "copiedTo" if copied), or NULL if failed.
+#'   and attr "copiedTo" if copied), or NULL if no tests were generated
+#'   (e.g., all analyses were skipped or processing failed).
 #' @keywords internal
 makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sanitize = FALSE,
                                         overwrite = FALSE, copyToExamples = FALSE,
