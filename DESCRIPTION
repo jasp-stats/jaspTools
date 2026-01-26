@@ -14,17 +14,17 @@ LazyData: true
 Imports:
   archive (>= 1.1.6),
   data.table,
+  DBI,
   httr,
   jsonlite,
   lifecycle,
   pkgload,
   remotes,
   rjson,
+  RSQLite,
   stringi,
   stringr,
   testthat (>= 3.0.3),
-  vdiffr (>= 1.0.7),
-  DBI,
-  RSQLite
+  vdiffr (>= 1.0.7)
 RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)

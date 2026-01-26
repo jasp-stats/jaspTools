@@ -75,6 +75,9 @@ makeTestsFromExamples <- function(path, module.dir, sanitize = FALSE, overwrite 
   if (file.exists(qmlPath)) {
     qmlContent <- parseDescriptionQmlFromPath(qmlPath)
     pkgAnalyses <- setdiff(names(qmlContent), "Description")
+  } else {
+    stop("Description.qml not found at path: ", qmlPath, 
+         ". Make sure the module contains inst/Description.qml (source) or Description.qml (installed).")
   }
 
 
