@@ -9,7 +9,8 @@ makeTestsFromSingleJASPFile(
   module.dir,
   sanitize = FALSE,
   overwrite = FALSE,
-  copyToExamples = FALSE
+  copyToExamples = FALSE,
+  pkgAnalyses = NULL
 )
 }
 \arguments{
@@ -22,10 +23,14 @@ makeTestsFromSingleJASPFile(
 \item{overwrite}{Whether to overwrite existing test files.}
 
 \item{copyToExamples}{Whether to copy the JASP file to the module's examples folder.}
+
+\item{pkgAnalyses}{Optional character vector of allowed analysis names for this module.
+If provided, analyses not in this list will be skipped.}
 }
 \value{
 The path to the created test file (with attr "skipped" if skipped,
-and attr "copiedTo" if copied), or NULL if failed.
+and attr "copiedTo" if copied), or NULL if no tests were generated
+(e.g., all analyses were skipped or processing failed).
 }
 \description{
 Internal function that processes a single JASP file and generates a test file.

@@ -54,7 +54,6 @@
 #'
 #' @export makeTestsFromExamples
 makeTestsFromExamples <- function(path, module.dir, sanitize = FALSE, overwrite = FALSE) {
-
   # Determine module directory
 
   if (missing(module.dir)) {
@@ -62,8 +61,25 @@ makeTestsFromExamples <- function(path, module.dir, sanitize = FALSE, overwrite 
     message("Using working directory as module: ", module.dir)
   }
 
-  if (!dir.exists(module.dir))
+  if (!dir.exists(module.dir)) {
     stop("Module directory does not exist: ", module.dir)
+  }
+
+  pkgAnalyses <- NULL
+  if (isBinaryPackage(module.dir)) {
+    qmlPath <- file.path(module.dir, "Description.qml")
+  } else {
+    qmlPath <- file.path(module.dir, "inst", "Description.qml")
+  }
+
+  if (file.exists(qmlPath)) {
+    qmlContent <- parseDescriptionQmlFromPath(qmlPath)
+    pkgAnalyses <- setdiff(names(qmlContent), "Description")
+  } else {
+    stop("Description.qml not found at path: ", qmlPath, 
+         ". Make sure the module contains inst/Description.qml (source) or Description.qml (installed).")
+  }
+
 
   # Collect JASP files to process
   jaspFiles <- character(0)
@@ -71,16 +87,17 @@ makeTestsFromExamples <- function(path, module.dir, sanitize = FALSE, overwrite 
 
   if (!missing(path)) {
     # Path provided: collect files from this path and mark them for copying
-    if (!dir.exists(path))
+    if (!dir.exists(path)) {
       stop("Directory does not exist: ", path)
+    }
 
     jaspFiles <- list.files(path, pattern = "\\.jasp$", full.names = TRUE)
-    if (length(jaspFiles) == 0)
+    if (length(jaspFiles) == 0) {
       stop("No .jasp files found in directory: ", path)
+    }
 
     copyToExamples <- TRUE
     message("Will copy JASP files to module examples/ folder before generating tests.\n")
-
   } else {
     # No path provided: collect files from module's examples/ folder
     examplesDir <- file.path(module.dir, "examples")
@@ -88,8 +105,9 @@ makeTestsFromExamples <- function(path, module.dir, sanitize = FALSE, overwrite 
       jaspFiles <- list.files(examplesDir, pattern = "\\.jasp$", full.names = TRUE)
     }
 
-    if (length(jaspFiles) == 0)
+    if (length(jaspFiles) == 0) {
       stop("No .jasp files found in module's examples/ folder: ", examplesDir)
+    }
   }
 
   createdFiles <- character(0)
@@ -99,36 +117,47 @@ makeTestsFromExamples <- function(path, module.dir, sanitize = FALSE, overwrite 
   for (jaspFile in jaspFiles) {
     message("Processing: ", basename(jaspFile))
 
-    tryCatch({
-      result <- makeTestsFromSingleJASPFile(jaspFile, module.dir = module.dir,
-                                             sanitize = sanitize, overwrite = overwrite,
-                                             copyToExamples = copyToExamples)
-      if (!is.null(result)) {
-        if (!is.null(attr(result, "copiedTo"))) {
-          copiedFiles <- c(copiedFiles, attr(result, "copiedTo"))
-        }
-        if (isTRUE(attr(result, "skipped"))) {
-          skippedFiles <- c(skippedFiles, result)
-          message("  Skipped (already exists): ", result)
+    tryCatch(
+      {
+        result <- makeTestsFromSingleJASPFile(jaspFile,
+          module.dir = module.dir,
+          sanitize = sanitize, overwrite = overwrite,
+          copyToExamples = copyToExamples,
+          pkgAnalyses = pkgAnalyses
+        )
+        if (!is.null(result)) {
+          if (!is.null(attr(result, "copiedTo"))) {
+            copiedFiles <- c(copiedFiles, attr(result, "copiedTo"))
+          }
+          if (isTRUE(attr(result, "skipped"))) {
+            skippedFiles <- c(skippedFiles, result)
+            message("  Skipped (already exists): ", result)
+          } else {
+            createdFiles <- c(createdFiles, result)
+            message("  Created: ", result)
+          }
         } else {
-          createdFiles <- c(createdFiles, result)
-          message("  Created: ", result)
+          message("  No tests created (all analyses were skipped)")
         }
+      },
+      error = function(e) {
+        warning("Failed to process ", basename(jaspFile), ": ", e$message, call. = FALSE)
       }
-    }, error = function(e) {
-      warning("Failed to process ", basename(jaspFile), ": ", e$message, call. = FALSE)
-    })
+    )
   }
 
   if (length(createdFiles) == 0 && length(skippedFiles) == 0) {
     warning("No test files were created.")
   } else {
-    if (length(copiedFiles) > 0)
+    if (length(copiedFiles) > 0) {
       message("\nCopied ", length(copiedFiles), " JASP file(s) to module examples/ folder(s).")
-    if (length(createdFiles) > 0)
+    }
+    if (length(createdFiles) > 0) {
       message("Created ", length(createdFiles), " test file(s).")
-    if (length(skippedFiles) > 0)
+    }
+    if (length(skippedFiles) > 0) {
       message("Skipped ", length(skippedFiles), " existing test file(s). Use overwrite = TRUE to regenerate.")
+    }
   }
 
   invisible(createdFiles)
@@ -145,12 +174,16 @@ makeTestsFromExamples <- function(path, module.dir, sanitize = FALSE, overwrite 
 #' @param overwrite Whether to overwrite existing test files.
 #' @param copyToExamples Whether to copy the JASP file to the module's examples folder.
 #'
+#' @param pkgAnalyses Optional character vector of allowed analysis names for this module.
+#'   If provided, analyses not in this list will be skipped.
+#'
 #' @return The path to the created test file (with attr "skipped" if skipped,
-#'   and attr "copiedTo" if copied), or NULL if failed.
+#'   and attr "copiedTo" if copied), or NULL if no tests were generated
+#'   (e.g., all analyses were skipped or processing failed).
 #' @keywords internal
 makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sanitize = FALSE,
-                                         overwrite = FALSE, copyToExamples = FALSE) {
-
+                                        overwrite = FALSE, copyToExamples = FALSE,
+                                        pkgAnalyses = NULL) {
   # Extract options from the JASP file
   allOptions <- analysisOptions(jaspFile)
 
@@ -160,8 +193,9 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sanitize = FALSE,
     allOptions <- list(allOptions)
   }
 
-  if (length(allOptions) == 0)
+  if (length(allOptions) == 0) {
     stop("No analyses found in JASP file")
+  }
 
   # Extract dataset from the JASP file
   dataset <- extractDatasetFromJASPFile(jaspFile)
@@ -170,7 +204,7 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sanitize = FALSE,
   baseName <- tools::file_path_sans_ext(basename(jaspFile))
   if (sanitize) {
     sanitizedName <- gsub("\\W+", "-", baseName)
-    sanitizedName <- gsub("^-+|-+$", "", sanitizedName)  # trim leading/trailing hyphens
+    sanitizedName <- gsub("^-+|-+$", "", sanitizedName) # trim leading/trailing hyphens
   } else {
     sanitizedName <- baseName
   }
@@ -223,39 +257,52 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sanitize = FALSE,
       next
     }
 
+    if (!is.null(pkgAnalyses) && !analysisName %in% pkgAnalyses) {
+      message("Analysis ", analysisName, " skipped because it is not exported from the current module.")
+      next
+    }
+
     message("  Running analysis ", i, "/", length(allOptions), ": ", analysisName)
 
     # Encode options and dataset
     encoded <- encodeOptionsAndDataset(opts, dataset)
 
     # Run the analysis to get results
-    tryCatch({
-      set.seed(1)
-      results <- runAnalysis(analysisName, encoded$dataset, encoded$options,
-                             view = FALSE, quiet = TRUE, encodedDataset = TRUE)
+    tryCatch(
+      {
+        set.seed(1)
+        results <- runAnalysis(analysisName, encoded$dataset, encoded$options,
+          view = FALSE, quiet = TRUE, encodedDataset = TRUE
+        )
 
-      # Generate test block with expectations from results
-      testBlock <- generateExampleTestBlock(
-        analysisName = analysisName,
-        analysisIndex = i,
-        totalAnalyses = length(allOptions),
-        jaspFileName = basename(jaspFile),
-        results = results
-      )
+        # Generate test block with expectations from results
+        testBlock <- generateExampleTestBlock(
+          analysisName = analysisName,
+          analysisIndex = i,
+          totalAnalyses = length(allOptions),
+          jaspFileName = basename(jaspFile),
+          results = results
+        )
 
-      testBlocks <- c(testBlocks, list(testBlock))
+        testBlocks <- c(testBlocks, list(testBlock))
+      },
+      error = function(e) {
+        warning("  Failed to run analysis ", analysisName, ": ", e$message, call. = FALSE)
+        # Generate a basic test block that just checks for no error
+        testBlock <- generateExampleTestBlockBasic(
+          analysisName = analysisName,
+          analysisIndex = i,
+          totalAnalyses = length(allOptions),
+          jaspFileName = basename(jaspFile)
+        )
+        testBlocks <<- c(testBlocks, list(testBlock))
+      }
+    )
+  }
 
-    }, error = function(e) {
-      warning("  Failed to run analysis ", analysisName, ": ", e$message, call. = FALSE)
-      # Generate a basic test block that just checks for no error
-      testBlock <- generateExampleTestBlockBasic(
-        analysisName = analysisName,
-        analysisIndex = i,
-        totalAnalyses = length(allOptions),
-        jaspFileName = basename(jaspFile)
-      )
-      testBlocks <<- c(testBlocks, list(testBlock))
-    })
+  # Check if any tests were generated (all analyses might have been skipped)
+  if (length(testBlocks) == 0) {
+    return(NULL)
   }
 
   # Generate the test file content
@@ -280,7 +327,6 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sanitize = FALSE,
 #' @return Character string with complete test file content.
 #' @keywords internal
 generateExampleTestFileContent <- function(baseName, sanitizedName, testBlocks) {
-
   lines <- character(0)
 
   # Header
@@ -312,13 +358,15 @@ generateExampleTestFileContent <- function(baseName, sanitizedName, testBlocks) 
 #' @return Character string with the test_that block.
 #' @keywords internal
 generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses, jaspFileName, results) {
-
   # Extract tests from results
-  tests <- tryCatch({
-    getTests(results$results)
-  }, error = function(e) {
-    list()
-  })
+  tests <- tryCatch(
+    {
+      getTests(results$results)
+    },
+    error = function(e) {
+      list()
+    }
+  )
 
   # Build the test block
   lines <- character(0)
@@ -364,7 +412,7 @@ generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses,
       if (test$type == "table") {
         lines <- c(lines, paste0('  table <- results[["results"]]', test$index))
         # Format table data nicely - add proper indentation
-        tableData <- gsub("\n\t", "\n    ", test$data)  # Convert tabs to spaces
+        tableData <- gsub("\n\t", "\n    ", test$data) # Convert tabs to spaces
         lines <- c(lines, paste0("  jaspTools::expect_equal_tables(table,"))
         lines <- c(lines, paste0("    ", tableData, ")"))
         lines <- c(lines, "")
@@ -402,7 +450,6 @@ generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses,
 #' @return Character string with the test_that block.
 #' @keywords internal
 generateExampleTestBlockBasic <- function(analysisName, analysisIndex, totalAnalyses, jaspFileName) {
-
   lines <- character(0)
 
   # Test description
@@ -450,12 +497,14 @@ generateExampleTestBlockBasic <- function(analysisName, analysisIndex, totalAnal
 
 
 makeUnitTestsFromResults <- function(results, name, dataset, options) {
-  if (!is.list(results) || is.null(names(results)) || results$status == "error")
+  if (!is.list(results) || is.null(names(results)) || results$status == "error") {
     stop("Can't make unit test from results: not a results list")
+  }
 
   tests <- getTests(results$results)
-  if (length(tests) == 0)
+  if (length(tests) == 0) {
     stop("Could not identify any tables or plots to test")
+  }
 
   output <- makeExpectations(tests, name, options, dataset)
   cat(output)
@@ -465,14 +514,16 @@ getTests <- function(results) {
   tests <- list()
 
   markResultsLocationExtractTests <- function(x) {
-    if (! "list" %in% class(x))
+    if (!"list" %in% class(x)) {
       return(x)
+    }
 
     unitTestType <- NULL
-    if (all(c("data", "schema") %in% names(x)))
+    if (all(c("data", "schema") %in% names(x))) {
       unitTestType <- "table"
-    else if (all(c("data", "width", "height") %in% names(x)))
+    } else if (all(c("data", "width", "height") %in% names(x))) {
       unitTestType <- "plot"
+    }
 
     if (!is.null(unitTestType) && unitTestType == "plot" || (unitTestType == "table" && length(x[["data"]]) > 0)) {
       testid <- length(tests)
@@ -480,7 +531,8 @@ getTests <- function(results) {
         title = unlist(x[["title"]]),
         id = testid,
         type = unitTestType,
-        data =  ifelse(unitTestType == "table", makeTestTable(x[["data"]], print=FALSE), ""))
+        data = ifelse(unitTestType == "table", makeTestTable(x[["data"]], print = FALSE), "")
+      )
       x[["itemToUnitTest"]] <- testid
     }
 
@@ -509,16 +561,17 @@ addPathIndexToTests <- function(tests, markedResults) {
 getTestLocationInResultsById <- function(results, id) {
   testIndices <- which(grepl("itemToUnitTest", names(results)))
   index <- testIndices[results[testIndices] == id]
-  if (length(index) != 1)
+  if (length(index) != 1) {
     stop("Failed to uniquely identify test case in results")
+  }
 
   location <- names(results)[index]
   return(gsub("itemToUnitTest", "data", location))
 }
 
 normalizeTestPath <- function(index) {
-  indexNames <- unlist(strsplit(index, ".", fixed=TRUE))
-  path <- paste0('[["', paste0(indexNames, collapse='"]][["'), '"]]')
+  indexNames <- unlist(strsplit(index, ".", fixed = TRUE))
+  path <- paste0('[["', paste0(indexNames, collapse = '"]][["'), '"]]')
 
   return(path)
 }
@@ -538,8 +591,9 @@ getOneTestPerCollection <- function(tests) {
 
 makeExpectations <- function(tests, name, options, dataset) {
   centralizePreamble <- FALSE
-  if (length(tests) > 1)
+  if (length(tests) > 1) {
     centralizePreamble <- TRUE
+  }
 
   expectations <- ""
 
@@ -549,11 +603,12 @@ makeExpectations <- function(tests, name, options, dataset) {
   }
 
   for (test in tests) {
-    if (!test$type %in% c("table", "plot"))
+    if (!test$type %in% c("table", "plot")) {
       stop("Unknown test type extracted from results, cannot continue: ", test$type)
+    }
 
     expectation <- makeSingleExpectation(test, name, options, dataset, centralizePreamble)
-    expectations <- paste(expectations, expectation, sep="\n\n")
+    expectations <- paste(expectations, expectation, sep = "\n\n")
   }
 
   return(expectations)
@@ -561,8 +616,8 @@ makeExpectations <- function(tests, name, options, dataset) {
 
 makeSingleExpectation <- function(test, name, options, dataset, centralizePreamble) {
   if (!is.character(test$title) || test$title == "") {
-    test$title <- paste("titleless", test$type, test$id, sep="-")
-    warning(test$type, " does not have a title, using a generic one: ", test$title, immediate.=TRUE)
+    test$title <- paste("titleless", test$type, test$id, sep = "-")
+    warning(test$type, " does not have a title, using a generic one: ", test$title, immediate. = TRUE)
   }
 
   openingLine <- addOpeningLine(test)
@@ -574,14 +629,15 @@ makeSingleExpectation <- function(test, name, options, dataset, centralizePreamb
   }
 
   testSpecificLines <- NA
-  if (test$type == "table")
+  if (test$type == "table") {
     testSpecificLines <- addTableSpecificLines(test)
-  else if (test$type == "plot")
+  } else if (test$type == "plot") {
     testSpecificLines <- addPlotSpecificLines(test, name)
+  }
 
   closingLine <- "})"
 
-  expectation <- paste(openingLine, preambleLines, testSpecificLines, closingLine, sep="\n")
+  expectation <- paste(openingLine, preambleLines, testSpecificLines, closingLine, sep = "\n")
   expectation <- gsub("NA\n", "", expectation)
 
   return(expectation)
@@ -590,11 +646,12 @@ makeSingleExpectation <- function(test, name, options, dataset, centralizePreamb
 addOpeningLine <- function(test) {
   opening <- paste0('test_that("', test$title)
 
-  titleContainsTestType <- grepl(test$type, test$title, ignore.case=TRUE)
-  if (test$type == "table")
-    opening <- paste0(opening, ifelse(titleContainsTestType, '',  ' table'), ' results match", {')
-  else if (test$type == "plot")
-    opening <- paste0(opening, ifelse(titleContainsTestType, '', ' plot'), ' matches", {')
+  titleContainsTestType <- grepl(test$type, test$title, ignore.case = TRUE)
+  if (test$type == "table") {
+    opening <- paste0(opening, ifelse(titleContainsTestType, "", " table"), ' results match", {')
+  } else if (test$type == "plot") {
+    opening <- paste0(opening, ifelse(titleContainsTestType, "", " plot"), ' matches", {')
+  }
 
   return(opening)
 }
@@ -604,23 +661,25 @@ addPreambleLines <- function(name, options, dataset) {
   settingOfSeed <- "set.seed(1)"
   runningOfAnalysis <- addRunAnalysisLines(name, dataset)
 
-  return(paste(settingOfOptions, settingOfSeed, runningOfAnalysis, sep="\n"))
+  return(paste(settingOfOptions, settingOfSeed, runningOfAnalysis, sep = "\n"))
 }
 
 addRunAnalysisLines <- function(name, dataset) {
-  if (is.character(dataset))
-    dataArg <- paste0('"', dataset ,'"')
-  else
-    dataArg <- paste0('dataset')
+  if (is.character(dataset)) {
+    dataArg <- paste0('"', dataset, '"')
+  } else {
+    dataArg <- paste0("dataset")
+  }
 
-  readingData <- paste0('dataset <- ', paste(capture.output(dput(dataset)), collapse="\n"))
+  readingData <- paste0("dataset <- ", paste(capture.output(dput(dataset)), collapse = "\n"))
 
-  running <- paste0('results <- runAnalysis("', name, '", ', dataArg, ', options)')
+  running <- paste0('results <- runAnalysis("', name, '", ', dataArg, ", options)")
 
-  if (is.character(dataset))
+  if (is.character(dataset)) {
     return(running)
-  else
-    return(paste(readingData, running, sep="\n"))
+  } else {
+    return(paste(readingData, running, sep = "\n"))
+  }
 }
 
 addTableSpecificLines <- function(test) {
@@ -628,7 +687,7 @@ addTableSpecificLines <- function(test) {
 
   comparingTables <- paste0("\tjaspTools::expect_equal_tables(table,\n\t\t", gsub("\n", "\n\t\t", test$data), ")")
 
-  return(paste(gettingTable, comparingTables, sep="\n"))
+  return(paste(gettingTable, comparingTables, sep = "\n"))
 }
 
 addPlotSpecificLines <- function(test, name) {
@@ -639,7 +698,7 @@ addPlotSpecificLines <- function(test, name) {
   title <- gsub("-+", "-", gsub("\\W", "-", tolower(test$title)))
   comparingPlots <- paste0('\tjaspTools::expect_equal_plots(testPlot, "', title, '")')
 
-  return(paste(gettingPlotName, gettingPlot, comparingPlots, sep="\n"))
+  return(paste(gettingPlotName, gettingPlot, comparingPlots, sep = "\n"))
 }
 
 addOptionSpecificationLines <- function(name, options) {
@@ -647,7 +706,7 @@ addOptionSpecificationLines <- function(name, options) {
 
   nonDefaultOpts <- getNonDefaultOptions(name, options)
   if (length(nonDefaultOpts) > 0) {
-    nonDefaults <- paste0("options$", names(nonDefaultOpts), " <- ", nonDefaultOpts, collapse="\n")
+    nonDefaults <- paste0("options$", names(nonDefaultOpts), " <- ", nonDefaultOpts, collapse = "\n")
     settingOfOptions <- paste0(settingOfOptions, "\n", nonDefaults)
   }
 
@@ -656,8 +715,9 @@ addOptionSpecificationLines <- function(name, options) {
 
 getNonDefaultOptions <- function(name, options) {
   defaultOpts <- analysisOptions(name)
-  if (!is.list(defaultOpts) || is.null(names(defaultOpts)))
+  if (!is.list(defaultOpts) || is.null(names(defaultOpts))) {
     stop("Couldn't find the default analysis options for this analysis")
+  }
 
   nonDefaultOpts <- NULL
   for (optName in names(options)) {
@@ -672,12 +732,13 @@ getNonDefaultOptions <- function(name, options) {
 }
 
 prepOptionValueForPrinting <- function(value) {
-  if (is.list(value))
-    result <- paste(capture.output(dput(value)), collapse="\n")
-  else if (is.character(value) && length(value) == 1 && !startsWith(value, "\""))
+  if (is.list(value)) {
+    result <- paste(capture.output(dput(value)), collapse = "\n")
+  } else if (is.character(value) && length(value) == 1 && !startsWith(value, "\"")) {
     result <- paste0("\"", value, "\"")
-  else
+  } else {
     result <- value
+  }
 
   return(result)
 }
