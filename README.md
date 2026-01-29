@@ -1,3 +1,12 @@
+<div align="right">
+
+[![Unit Tests](https://github.com/jasp-stats/jaspTools/actions/workflows/unittests.yml/badge.svg)](https://github.com/jasp-stats/jaspTools/actions/workflows/unittests.yml)
+[![codecov](https://codecov.io/gh/jasp-stats/jaspTools/branch/master/graph/badge.svg)](https://codecov.io/gh/jasp-stats/jaspTools)
+<br>
+<b>Maintainer:</b> <a href="https://github.com/vandenman/">Don van den Bergh</a>
+
+</div>
+
 # jaspTools
 R package which aids developers with writing JASP analyses.
 
