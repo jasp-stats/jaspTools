@@ -183,6 +183,62 @@ test_that("encodeOptionsAndDataset handles empty types gracefully", {
   expect_equal(nrow(result$encodingMap), 0)
 })
 
+test_that("encodeOptionsAndDataset handles NULL dataset gracefully", {
+
+  # Create a simple options list (typical for summary stats analyses without data)
+  opts <- list(
+    n = 100,
+    mean = 50,
+    sd = 10,
+    `.meta` = list()
+  )
+
+  # Should not warn or error when dataset is NULL
+  result <- jaspTools:::encodeOptionsAndDataset(opts, NULL)
+
+  # Should return original options unchanged
+  expect_equal(result$options, opts)
+
+  # Dataset should remain NULL
+  expect_null(result$dataset)
+
+  # Encoding map should be empty
+  expect_equal(nrow(result$encodingMap), 0)
+  expect_true(is.data.frame(result$encodingMap))
+  expect_true(all(c("original", "encoded", "type") %in% names(result$encodingMap)))
+})
+
+test_that("encodeOptionsAndDataset works with no-data JASP file", {
+
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles",
+                        "no_data_summary_stats.jasp")
+
+  skip_if_not(file.exists(jaspFile), "No-data JASP file not found")
+
+  # Extract options and dataset
+  opts <- jaspTools::analysisOptions(jaspFile)
+  dataset <- jaspTools::extractDatasetFromJASPFile(jaspFile)
+
+  # Dataset should be NULL
+  expect_null(dataset)
+
+  # Encode should work without errors
+  result <- jaspTools:::encodeOptionsAndDataset(opts, dataset)
+
+  # Result structure should be correct
+  expect_true(is.list(result))
+  expect_true(all(c("options", "dataset", "encodingMap") %in% names(result)))
+
+  # Options should be unchanged (since no dataset columns to encode)
+  expect_equal(result$options, opts)
+
+  # Dataset should remain NULL
+  expect_null(result$dataset)
+
+  # Encoding map should be empty
+  expect_equal(nrow(result$encodingMap), 0)
+})
+
 test_that("encodeOptionsAndDataset correctly encodes nested option structures", {
 
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.jasp")

@@ -195,3 +195,16 @@ test_that("extractDatasetFromJASPFile works for BCG Vaccine dataset", {
     }
   }
 })
+
+test_that("extractDatasetFromJASPFile returns NULL for JASP files without data", {
+
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles",
+                        "no_data_summary_stats.jasp")
+
+  skip_if_not(file.exists(jaspFile), "No-data JASP file not found")
+
+  # Should return NULL instead of error
+  result <- extractDatasetFromJASPFile(jaspFile)
+
+  expect_null(result, info = "JASP files without data should return NULL")
+})
