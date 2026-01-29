@@ -81,3 +81,20 @@ test_that("analysisOptions flattens deeply nested types/value structures", {
   expect_true(is.list(opts$`variables.types`[[1]]$coefficientAlpha))
   expect_equal(length(opts$`variables.types`[[1]]$coefficientAlpha), 0)
 })
+
+test_that("analysisOptions extracts options from no-data JASP file", {
+
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles",
+                        "no_data_summary_stats.jasp")
+
+  skip_if_not(file.exists(jaspFile), "No-data JASP file not found")
+
+  # Should be able to extract options without error
+  opts <- jaspTools::analysisOptions(jaspFile)
+
+  # Should return a valid options list
+  expect_true(is.list(opts))
+
+  # Should have an analysisName attribute
+  expect_true(!is.null(attr(opts, "analysisName")))
+})

@@ -73,7 +73,8 @@ extractDatasetFromJASPFile <- function(jaspFile, dataSetIndex = 1L) {
   ))
 
   if (nrow(columns) == 0) {
-    stop("No columns found for dataSet ", dataSetIndex)
+    # No data in this JASP file - return NULL
+    return(NULL)
   }
 
   # Get the labels table - include originalValueJson for value reconstruction
@@ -82,7 +83,8 @@ extractDatasetFromJASPFile <- function(jaspFile, dataSetIndex = 1L) {
   # Get the data from DataSet_N table
   dataTableName <- paste0("DataSet_", dataSetIndex)
   if (!dataTableName %in% DBI::dbListTables(con)) {
-    stop("Data table '", dataTableName, "' not found in the database")
+    # No data table in this JASP file - return NULL
+    return(NULL)
   }
 
   # Build a query that casts DBL columns to TEXT to preserve nan/inf values
@@ -543,6 +545,15 @@ devcat <- function(..., file = "", sep = " ", fill = FALSE, labels = NULL,
 #'
 #' @export
 encodeOptionsAndDataset <- function(options, dataset) {
+
+  # Handle NULL dataset (analysis doesn't require data)
+  if (is.null(dataset)) {
+    return(list(
+      options     = options,
+      dataset     = NULL,
+      encodingMap = data.frame(original = character(0), encoded = character(0), type = character(0))
+    ))
+  }
 
   # Load the dataset if it's a path or name
   dataset <- loadCorrectDataset(dataset)
