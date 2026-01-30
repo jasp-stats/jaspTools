@@ -234,6 +234,10 @@ fixOptionsForVariableTypes <- function(options) {
     return(types)
   }
 
+  # Fields that are internal JASP metadata and should not be preserved as user-facing options
+  # when flattening types/value structures
+  internalFields <- c("types", "value", "optionKey", "columns", "prefixedColumns")
+
   # Recursively flatten a nested list structure, extracting types into a parallel structure
   # Returns a list with $value (the flattened value) and $types (the parallel types structure)
   flattenRecursive <- function(obj) {
@@ -249,6 +253,25 @@ fixOptionsForVariableTypes <- function(options) {
 
       # Build types structure
       typesStructure <- buildTypesStructure(types, value, optionKey)
+
+      # Check for additional fields that should be preserved (e.g., "model", "modelOriginal")
+      # These are user-facing fields that exist alongside types/value structure
+      additionalFields <- setdiff(names(obj), internalFields)
+
+      # If there are additional fields, preserve them alongside the flattened value
+      if (length(additionalFields) > 0) {
+        # Create a new object with the flattened value and preserved additional fields
+        newObj <- list()
+        newObj[["value"]] <- value
+
+        for (field in additionalFields) {
+          # Recursively process each additional field in case it also needs flattening
+          result <- flattenRecursive(obj[[field]])
+          newObj[[field]] <- result$value
+        }
+
+        return(list(value = newObj, types = typesStructure))
+      }
 
       # Recursively process the value in case it contains nested structures
       if (is.list(value)) {
