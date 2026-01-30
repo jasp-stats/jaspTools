@@ -4,7 +4,7 @@
 \alias{encodeOptionsWithMap}
 \title{Encode Options Using Encoding Map}
 \usage{
-encodeOptionsWithMap(options, encodingMap, allColumnNames)
+encodeOptionsWithMap(options, encodingMap, allColumnNames, forceEncode = NULL)
 }
 \arguments{
 \item{options}{The options list.}
@@ -12,6 +12,8 @@ encodeOptionsWithMap(options, encodingMap, allColumnNames)
 \item{encodingMap}{Data.frame with columns \code{original}, \code{encoded}, \code{type}.}
 
 \item{allColumnNames}{Vector of valid column names.}
+
+\item{forceEncode}{Optional character vector of option names to force-encode via regex.}
 }
 \value{
 The options list with encoded variable names.
