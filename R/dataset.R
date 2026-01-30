@@ -505,6 +505,13 @@ devcat <- function(..., file = "", sep = " ", fill = FALSE, labels = NULL,
 #' @param options A named list of analysis options, typically from \code{analysisOptions()}.
 #' @param dataset A data.frame or the name/path of a dataset to be encoded.
 #'
+#' @param forceEncode Optional character vector of option names that should be
+#'   forcibly encoded using regular expression replacement. This is useful for
+#'   options like \code{model} that contain variable names embedded in strings
+#'   (e.g., formula syntax "A~B") but do not have a parallel \code{.types} entry.
+#'   These options will have all column names replaced with their encoded equivalents
+#'   using word-boundary-aware regex matching.
+#'
 #' @return A list with three components:
 #' \itemize{
 #'   \item \code{options}: The encoded options with variable names replaced by "jaspColumnN".
@@ -542,13 +549,6 @@ devcat <- function(..., file = "", sep = " ", fill = FALSE, labels = NULL,
 #' # result$dataset has column "jaspColumn1" as a factor
 #' # result$encodingMap shows the mapping
 #' }
-#'
-#' @param forceEncode Optional character vector of option names that should be
-#'   forcibly encoded using regular expression replacement. This is useful for
-#'   options like \code{model} that contain variable names embedded in strings
-#'   (e.g., formula syntax "A~B") but do not have a parallel \code{.types} entry.
-#'   These options will have all column names replaced with their encoded equivalents
-#'   using word-boundary-aware regex matching.
 #'
 #' @export
 encodeOptionsAndDataset <- function(options, dataset, forceEncode = NULL) {
@@ -734,7 +734,7 @@ encodeOptionsWithMap <- function(options, encodingMap, allColumnNames, forceEnco
       for (origName in names(lookup)) {
         # Use word boundary regex to replace column names
         # Escape regex metacharacters in the original name
-        escapedName <- gsub("([.\\\\^$|?*+()\\[\\]\\{\\}])", "\\\\\\1", origName)
+        escapedName <- gsub("([.\\\\^$|?*+()\\[\\]\\{\\}-])", "\\\\\\\1", origName)
         pattern <- paste0("(?<![A-Za-z0-9_])", escapedName, "(?![A-Za-z0-9_])")
         result[i] <- gsub(pattern, lookup[[origName]], result[i], perl = TRUE)
       }
@@ -786,7 +786,7 @@ encodeOptionsWithMap <- function(options, encodingMap, allColumnNames, forceEnco
         # (?![A-Za-z0-9_]) is a negative lookahead for word characters
         # This prevents matching partial words
         # Escape regex metacharacters in the original name
-        escapedName <- gsub("([.\\\\^$|?*+()\\[\\]\\{\\}])", "\\\\\\1", origName)
+        escapedName <- gsub("([.\\^$|?*+()\\[\\]\\{\\}-])", "\\\\\\1", origName)
         pattern <- paste0("(?<![A-Za-z0-9_])", escapedName, "(?![A-Za-z0-9_])")
         result[i] <- gsub(pattern, lookup[[origName]], result[i], perl = TRUE)
       }

@@ -370,6 +370,12 @@ test_that("forceEncode only affects specified options", {
   encodedModel <- result$options$model
   expect_true(grepl("jaspColumn", encodedModel),
               info = "Model should contain encoded column names")
+
+  # Verify that other options that should be encoded via the normal mechanism
+  # (e.g., 'syntax') are not changed by the forceEncode regex path
+  no_force <- jaspTools:::encodeOptionsAndDataset(opts, dataset)
+  expect_equal(result$options$syntax$model, no_force$options$syntax$model,
+               info = "syntax$model should be encoded by the normal mechanism and not be altered by forceEncode")
 })
 
 test_that("forceEncode handles multiple options", {
