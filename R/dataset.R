@@ -505,6 +505,13 @@ devcat <- function(..., file = "", sep = " ", fill = FALSE, labels = NULL,
 #' @param options A named list of analysis options, typically from \code{analysisOptions()}.
 #' @param dataset A data.frame or the name/path of a dataset to be encoded.
 #'
+#' @param forceEncode Optional character vector of option names that should be
+#'   forcibly encoded using regular expression replacement. This is useful for
+#'   options like \code{model} that contain variable names embedded in strings
+#'   (e.g., formula syntax "A~B") but do not have a parallel \code{.types} entry.
+#'   These options will have all column names replaced with their encoded equivalents
+#'   using word-boundary-aware regex matching.
+#'
 #' @return A list with three components:
 #' \itemize{
 #'   \item \code{options}: The encoded options with variable names replaced by "jaspColumnN".
@@ -544,7 +551,7 @@ devcat <- function(..., file = "", sep = " ", fill = FALSE, labels = NULL,
 #' }
 #'
 #' @export
-encodeOptionsAndDataset <- function(options, dataset) {
+encodeOptionsAndDataset <- function(options, dataset, forceEncode = NULL) {
 
   # Handle NULL dataset (analysis doesn't require data)
   if (is.null(dataset)) {
@@ -579,7 +586,7 @@ encodeOptionsAndDataset <- function(options, dataset) {
   names(encodingMap)[1] <- "original"
 
   # Step 4: Encode the options
-  encodedOptions <- encodeOptionsWithMap(options, encodingMap, allColumnNames)
+  encodedOptions <- encodeOptionsWithMap(options, encodingMap, allColumnNames, forceEncode)
 
   # Step 5: Create the encoded dataset
   encodedDataset <- createEncodedDataset(dataset, encodingMap)
@@ -642,6 +649,12 @@ extractPairsFromValueAndType <- function(values, types, allColumnNames) {
 
   result <- data.frame(variable = character(0), type = character(0), stringsAsFactors = FALSE)
 
+  # Special case: values is a list with a "value" element (from flattened types/value structure that preserved
+  # additional fields like "model" and "modelOriginal"). In this case, the actual variable names are in values$value
+  if (is.list(values) && "value" %in% names(values) && is.character(types)) {
+    return(extractPairsFromValueAndType(values$value, types, allColumnNames))
+  }
+
   # Simple case: both are character vectors of same length
 
   if (is.character(values) && is.character(types) && length(values) == length(types)) {
@@ -698,13 +711,34 @@ extractPairsFromValueAndType <- function(values, types, allColumnNames) {
 #' @param options The options list.
 #' @param encodingMap Data.frame with columns \code{original}, \code{encoded}, \code{type}.
 #' @param allColumnNames Vector of valid column names.
+#' @param forceEncode Optional character vector of option names to force-encode via regex.
 #'
 #' @return The options list with encoded variable names.
 #' @keywords internal
-encodeOptionsWithMap <- function(options, encodingMap, allColumnNames) {
+encodeOptionsWithMap <- function(options, encodingMap, allColumnNames, forceEncode = NULL) {
 
   # Create lookup from original to encoded
   lookup <- stats::setNames(encodingMap$encoded, encodingMap$original)
+
+  # Force-encode a string value using regex replacement
+
+  # Uses word boundaries to avoid partial matches
+  forceEncodeString <- function(x, lookup) {
+    if (!is.character(x) || length(x) == 0) {
+      return(x)
+    }
+    result <- x
+    for (i in seq_along(result)) {
+      for (origName in names(lookup)) {
+        # Use word boundary regex to replace column names
+        # Escape regex metacharacters in the original name
+        escapedName <- gsub("([.\\\\^$|?*+()\\[\\]\\{\\}-])", "\\\\\\\1", origName)
+        pattern <- paste0("(?<![A-Za-z0-9_])", escapedName, "(?![A-Za-z0-9_])")
+        result[i] <- gsub(pattern, lookup[[origName]], result[i], perl = TRUE)
+      }
+    }
+    return(result)
+  }
 
   # Recursively encode values
   encodeValue <- function(x) {
@@ -716,6 +750,16 @@ encodeOptionsWithMap <- function(options, encodingMap, allColumnNames) {
       }
       return(x)
     } else if (is.list(x)) {
+      # Special handling for lists with both "model" and "modelOriginal" fields.
+      # JASP stores pre-encoded column names in "model" (e.g., "JaspColumn_0_Encoded"),
+      # but our encoding uses different names (e.g., "jaspColumn1"). Since JASP's
+      # encoding scheme doesn't match ours, we must re-encode from "modelOriginal"
+      # (which contains the original user-facing variable names) using our lookup.
+      if ("model" %in% names(x) && "modelOriginal" %in% names(x)) {
+        # Re-encode model from modelOriginal using regex-based replacement
+        x[["model"]] <- forceEncodeString(x[["modelOriginal"]], lookup)
+      }
+
       # Recursively process list elements
       for (i in seq_along(x)) {
         x[[i]] <- encodeValue(x[[i]])
@@ -726,13 +770,42 @@ encodeOptionsWithMap <- function(options, encodingMap, allColumnNames) {
     }
   }
 
+  # Force-encode a string value using regex replacement
+  # Uses word boundaries to avoid partial matches
+  forceEncodeValue <- function(x, lookup) {
+    if (!is.character(x) || length(x) == 0) {
+      return(x)
+    }
+    result <- x
+    for (i in seq_along(result)) {
+      for (origName in names(lookup)) {
+        # Use word boundary regex to replace column names
+        # (?<![A-Za-z0-9_]) is a negative lookbehind for word characters
+        # (?![A-Za-z0-9_]) is a negative lookahead for word characters
+        # This prevents matching partial words
+        # Escape regex metacharacters in the original name
+        escapedName <- gsub("([.\\^$|?*+()\\[\\]\\{\\}-])", "\\\\\\1", origName)
+        pattern <- paste0("(?<![A-Za-z0-9_])", escapedName, "(?![A-Za-z0-9_])")
+        result[i] <- gsub(pattern, lookup[[origName]], result[i], perl = TRUE)
+      }
+    }
+    return(result)
+  }
+
   # Process all options except .meta and .types entries
   optionNames <- names(options)
   for (nm in optionNames) {
     if (nm == ".meta" || grepl("\\.types$", nm)) {
       next
     }
-    options[[nm]] <- encodeValue(options[[nm]])
+
+    # Check if this option should be force-encoded
+    if (!is.null(forceEncode) && nm %in% forceEncode) {
+      # Force encode using regex - only works on character values
+      options[[nm]] <- forceEncodeValue(options[[nm]], lookup)
+    } else {
+      options[[nm]] <- encodeValue(options[[nm]])
+    }
   }
 
   return(options)

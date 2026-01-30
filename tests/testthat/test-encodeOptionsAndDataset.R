@@ -281,3 +281,264 @@ test_that("encodeOptionsAndDataset correctly encodes nested option structures", 
     }
   }
 })
+
+test_that("encodeOptionsAndDataset with forceEncode replaces column names in model string via regex", {
+
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "bainSem.jasp")
+
+  skip_if_not(file.exists(jaspFile), "Test JASP file not found")
+
+  # Get options from the second analysis (has model with column names like peabody, age)
+  # Note: bainSem.jasp has 3 analyses, we use the second one
+  opts <- jaspTools:::analysisOptionsFromJASPFile(jaspFile)[[2]]
+
+  # Load the dataset
+  dataset <- jaspTools::extractDatasetFromJASPFile(jaspFile)
+
+  # The second bainSem analysis has a 'model' option with embedded column names like:
+  # "A~B > A~peabody = A~age = 0\n..."
+  # where peabody and age are column names in the dataset
+
+  # First, verify the model option exists and contains column names
+  expect_true("model" %in% names(opts))
+  originalModel <- opts$model
+
+  # Check that the model string contains some column names from the dataset
+  colNamesInModel <- colnames(dataset)[vapply(colnames(dataset), function(cn) {
+    grepl(cn, originalModel, fixed = TRUE)
+  }, logical(1))]
+  expect_true(length(colNamesInModel) > 0,
+              info = "Model option should contain column names from dataset")
+
+  # Encode with forceEncode = "model"
+  result <- jaspTools:::encodeOptionsAndDataset(opts, dataset, forceEncode = "model")
+
+  # Check that the encoding map was created
+  expect_true(nrow(result$encodingMap) > 0,
+              info = "Encoding map should have entries")
+
+  # Check that the model option has been force-encoded
+  encodedModel <- result$options$model
+
+  # The encoded model should not contain original column names that were in the encoding map
+  originalVars <- result$encodingMap$original
+  encodedVars <- result$encodingMap$encoded
+
+  # Check that column names in the encoding map have been replaced
+  # Only check variables that were actually in the original model
+  for (i in seq_along(originalVars)) {
+    origVar <- originalVars[i]
+    encVar <- encodedVars[i]
+
+    # Check if this variable was in the original model
+    escapedVar <- gsub("([.\\\\^$|?*+()\\[\\]\\{\\}])", "\\\\\\1", origVar)
+    pattern <- paste0("(?<![A-Za-z0-9_])", escapedVar, "(?![A-Za-z0-9_])")
+
+    if (grepl(pattern, originalModel, perl = TRUE)) {
+      # This variable was in the original model, so it should be replaced
+      expect_false(grepl(pattern, encodedModel, perl = TRUE),
+                   info = paste("Model should not contain original variable name:", origVar))
+      expect_true(grepl(encVar, encodedModel, fixed = TRUE),
+                  info = paste("Model should contain encoded variable name:", encVar))
+    }
+  }
+
+  # Verify the structure is preserved (should still have the same operators and structure)
+  expect_true(grepl("~", encodedModel, fixed = TRUE),
+              info = "Model should still contain SEM syntax operators")
+  expect_true(grepl(">", encodedModel, fixed = TRUE) || grepl("&", encodedModel, fixed = TRUE),
+              info = "Model should still contain constraint operators")
+})
+
+test_that("forceEncode only affects specified options", {
+
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "bainSem.jasp")
+
+  skip_if_not(file.exists(jaspFile), "Test JASP file not found")
+
+  # Get options from the second analysis
+  opts <- jaspTools:::analysisOptionsFromJASPFile(jaspFile)[[2]]
+  dataset <- jaspTools::extractDatasetFromJASPFile(jaspFile)
+
+  # Test that forceEncode only affects the 'model' option, not other options
+  # The 'syntax' option also references variables but has shouldEncode metadata
+
+  # Encode with forceEncode = "model"
+  result <- jaspTools:::encodeOptionsAndDataset(opts, dataset, forceEncode = "model")
+
+  # The 'model' option should be force-encoded (column names replaced with jaspColumnN)
+  encodedModel <- result$options$model
+  expect_true(grepl("jaspColumn", encodedModel),
+              info = "Model should contain encoded column names")
+
+  # Verify that other options that should be encoded via the normal mechanism
+  # (e.g., 'syntax') are not changed by the forceEncode regex path
+  no_force <- jaspTools:::encodeOptionsAndDataset(opts, dataset)
+  expect_equal(result$options$syntax$model, no_force$options$syntax$model,
+               info = "syntax$model should be encoded by the normal mechanism and not be altered by forceEncode")
+})
+
+test_that("forceEncode handles multiple options", {
+
+  # Create a simple test case with multiple options to force-encode
+  opts <- list(
+    formula1 = "A ~ B + C",
+    formula2 = "D ~ A + B",
+    regularOpt = c("A", "B"),
+    `regularOpt.types` = c("scale", "scale"),
+    `.meta` = list()
+  )
+
+  dataset <- data.frame(
+    A = 1:5,
+    B = 6:10,
+    C = 11:15,
+    D = 16:20,
+    stringsAsFactors = FALSE
+  )
+
+  # Encode with forceEncode for both formula options
+  result <- jaspTools:::encodeOptionsAndDataset(opts, dataset, forceEncode = c("formula1", "formula2"))
+
+  # Check encoding map was created
+  expect_true(nrow(result$encodingMap) > 0)
+
+  # Both formula options should have A and B replaced
+  expect_false(grepl("(?<![A-Za-z0-9_])A(?![A-Za-z0-9_])", result$options$formula1, perl = TRUE),
+               info = "formula1 should not contain original 'A'")
+  expect_false(grepl("(?<![A-Za-z0-9_])B(?![A-Za-z0-9_])", result$options$formula1, perl = TRUE),
+               info = "formula1 should not contain original 'B'")
+  expect_false(grepl("(?<![A-Za-z0-9_])A(?![A-Za-z0-9_])", result$options$formula2, perl = TRUE),
+               info = "formula2 should not contain original 'A'")
+  expect_false(grepl("(?<![A-Za-z0-9_])B(?![A-Za-z0-9_])", result$options$formula2, perl = TRUE),
+               info = "formula2 should not contain original 'B'")
+
+  # Should contain jaspColumn references
+  expect_true(grepl("jaspColumn", result$options$formula1),
+              info = "formula1 should contain encoded names")
+  expect_true(grepl("jaspColumn", result$options$formula2),
+              info = "formula2 should contain encoded names")
+})
+
+test_that("forceEncode uses word boundaries to avoid partial matches", {
+
+  # Test that forceEncode doesn't replace partial matches
+  # e.g., if column is "A", it shouldn't replace "AB" -> "jaspColumn1B"
+  opts <- list(
+    model = "AB ~ A + B",  # AB is a single term, A and B are separate
+    variables = c("A", "B"),
+    `variables.types` = c("scale", "scale"),
+    `.meta` = list()
+  )
+
+  dataset <- data.frame(
+    A = 1:5,
+    B = 6:10,
+    AB = 11:15,  # This column should NOT be matched if not in encoding map
+    stringsAsFactors = FALSE
+  )
+
+  # Only A and B are in the options with types, not AB
+  result <- jaspTools:::encodeOptionsAndDataset(opts, dataset, forceEncode = "model")
+
+  # The model should have A and B replaced but AB should remain (since AB is not in encoding map)
+  encodedModel <- result$options$model
+
+  # A and B should be replaced
+  expect_false(grepl("(?<![A-Za-z0-9_])A(?![A-Za-z0-9_])", encodedModel, perl = TRUE),
+               info = "Standalone A should be replaced")
+  expect_false(grepl("(?<![A-Za-z0-9_])B(?![A-Za-z0-9_])", encodedModel, perl = TRUE),
+               info = "Standalone B should be replaced")
+
+  # AB should remain unchanged (it's not in the encoding map)
+  expect_true(grepl("AB", encodedModel, fixed = TRUE),
+              info = "AB should remain unchanged as it's not in the encoding map")
+})
+
+test_that("encodeOptionsAndDataset re-encodes model from modelOriginal when both are present", {
+
+  # When an option contains both "model" and "modelOriginal" fields, the encoder should
+  # re-encode "model" from "modelOriginal" using our encoding scheme. This is necessary
+  # because JASP stores pre-encoded column names in "model" (e.g., "JaspColumn_0_Encoded"),
+  # but our encoding uses different names (e.g., "jaspColumn1"). Since JASP's encoding
+  # scheme doesn't match ours, we must re-encode from "modelOriginal" which contains
+  # the original user-facing variable names.
+
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "bainSem.jasp")
+
+  skip_if_not(file.exists(jaspFile), "Test JASP file not found")
+
+  # Get options from the first analysis (has syntax with model/modelOriginal)
+  opts <- jaspTools:::analysisOptionsFromJASPFile(jaspFile)[[1]]
+  dataset <- jaspTools::extractDatasetFromJASPFile(jaspFile)
+
+  # Verify the raw structure has both model and modelOriginal in syntax
+  expect_true(is.list(opts$syntax),
+              info = "syntax should be a list with preserved fields")
+  expect_true("model" %in% names(opts$syntax),
+              info = "syntax should contain 'model' field")
+  expect_true("modelOriginal" %in% names(opts$syntax),
+              info = "syntax should contain 'modelOriginal' field")
+
+  # The pre-encoded model from JASP uses JaspColumn_X_Encoded format
+  expect_true(grepl("JaspColumn_", opts$syntax$model),
+              info = "JASP's model should use JaspColumn_X_Encoded format")
+
+  # The modelOriginal should contain original variable names
+  expect_true(grepl("Ab|Al|Af", opts$syntax$modelOriginal),
+              info = "modelOriginal should contain original variable names")
+
+  # Encode options and dataset
+  result <- jaspTools:::encodeOptionsAndDataset(opts, dataset)
+
+  # After encoding, the model should be re-encoded from modelOriginal
+  # It should now use our jaspColumnN format, NOT JASP's JaspColumn_X_Encoded format
+  expect_true(grepl("jaspColumn", result$options$syntax$model),
+              info = "Encoded model should use our jaspColumnN format")
+  expect_false(grepl("JaspColumn_", result$options$syntax$model),
+               info = "Encoded model should NOT contain JASP's JaspColumn_X_Encoded format")
+
+  # Verify that all variables in modelOriginal have been encoded
+  # Extract variable names that appear in the encoding map
+  encodedVars <- result$encodingMap$encoded
+  originalVars <- result$encodingMap$original
+
+  # Check that each original variable in modelOriginal has been replaced with encoded version
+  for (i in seq_along(originalVars)) {
+    origVar <- originalVars[i]
+    encVar <- encodedVars[i]
+
+    # Build word-boundary pattern for original variable
+    escapedVar <- gsub("([.\\\\^$|?*+()\\[\\]\\{\\}])", "\\\\\\1", origVar)
+    pattern <- paste0("(?<![A-Za-z0-9_])", escapedVar, "(?![A-Za-z0-9_])")
+
+    # If original variable was in modelOriginal, it should be replaced in model
+    if (grepl(pattern, opts$syntax$modelOriginal, perl = TRUE)) {
+      expect_false(grepl(pattern, result$options$syntax$model, perl = TRUE),
+                   info = paste("Model should not contain original variable:", origVar))
+      expect_true(grepl(encVar, result$options$syntax$model, fixed = TRUE),
+                  info = paste("Model should contain encoded variable:", encVar))
+    }
+  }
+})
+
+test_that("encodeOptionsAndDataset preserves modelOriginal unchanged", {
+
+  # The modelOriginal field should be preserved with original variable names
+  # It serves as a reference for what the user originally entered
+
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "bainSem.jasp")
+
+  skip_if_not(file.exists(jaspFile), "Test JASP file not found")
+
+  opts <- jaspTools:::analysisOptionsFromJASPFile(jaspFile)[[1]]
+  dataset <- jaspTools::extractDatasetFromJASPFile(jaspFile)
+
+  originalModelOriginal <- opts$syntax$modelOriginal
+
+  result <- jaspTools:::encodeOptionsAndDataset(opts, dataset)
+
+  # modelOriginal should remain unchanged (still has original variable names)
+  expect_equal(result$options$syntax$modelOriginal, originalModelOriginal,
+               info = "modelOriginal should be preserved unchanged")
+})

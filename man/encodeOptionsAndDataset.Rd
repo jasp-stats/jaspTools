@@ -4,12 +4,19 @@
 \alias{encodeOptionsAndDataset}
 \title{Encode Options and Dataset for JASP Analysis}
 \usage{
-encodeOptionsAndDataset(options, dataset)
+encodeOptionsAndDataset(options, dataset, forceEncode = NULL)
 }
 \arguments{
 \item{options}{A named list of analysis options, typically from \code{analysisOptions()}.}
 
 \item{dataset}{A data.frame or the name/path of a dataset to be encoded.}
+
+\item{forceEncode}{Optional character vector of option names that should be
+forcibly encoded using regular expression replacement. This is useful for
+options like \code{model} that contain variable names embedded in strings
+(e.g., formula syntax "A~B") but do not have a parallel \code{.types} entry.
+These options will have all column names replaced with their encoded equivalents
+using word-boundary-aware regex matching.}
 }
 \value{
 A list with three components:

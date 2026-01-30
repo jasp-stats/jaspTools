@@ -8,7 +8,8 @@ generateExampleTestBlockBasic(
   analysisName,
   analysisIndex,
   totalAnalyses,
-  jaspFileName
+  jaspFileName,
+  forceEncode = NULL
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ generateExampleTestBlockBasic(
 \item{totalAnalyses}{Total number of analyses in the file.}
 
 \item{jaspFileName}{Name of the JASP file.}
+
+\item{forceEncode}{Optional character vector of option names to force-encode via regex.}
 }
 \value{
 Character string with the test_that block.
