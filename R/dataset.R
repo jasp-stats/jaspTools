@@ -722,6 +722,26 @@ encodeOptionsWithMap <- function(options, encodingMap, allColumnNames, forceEnco
   # Create lookup from original to encoded
   lookup <- stats::setNames(encodingMap$encoded, encodingMap$original)
 
+  # Force-encode a string value using regex replacement
+
+  # Uses word boundaries to avoid partial matches
+  forceEncodeString <- function(x, lookup) {
+    if (!is.character(x) || length(x) == 0) {
+      return(x)
+    }
+    result <- x
+    for (i in seq_along(result)) {
+      for (origName in names(lookup)) {
+        # Use word boundary regex to replace column names
+        # Escape regex metacharacters in the original name
+        escapedName <- gsub("([.\\\\^$|?*+()\\[\\]\\{\\}])", "\\\\\\1", origName)
+        pattern <- paste0("(?<![A-Za-z0-9_])", escapedName, "(?![A-Za-z0-9_])")
+        result[i] <- gsub(pattern, lookup[[origName]], result[i], perl = TRUE)
+      }
+    }
+    return(result)
+  }
+
   # Recursively encode values
   encodeValue <- function(x) {
     if (is.character(x)) {
@@ -732,6 +752,16 @@ encodeOptionsWithMap <- function(options, encodingMap, allColumnNames, forceEnco
       }
       return(x)
     } else if (is.list(x)) {
+      # Special handling for lists with both "model" and "modelOriginal" fields.
+      # JASP stores pre-encoded column names in "model" (e.g., "JaspColumn_0_Encoded"),
+      # but our encoding uses different names (e.g., "jaspColumn1"). Since JASP's
+      # encoding scheme doesn't match ours, we must re-encode from "modelOriginal"
+      # (which contains the original user-facing variable names) using our lookup.
+      if ("model" %in% names(x) && "modelOriginal" %in% names(x)) {
+        # Re-encode model from modelOriginal using regex-based replacement
+        x[["model"]] <- forceEncodeString(x[["modelOriginal"]], lookup)
+      }
+
       # Recursively process list elements
       for (i in seq_along(x)) {
         x[[i]] <- encodeValue(x[[i]])

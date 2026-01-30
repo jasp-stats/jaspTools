@@ -448,3 +448,91 @@ test_that("forceEncode uses word boundaries to avoid partial matches", {
   expect_true(grepl("AB", encodedModel, fixed = TRUE),
               info = "AB should remain unchanged as it's not in the encoding map")
 })
+
+test_that("encodeOptionsAndDataset re-encodes model from modelOriginal when both are present", {
+
+  # When an option contains both "model" and "modelOriginal" fields, the encoder should
+  # re-encode "model" from "modelOriginal" using our encoding scheme. This is necessary
+  # because JASP stores pre-encoded column names in "model" (e.g., "JaspColumn_0_Encoded"),
+  # but our encoding uses different names (e.g., "jaspColumn1"). Since JASP's encoding
+  # scheme doesn't match ours, we must re-encode from "modelOriginal" which contains
+  # the original user-facing variable names.
+
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "bainSem.jasp")
+
+  skip_if_not(file.exists(jaspFile), "Test JASP file not found")
+
+  # Get options from the first analysis (has syntax with model/modelOriginal)
+  opts <- jaspTools:::analysisOptionsFromJASPFile(jaspFile)[[1]]
+  dataset <- jaspTools::extractDatasetFromJASPFile(jaspFile)
+
+  # Verify the raw structure has both model and modelOriginal in syntax
+  expect_true(is.list(opts$syntax),
+              info = "syntax should be a list with preserved fields")
+  expect_true("model" %in% names(opts$syntax),
+              info = "syntax should contain 'model' field")
+  expect_true("modelOriginal" %in% names(opts$syntax),
+              info = "syntax should contain 'modelOriginal' field")
+
+  # The pre-encoded model from JASP uses JaspColumn_X_Encoded format
+  expect_true(grepl("JaspColumn_", opts$syntax$model),
+              info = "JASP's model should use JaspColumn_X_Encoded format")
+
+  # The modelOriginal should contain original variable names
+  expect_true(grepl("Ab|Al|Af", opts$syntax$modelOriginal),
+              info = "modelOriginal should contain original variable names")
+
+  # Encode options and dataset
+  result <- jaspTools:::encodeOptionsAndDataset(opts, dataset)
+
+  # After encoding, the model should be re-encoded from modelOriginal
+  # It should now use our jaspColumnN format, NOT JASP's JaspColumn_X_Encoded format
+  expect_true(grepl("jaspColumn", result$options$syntax$model),
+              info = "Encoded model should use our jaspColumnN format")
+  expect_false(grepl("JaspColumn_", result$options$syntax$model),
+               info = "Encoded model should NOT contain JASP's JaspColumn_X_Encoded format")
+
+  # Verify that all variables in modelOriginal have been encoded
+  # Extract variable names that appear in the encoding map
+  encodedVars <- result$encodingMap$encoded
+  originalVars <- result$encodingMap$original
+
+  # Check that each original variable in modelOriginal has been replaced with encoded version
+  for (i in seq_along(originalVars)) {
+    origVar <- originalVars[i]
+    encVar <- encodedVars[i]
+
+    # Build word-boundary pattern for original variable
+    escapedVar <- gsub("([.\\\\^$|?*+()\\[\\]\\{\\}])", "\\\\\\1", origVar)
+    pattern <- paste0("(?<![A-Za-z0-9_])", escapedVar, "(?![A-Za-z0-9_])")
+
+    # If original variable was in modelOriginal, it should be replaced in model
+    if (grepl(pattern, opts$syntax$modelOriginal, perl = TRUE)) {
+      expect_false(grepl(pattern, result$options$syntax$model, perl = TRUE),
+                   info = paste("Model should not contain original variable:", origVar))
+      expect_true(grepl(encVar, result$options$syntax$model, fixed = TRUE),
+                  info = paste("Model should contain encoded variable:", encVar))
+    }
+  }
+})
+
+test_that("encodeOptionsAndDataset preserves modelOriginal unchanged", {
+
+  # The modelOriginal field should be preserved with original variable names
+  # It serves as a reference for what the user originally entered
+
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "bainSem.jasp")
+
+  skip_if_not(file.exists(jaspFile), "Test JASP file not found")
+
+  opts <- jaspTools:::analysisOptionsFromJASPFile(jaspFile)[[1]]
+  dataset <- jaspTools::extractDatasetFromJASPFile(jaspFile)
+
+  originalModelOriginal <- opts$syntax$modelOriginal
+
+  result <- jaspTools:::encodeOptionsAndDataset(opts, dataset)
+
+  # modelOriginal should remain unchanged (still has original variable names)
+  expect_equal(result$options$syntax$modelOriginal, originalModelOriginal,
+               info = "modelOriginal should be preserved unchanged")
+})
