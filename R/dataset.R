@@ -649,6 +649,14 @@ extractPairsFromValueAndType <- function(values, types, allColumnNames) {
 
   result <- data.frame(variable = character(0), type = character(0), stringsAsFactors = FALSE)
 
+  # Special case: values is a list with a "value" element (from flattened types/value structure
+
+  # that preserved additional fields like "model" and "modelOriginal")
+  # In this case, the actual variable names are in values$value
+  if (is.list(values) && "value" %in% names(values) && is.character(types)) {
+    return(extractPairsFromValueAndType(values$value, types, allColumnNames))
+  }
+
   # Simple case: both are character vectors of same length
 
   if (is.character(values) && is.character(types) && length(values) == length(types)) {
