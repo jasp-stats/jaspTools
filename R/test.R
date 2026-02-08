@@ -33,17 +33,23 @@ runTestsTravis <- function(modulePath) {
 #' Tests a specific R analysis found under module/tests/testthat. Useful to perform before
 #' making a pull request, to prevent failing builds.
 #'
+#' In addition to the standard test file (e.g., \code{test-AnalysisName.R}), this function
+#' also discovers auto-generated example test files (\code{test-example-*.R}) that contain
+#' \code{runAnalysis("AnalysisName", ...)} calls. This ensures that example-based tests
+#' created by \code{\link{makeTestsFromExamples}} are included when testing an analysis.
 #'
 #' @param name String name of the analysis to test (case sensitive).
 #' @param onlyPlots Would you like to only run the tests for plots? This can speed up the generating of reference images in case you are not interested in the other unit tests.
+#' @param includeExamples Logical. If TRUE (default), also runs any \code{test-example-*.R}
+#'   files that contain the analysis. Set to FALSE to only run the standard test file.
 #' @examples
 #'
 #' testAnalysis("AnovaBayesian")
 #'
 #' @export testAnalysis
-testAnalysis <- function(name, onlyPlots = FALSE) {
+testAnalysis <- function(name, onlyPlots = FALSE, includeExamples = TRUE) {
   modulePath <- getModulePathFromRFunction(name)
-  filesToTest <- getTestFilesMatchingName(name, modulePath)
+  filesToTest <- getTestFilesMatchingName(name, modulePath, includeExamples = includeExamples)
 
   envirValue <- Sys.getenv("NOT_CRAN")
   Sys.setenv("NOT_CRAN" = "true") # this is to prevent vdiffr from skipping plots
@@ -281,7 +287,7 @@ approxMatch <- function(new, old, tol = 1e-5) {
 
 }
 
-getTestFilesMatchingName <- function(name, modulePath) {
+getTestFilesMatchingName <- function(name, modulePath, includeExamples = TRUE) {
   testsDir <- file.path(modulePath, "tests", "testthat")
   if (!dir.exists(testsDir))
     stop("Could not locate ", testsDir)
@@ -290,14 +296,28 @@ getTestFilesMatchingName <- function(name, modulePath) {
   if (length(testFiles) == 0)
     stop("No files found to test.")
 
+  # Pass 1: match by file name (e.g., test-AnalysisName.R, test-verified-AnalysisName.R)
   analysisNames <- gsub("^test-(verified-)?", "", testFiles)
   analysisNames <- gsub("\\.[rR]$", "", analysisNames)
-
   matches <- which(tolower(basename(analysisNames)) == tolower(name))
-  if (length(matches) == 0)
-    stop("Could not locate test-", name, ".R, found the following testfiles: ", paste(basename(testFiles), collapse =  ", "))
+  matchedFiles <- testFiles[matches]
 
-  return(testFiles[matches])
+  # Pass 2: scan test-example-* files for runAnalysis("name", ...) calls
+  if (includeExamples) {
+    exampleFiles <- testFiles[grepl("^test-example-.*\\.[rR]$", testFiles)]
+    exampleFiles <- setdiff(exampleFiles, matchedFiles)
+    pattern <- paste0('runAnalysis\\(\\s*["\']', name, '["\']')
+    for (ef in exampleFiles) {
+      content <- readLines(file.path(testsDir, ef), warn = FALSE)
+      if (any(grepl(pattern, content)))
+        matchedFiles <- c(matchedFiles, ef)
+    }
+  }
+
+  if (length(matchedFiles) == 0)
+    stop("Could not locate test file for ", name, ". Found the following test files: ", paste(basename(testFiles), collapse = ", "))
+
+  return(matchedFiles)
 }
 
 printSuccessFailureModules <- function(testResults) {
