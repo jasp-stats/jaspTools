@@ -14,8 +14,8 @@ testAnalysis(name, onlyPlots = FALSE, includeAll = TRUE)
 \item{includeAll}{Logical (default \code{TRUE}). When \code{TRUE}, also
 includes auto-generated example test files (\code{test-library-*.R},
 \code{test-verified-*.R}, \code{test-other-*.R}) that contain
-\code{runAnalysis("AnalysisName", ...)} calls. Set \code{includeAll = FALSE}
-to restrict testing to the standard \code{test-AnalysisName.R} file only.}
+\code{runAnalysis("AnalysisName", ...)} calls. Set \code{includeAll = FALSE} to
+restrict testing to the standard \code{test-AnalysisName.R} file only.}
 }
 \description{
 Tests a specific R analysis found under module/tests/testthat. Useful to perform before
@@ -27,9 +27,6 @@ also discovers auto-generated source-based test files (\code{test-library-*.R},
 \code{test-verified-*.R}, \code{test-other-*.R}) that contain
 \code{runAnalysis("AnalysisName", ...)} calls. This ensures that tests
 created by \code{\link{makeTestsFromExamples}} are included when testing an analysis.
-
-To exclude example-based test files and run only the standard test file, set
-\code{includeAll = FALSE}.
 }
 \examples{
 

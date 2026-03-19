@@ -26,7 +26,8 @@ Be sure to use single quotes (') when supplying this string.
 }
 \examples{
 jaspOptions <- analysisOptions("~/Documents/someFile.jasp")
-options <- jaspOptions[[1]] # if there are multiple analyses in the .jasp files you need to select one
+# if there are multiple analyses in the .jasp files you need to select one
+options <- jaspOptions[[1]]
 
 options <- analysisOptions("BinomialTest")
 options[["variables"]] <- "contBinom"

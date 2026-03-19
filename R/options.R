@@ -16,7 +16,8 @@
 #' left empty.
 #' @examples
 #' jaspOptions <- analysisOptions("~/Documents/someFile.jasp")
-#' options <- jaspOptions[[1]] # if there are multiple analyses in the .jasp files you need to select one
+#' # if there are multiple analyses in the .jasp files you need to select one
+#' options <- jaspOptions[[1]]
 #'
 #' options <- analysisOptions("BinomialTest")
 #' options[["variables"]] <- "contBinom"
@@ -495,7 +496,7 @@ parsePreloadDataFromDescriptionQml <- function(analysisName) {
   # is preloadData even set for this specific analysis?
   specifiedPreloadDataLocal  <- "preloadData" %in% names(description[[analysisName]])
   # is preloadData set to TRUE for this specific analysis?
-  
+
   preloadDataAnalysis <- specifiedPreloadDataLocal && isTRUE(description[[analysisName]][["preloadData"]])
   # if preloadData set to TRUE for the analysis, or if set globally to TRUE and not set for the analysis
   preloadData <- (specifiedPreloadDataLocal && preloadDataAnalysis) || (!specifiedPreloadDataLocal && preloadDataGlobalSpecified && preloadGlobalValue)

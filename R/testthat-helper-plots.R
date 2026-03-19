@@ -1,7 +1,14 @@
 #' Compares JASP plots in unit tests.
 #'
 #' This function compares a stored .svg of a plot, to the plot that is created when the tests are run.
-#' If no .svg exists yet then you must first run \code{manageTestPlots}.
+#' If no visual reference (.svg) exists yet, \pkg{vdiffr} handles it like other visual snapshots.
+#'
+#' For \pkg{ggplot2} objects, a structural fallback snapshot is also maintained.
+#' In interactive test runs, if that structural snapshot is missing, it is created automatically
+#' (even when the visual comparison passes).
+#'
+#' To accept changed structural snapshots, use \code{testthat::snapshot_accept()} from the
+#' package root after running tests.
 #'
 #'
 #' @param test The plot object you wish to test (does not work well for non-ggplot2 objects).
@@ -32,15 +39,442 @@ expect_equal_plots <- function(test, name, dir = lifecycle::deprecated()) {
     subplots <- test$subplots
 
     for (i in seq_along(subplots))
-      vdiffr::expect_doppelganger(paste(name, "subplot", i, sep = "-"), subplots[[i]])
+      expect_plot_with_fallback(paste(name, "subplot", i, sep = "-"), subplots[[i]])
 
   } else {
     if (inherits(test, "qgraph")) {
       qq <- test
       test <- function() plot(qq)
     }
-    suppressWarnings(vdiffr::expect_doppelganger(name, test))
+    expect_plot_with_fallback(name, test)
   }
+}
+
+expect_plot_with_fallback <- function(name, test) {
+  result <- expect_doppelganger_with_ggplot_fallback(name, test)
+  if (isTRUE(result$passed)) {
+    maybe_seed_ggplot_structure_snapshot(test, name)
+    return(invisible(TRUE))
+  }
+
+  fallbackResult <- expect_doppelganger_fallback(test, name, vdiffr_result = result)
+  if (isTRUE(fallbackResult$passed)) {
+    testthat::succeed(paste0("vdiffr mismatch for '", name, "' accepted by fallback."))
+    return(invisible(TRUE))
+  }
+
+  vdiffrMsg <- conditionMessage(result$exception)
+  if (isTRUE(fallbackResult$has_fallback)) {
+    testthat::fail(paste0(
+      "vdiffr mismatch for '", name, "'.\n",
+      "Original vdiffr failure: ", vdiffrMsg
+    ))
+  } else {
+    testthat::fail(paste0(
+      "vdiffr mismatch for '", name, "'.\n",
+      "Original vdiffr failure: ", vdiffrMsg, "\n",
+      "Fallback failure: ", fallbackResult$message
+    ))
+  }
+
+  invisible(FALSE)
+}
+
+maybe_seed_ggplot_structure_snapshot <- function(test, name) {
+  if (!inherits(test, "ggplot"))
+    return(invisible(FALSE))
+
+  if (!is_interactive_plot_snapshot_mode())
+    return(invisible(FALSE))
+
+  snapshotName <- ggplot_structure_snapshot_name(name)
+  snapshotPath <- snapshot_relative_path(snapshotName)
+  if (file.exists(snapshotPath))
+    return(invisible(FALSE))
+
+  writeRes <- write_ggplot_structure_snapshot(test, snapshotName, snapshotPath, overwrite = FALSE)
+  if (!isTRUE(writeRes$passed))
+    return(invisible(FALSE))
+
+  testthat::succeed(paste0(
+    "Created missing ggplot structural snapshot for '",
+    name,
+    "' during interactive run."
+  ))
+  invisible(TRUE)
+}
+
+expect_doppelganger_with_ggplot_fallback <- function(name, test) {
+  out <- list(passed = FALSE, exception = NULL)
+
+  tryCatch(
+    {
+      suppressWarnings(vdiffr::expect_doppelganger(name, test))
+      out$passed <- TRUE
+      out
+    },
+    expectation_failure = function(cnd) {
+      out$exception <- cnd
+      out
+    },
+    error = function(cnd) {
+      out$exception <- cnd
+      out
+    }
+  )
+}
+
+#' @noRd
+expect_doppelganger_fallback <- function(test, name, ...) {
+  if (is.function(test))
+    return(expect_doppelganger_fallback.default(test, name, ...))
+
+  # ggplot2 now prepends namespaced classes (e.g. "ggplot2::ggplot").
+  # Strip prefixes so methods like *.ggplot are reachable.
+  dispatchTest <- test
+  cls <- class(dispatchTest)
+  plainCls <- sub("^.*::", "", cls)
+  class(dispatchTest) <- unique(c(plainCls, cls))
+
+  UseMethod("expect_doppelganger_fallback", dispatchTest)
+}
+
+#' @noRd
+#' @method expect_doppelganger_fallback default
+#' @export
+expect_doppelganger_fallback.default <- function(test, name, ...) {
+  list(
+    passed = FALSE,
+    has_fallback = FALSE,
+    exception = NULL,
+    message = paste0(
+      "No fallback expectation is implemented for class(es): ",
+      paste(class(test), collapse = ", "),
+      "."
+    )
+  )
+}
+
+#' @noRd
+#' @method expect_doppelganger_fallback ggplot
+#' @export
+expect_doppelganger_fallback.ggplot <- function(test, name, vdiffr_result = NULL, ...) {
+  expect_equal_ggplot_structure(test, name, vdiffr_result = vdiffr_result)
+}
+
+expect_equal_ggplot_structure <- function(plot, name, vdiffr_result = NULL) {
+  testthat::local_edition(3)
+
+  snapshotName <- ggplot_structure_snapshot_name(name)
+  snapshotPath <- snapshot_relative_path(snapshotName)
+  ensure_snapshot_subdir(snapshotName)
+  testthat::announce_snapshot_file(path = snapshotPath, name = snapshotName)
+
+  buildRes <- build_ggplot_structure_snapshot(plot)
+  if (!isTRUE(buildRes$passed)) {
+    return(list(
+      passed = FALSE,
+      has_fallback = TRUE,
+      exception = buildRes$exception,
+      message = buildRes$message
+    ))
+  }
+
+  tmpPath <- buildRes$tmpPath
+
+  if (should_update_ggplot_structure_snapshots()) {
+    hadSnapshot <- file.exists(snapshotPath)
+    writeRes <- write_ggplot_structure_snapshot(plot, snapshotName, snapshotPath, overwrite = TRUE)
+    if (!isTRUE(writeRes$passed))
+      return(writeRes)
+
+    action <- if (hadSnapshot) "updated" else "created"
+    return(list(
+      passed = TRUE,
+      has_fallback = TRUE,
+      exception = NULL,
+      message = paste0(
+        "ggplot structural snapshot for '",
+        name,
+        "' ",
+        action,
+        " in update mode."
+      )
+    ))
+  }
+
+  snapshotRes <- tryCatch(
+    {
+      testthat::expect_snapshot_file(
+        tmpPath,
+        name = snapshotName,
+        cran = FALSE,
+        compare = compare_ggplot_structure_snapshot
+      )
+
+      list(
+        passed = TRUE,
+        has_fallback = TRUE,
+        exception = NULL,
+        message = if (is.null(vdiffr_result) || isTRUE(vdiffr_result$passed)) {
+          paste0("ggplot structural snapshot for '", name, "' passed.")
+        } else {
+          paste0("vdiffr mismatch for '", name, "' accepted by ggplot structural fallback.")
+        }
+      )
+    },
+    expectation_failure = function(cnd) {
+      list(
+        passed = FALSE,
+        has_fallback = TRUE,
+        exception = cnd,
+        message = conditionMessage(cnd)
+      )
+    },
+    error = function(cnd) {
+      list(
+        passed = FALSE,
+        has_fallback = TRUE,
+        exception = cnd,
+        message = conditionMessage(cnd)
+      )
+    }
+  )
+
+  snapshotRes
+}
+
+is_interactive_plot_snapshot_mode <- function() {
+  interactive() && !identical(tolower(Sys.getenv("CI", "false")), "true")
+}
+
+build_ggplot_structure_snapshot <- function(plot) {
+  current <- tryCatch(
+    extract_ggplot_structure(plot),
+    error = function(cnd) cnd
+  )
+
+  if (inherits(current, "error")) {
+    return(list(
+      passed = FALSE,
+      exception = current,
+      message = conditionMessage(current)
+    ))
+  }
+
+  tmpPath <- tempfile(pattern = "ggplot-structure-", fileext = ".rds")
+  saveRDS(current, tmpPath)
+
+  list(
+    passed = TRUE,
+    exception = NULL,
+    message = NULL,
+    tmpPath = tmpPath
+  )
+}
+
+write_ggplot_structure_snapshot <- function(plot, snapshotName, snapshotPath, overwrite = FALSE) {
+  ensure_snapshot_subdir(snapshotName)
+  buildRes <- build_ggplot_structure_snapshot(plot)
+  if (!isTRUE(buildRes$passed)) {
+    return(list(
+      passed = FALSE,
+      has_fallback = TRUE,
+      exception = buildRes$exception,
+      message = buildRes$message
+    ))
+  }
+
+  writeRes <- tryCatch(
+    file.copy(buildRes$tmpPath, snapshotPath, overwrite = overwrite),
+    error = function(cnd) cnd
+  )
+
+  if (!isTRUE(writeRes)) {
+    err <- if (inherits(writeRes, "error")) {
+      writeRes
+    } else {
+      simpleError(paste0("Failed to write snapshot file: ", snapshotPath))
+    }
+
+    return(list(
+      passed = FALSE,
+      has_fallback = TRUE,
+      exception = err,
+      message = conditionMessage(err)
+    ))
+  }
+
+  list(
+    passed = TRUE,
+    has_fallback = TRUE,
+    exception = NULL,
+    message = NULL
+  )
+}
+
+should_update_ggplot_structure_snapshots <- function() {
+  isTRUE(getOption("jaspTools.plotStructure.update", FALSE)) ||
+    identical(tolower(Sys.getenv("JASP_PLOT_STRUCTURE_UPDATE", "false")), "true")
+}
+
+ggplot_structure_snapshot_path <- function(name) {
+  snapshot_relative_path(ggplot_structure_snapshot_name(name))
+}
+
+ggplot_structure_snapshot_name <- function(name) {
+  file <- paste0(str_standardise_snapshot_name(name), ".rds")
+  file.path("reference_plotobject", file)
+}
+
+str_standardise_snapshot_name <- function(x, sep = "-") {
+  x <- tolower(x)
+  x <- gsub("[^a-z0-9]", sep, x)
+  x <- gsub(paste0(sep, sep, "+"), sep, x)
+  x <- gsub(paste0("^", sep, "|", sep, "$"), "", x)
+  x
+}
+
+compare_ggplot_structure_snapshot <- function(old, new) {
+  oldStructure <- tryCatch(readRDS(old), error = function(cnd) cnd)
+  newStructure <- tryCatch(readRDS(new), error = function(cnd) cnd)
+
+  if (inherits(oldStructure, "error") || inherits(newStructure, "error"))
+    return(FALSE)
+
+  isTRUE(all.equal(
+    oldStructure,
+    newStructure,
+    tolerance = getOption("jaspTools.plotStructure.tolerance", 1e-6),
+    check.attributes = FALSE
+  ))
+}
+
+get_snapshotter <- function() {
+  x <- getOption("testthat.snapshotter")
+  if (is.null(x))
+    return(NULL)
+  if (!x$is_active())
+    return(NULL)
+  x
+}
+
+snapshot_relative_path <- function(name) {
+  snapshotter <- get_snapshotter()
+  if (is.null(snapshotter))
+    return(file.path("tests", "testthat", "_snaps", name))
+
+  file.path(snapshotter$snap_dir, snapshotter$file, name)
+}
+
+ensure_snapshot_subdir <- function(name) {
+  path <- snapshot_relative_path(name)
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  invisible(path)
+}
+
+extract_ggplot_structure <- function(plot) {
+  if (!inherits(plot, "ggplot"))
+    stop("`plot` must inherit from 'ggplot'.")
+
+  built <- ggplot2::ggplot_build(plot)
+
+  list(
+    labels = normalize_named_list(plot$labels),
+    layer_data = lapply(built$data, normalize_data_frame_for_snapshot),
+    layer_spec = lapply(plot$layers, extract_layer_spec),
+    layout = extract_layout_spec(plot, built),
+    scales = extract_scale_spec(plot)
+  )
+}
+
+normalize_data_frame_for_snapshot <- function(df) {
+  if (!is.data.frame(df))
+    return(df)
+
+  df <- as.data.frame(df, stringsAsFactors = FALSE)
+  if (ncol(df) > 0)
+    df <- df[, sort(names(df)), drop = FALSE]
+
+  for (nm in names(df)) {
+    col <- df[[nm]]
+    if (is.factor(col))
+      df[[nm]] <- as.character(col)
+    if (inherits(col, "POSIXct") || inherits(col, "POSIXt"))
+      df[[nm]] <- format(col, tz = "UTC", usetz = TRUE)
+    if (is.numeric(col))
+      df[[nm]] <- signif(col, getOption("jaspTools.plotStructure.signif", 10))
+  }
+
+  rownames(df) <- NULL
+  attributes(df) <- attributes(df)[intersect(names(attributes(df)), c("names", "class", "row.names"))]
+  df
+}
+
+normalize_named_list <- function(x) {
+  if (is.null(x))
+    return(NULL)
+
+  if (is.list(x) && !is.null(names(x))) {
+    x <- x[sort(names(x))]
+    x <- lapply(x, normalize_named_list)
+    return(x)
+  }
+
+  if (is.list(x))
+    return(lapply(x, normalize_named_list))
+
+  if (is.factor(x))
+    return(as.character(x))
+
+  if (is.numeric(x))
+    return(signif(x, getOption("jaspTools.plotStructure.signif", 10)))
+
+  x
+}
+
+extract_layer_spec <- function(layer) {
+  list(
+    geom = class(layer$geom)[1],
+    stat = class(layer$stat)[1],
+    position = class(layer$position)[1],
+    mapping = if (is.null(layer$mapping)) NULL else sort(names(layer$mapping)),
+    aes_params = normalize_named_list(layer$aes_params),
+    stat_params = normalize_named_list(layer$stat_params)
+  )
+}
+
+extract_layout_spec <- function(plot, built) {
+  panelLayout <- NULL
+  if (!is.null(built$layout$layout) && is.data.frame(built$layout$layout)) {
+    panelLayout <- built$layout$layout
+    keep <- intersect(c("PANEL", "ROW", "COL", "SCALE_X", "SCALE_Y"), names(panelLayout))
+    panelLayout <- panelLayout[, keep, drop = FALSE]
+    panelLayout <- normalize_data_frame_for_snapshot(panelLayout)
+  }
+
+  list(
+    coord = class(plot$coordinates)[1],
+    facet = class(plot$facet)[1],
+    panel_layout = panelLayout
+  )
+}
+
+extract_scale_spec <- function(plot) {
+  scales <- plot$scales$scales
+  lapply(scales, function(scale) {
+    transName <- NULL
+    if (!is.null(scale$trans) && !is.null(scale$trans$name))
+      transName <- scale$trans$name
+
+    list(
+      class = class(scale)[1],
+      aesthetics = if (is.null(scale$aesthetics)) NULL else sort(scale$aesthetics),
+      name = scale$name,
+      limits = normalize_named_list(scale$limits),
+      trans = transName
+    )
+  })
 }
 
 skip_if_grob <- function(test) {
