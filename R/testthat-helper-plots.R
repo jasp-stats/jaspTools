@@ -51,7 +51,7 @@ expect_equal_plots <- function(test, name, dir = lifecycle::deprecated()) {
 }
 
 expect_plot_with_fallback <- function(name, test) {
-  result <- expect_doppelganger_with_ggplot_fallback(name, test)
+  result <- capture_vdiffr_expectation(name, test)
   if (isTRUE(result$passed)) {
     maybe_seed_ggplot_structure_snapshot(test, name)
     return(invisible(TRUE))
@@ -64,20 +64,35 @@ expect_plot_with_fallback <- function(name, test) {
   }
 
   vdiffrMsg <- conditionMessage(result$exception)
-  if (isTRUE(fallbackResult$has_fallback)) {
-    testthat::fail(paste0(
-      "vdiffr mismatch for '", name, "'.\n",
-      "Original vdiffr failure: ", vdiffrMsg
-    ))
-  } else {
-    testthat::fail(paste0(
-      "vdiffr mismatch for '", name, "'.\n",
-      "Original vdiffr failure: ", vdiffrMsg, "\n",
-      "Fallback failure: ", fallbackResult$message
-    ))
-  }
+  fallbackMsg <- build_fallback_failure_message(fallbackResult)
+  testthat::fail(paste0(
+    "vdiffr mismatch for '", name, "'.\n",
+    "Original vdiffr failure: ", vdiffrMsg, "\n",
+    "Fallback failure: ", fallbackMsg
+  ))
 
   invisible(FALSE)
+}
+
+build_fallback_failure_message <- function(fallbackResult) {
+  fallbackMsg <- fallbackResult$message
+
+  fallbackExceptionMsg <- NULL
+  if (!is.null(fallbackResult$exception) && inherits(fallbackResult$exception, "condition"))
+    fallbackExceptionMsg <- conditionMessage(fallbackResult$exception)
+
+  combinedFallbackMsg <- fallbackMsg
+  if (!is.null(fallbackExceptionMsg) && nzchar(fallbackExceptionMsg)) {
+    if (is.null(combinedFallbackMsg) || !nzchar(combinedFallbackMsg))
+      combinedFallbackMsg <- fallbackExceptionMsg
+    else
+      combinedFallbackMsg <- paste0(combinedFallbackMsg, " (", fallbackExceptionMsg, ")")
+  }
+
+  if (is.null(combinedFallbackMsg) || !nzchar(combinedFallbackMsg))
+    combinedFallbackMsg <- "<no fallback details available>"
+
+  combinedFallbackMsg
 }
 
 maybe_seed_ggplot_structure_snapshot <- function(test, name) {
@@ -104,7 +119,7 @@ maybe_seed_ggplot_structure_snapshot <- function(test, name) {
   invisible(TRUE)
 }
 
-expect_doppelganger_with_ggplot_fallback <- function(name, test) {
+capture_vdiffr_expectation <- function(name, test) {
   out <- list(passed = FALSE, exception = NULL)
 
   tryCatch(

@@ -28,7 +28,7 @@ test_that("vdiffr mismatch falls back to ggplot structural snapshot", {
     .package = "vdiffr"
   )
 
-  vdiffrResult <- jaspTools:::expect_doppelganger_with_ggplot_fallback("demo-plot", p)
+  vdiffrResult <- jaspTools:::capture_vdiffr_expectation("demo-plot", p)
   expect_false(vdiffrResult$passed)
   expect_s3_class(vdiffrResult$exception, "expectation_failure")
 
@@ -45,7 +45,7 @@ test_that("default fallback reports no method for non-ggplot", {
     .package = "vdiffr"
   )
 
-  vdiffrResult <- jaspTools:::expect_doppelganger_with_ggplot_fallback("non-ggplot", function() plot(1:3))
+  vdiffrResult <- jaspTools:::capture_vdiffr_expectation("non-ggplot", function() plot(1:3))
   expect_false(vdiffrResult$passed)
   expect_s3_class(vdiffrResult$exception, "expectation_failure")
 
