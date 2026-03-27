@@ -133,7 +133,7 @@ capture_vdiffr_expectation <- function(name, test) {
 
   tryCatch(
     {
-      vdiffr::expect_doppelganger(name, test)
+      suppressWarnings(vdiffr::expect_doppelganger(name, test))
       out$passed <- TRUE
 
       # In interactive mode, vdiffr silently accepts mismatches by writing a
