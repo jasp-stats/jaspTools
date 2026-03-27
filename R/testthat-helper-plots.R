@@ -59,6 +59,7 @@ expect_plot_with_fallback <- function(name, test) {
 
   fallbackResult <- expect_doppelganger_fallback(test, name, vdiffr_result = result)
   if (isTRUE(fallbackResult$passed)) {
+    warning("vdiffr mismatch for '", name, "' accepted by structural fallback.", call. = FALSE)
     testthat::succeed(paste0("vdiffr mismatch for '", name, "' accepted by fallback."))
     return(invisible(TRUE))
   }
@@ -99,22 +100,30 @@ maybe_seed_ggplot_structure_snapshot <- function(test, name) {
   if (!inherits(test, "ggplot"))
     return(invisible(FALSE))
 
-  if (!is_interactive_plot_snapshot_mode())
-    return(invisible(FALSE))
+  testthat::local_edition(3)
 
   snapshotName <- ggplot_structure_snapshot_name(name)
   snapshotPath <- snapshot_relative_path(snapshotName)
-  if (file.exists(snapshotPath))
+  ensure_snapshot_subdir(snapshotName)
+  testthat::announce_snapshot_file(path = snapshotPath, name = snapshotName)
+
+  updateMode <- should_update_ggplot_structure_snapshots()
+
+  if (!updateMode && file.exists(snapshotPath))
     return(invisible(FALSE))
 
-  writeRes <- write_ggplot_structure_snapshot(test, snapshotName, snapshotPath, overwrite = FALSE)
+  if (!updateMode && !is_interactive_plot_snapshot_mode())
+    return(invisible(FALSE))
+
+  writeRes <- write_ggplot_structure_snapshot(test, snapshotName, snapshotPath, overwrite = updateMode)
   if (!isTRUE(writeRes$passed))
     return(invisible(FALSE))
 
+  action <- if (updateMode) "Updated" else "Created"
   testthat::succeed(paste0(
-    "Created missing ggplot structural snapshot for '",
+    action, " ggplot structural snapshot for '",
     name,
-    "' during interactive run."
+    "'."
   ))
   invisible(TRUE)
 }
@@ -124,11 +133,28 @@ capture_vdiffr_expectation <- function(name, test) {
 
   tryCatch(
     {
-      suppressWarnings(vdiffr::expect_doppelganger(name, test))
+      vdiffr::expect_doppelganger(name, test)
       out$passed <- TRUE
+
+      # In interactive mode, vdiffr silently accepts mismatches by writing a
+      # .new.svg file. Detect this and treat it as a mismatch.
+      newSvgName <- paste0(str_standardise_snapshot_name(name), ".new.svg")
+      newSvgPath <- snapshot_relative_path(newSvgName)
+      if (file.exists(newSvgPath)) {
+        out$passed <- FALSE
+        out$exception <- simpleError(paste0(
+          "vdiffr mismatch for '", name, "' (detected via .new.svg in interactive mode)."
+        ))
+        unlink(newSvgPath)
+      }
+
       out
     },
     expectation_failure = function(cnd) {
+      out$exception <- cnd
+      out
+    },
+    expectation_warning = function(cnd) {
       out$exception <- cnd
       out
     },
