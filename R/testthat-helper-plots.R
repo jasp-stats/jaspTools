@@ -94,6 +94,11 @@ build_fallback_failure_message <- function(fallbackResult) {
       combinedFallbackMsg <- paste0(combinedFallbackMsg, " (", fallbackExceptionMsg, ")")
   }
 
+  structuralDiff <- get_last_structural_diff()
+  if (!is.null(structuralDiff) && nzchar(structuralDiff)) {
+    combinedFallbackMsg <- paste0(combinedFallbackMsg, "\n", structuralDiff)
+  }
+
   if (is.null(combinedFallbackMsg) || !nzchar(combinedFallbackMsg))
     combinedFallbackMsg <- "<no fallback details available>"
 
@@ -383,12 +388,21 @@ str_standardise_snapshot_name <- function(x, sep = "-") {
   x
 }
 
+# Environment to store the last structural comparison details, so they can be
+# retrieved and included in failure messages (message() output is lost on CI).
+.structuralDiffEnv <- new.env(parent = emptyenv())
+.structuralDiffEnv$lastDiff <- NULL
+
 compare_ggplot_structure_snapshot <- function(old, new) {
+  .structuralDiffEnv$lastDiff <- NULL
+
   oldStructure <- tryCatch(readRDS(old), error = function(cnd) cnd)
   newStructure <- tryCatch(readRDS(new), error = function(cnd) cnd)
 
-  if (inherits(oldStructure, "error") || inherits(newStructure, "error"))
+  if (inherits(oldStructure, "error") || inherits(newStructure, "error")) {
+    .structuralDiffEnv$lastDiff <- "Could not read one or both .rds snapshot files."
     return(FALSE)
+  }
 
   tol <- getOption("jaspTools.plotStructure.tolerance", 1e-6)
   result <- all.equal(
@@ -399,15 +413,20 @@ compare_ggplot_structure_snapshot <- function(old, new) {
   )
 
   if (!isTRUE(result)) {
-    diffSummary <- paste(utils::head(result, 10), collapse = "\n  ")
-    message(
+    diffLines <- utils::head(result, 10)
+    diffSummary <- paste0(
       "Structural fallback mismatch (tolerance = ", format(tol, scientific = TRUE), "):\n  ",
-      diffSummary,
-      if (length(result) > 10) paste0("\n  ... and ", length(result) - 10, " more differences")
+      paste(diffLines, collapse = "\n  "),
+      if (length(result) > 10) paste0("\n  ... and ", length(result) - 10, " more differences") else ""
     )
+    .structuralDiffEnv$lastDiff <- diffSummary
   }
 
   isTRUE(result)
+}
+
+get_last_structural_diff <- function() {
+  .structuralDiffEnv$lastDiff
 }
 
 get_snapshotter <- function() {
@@ -472,7 +491,7 @@ normalize_data_frame_for_snapshot <- function(df) {
 }
 
 normalize_named_list <- function(x) {
-  if (is.null(x))
+  if (is.null(x) || inherits(x, "waiver"))
     return(NULL)
 
   if (is.list(x) && !is.null(names(x))) {
@@ -524,14 +543,24 @@ extract_scale_spec <- function(plot) {
   scales <- plot$scales$scales
   lapply(scales, function(scale) {
     transName <- NULL
-    if (!is.null(scale$trans) && !is.null(scale$trans$name))
-      transName <- scale$trans$name
+    # ggplot2 >= 3.5.0 renamed $trans to $transform
+    transObj <- scale$transform %||% scale$trans
+    if (!is.null(transObj) && !is.null(transObj$name))
+      transName <- transObj$name
+
+    scaleName <- scale$name
+    if (inherits(scaleName, "waiver"))
+      scaleName <- NULL
+
+    scaleLimits <- scale$limits
+    if (inherits(scaleLimits, "waiver"))
+      scaleLimits <- NULL
 
     list(
       class = class(scale)[1],
       aesthetics = if (is.null(scale$aesthetics)) NULL else sort(scale$aesthetics),
-      name = scale$name,
-      limits = normalize_named_list(scale$limits),
+      name = scaleName,
+      limits = if (!is.null(scaleLimits)) normalize_named_list(scaleLimits) else NULL,
       trans = transName
     )
   })
