@@ -106,7 +106,7 @@ build_fallback_failure_message <- function(fallbackResult) {
 }
 
 maybe_seed_ggplot_structure_snapshot <- function(test, name) {
-  if (!inherits(test, "ggplot"))
+  if (!is_ggplot(test))
     return(invisible(FALSE))
 
   testthat::local_edition(3)
@@ -388,10 +388,27 @@ str_standardise_snapshot_name <- function(x, sep = "-") {
   x
 }
 
+# ggplot2 >= 3.5.2 prepends namespaced classes (e.g. "ggplot2::ggplot"),
+# so plain inherits(x, "ggplot") may return FALSE.
+is_ggplot <- function(x) {
+  "ggplot" %in% sub("^.*::", "", class(x))
+}
+
 # Environment to store the last structural comparison details, so they can be
 # retrieved and included in failure messages (message() output is lost on CI).
 .structuralDiffEnv <- new.env(parent = emptyenv())
 .structuralDiffEnv$lastDiff <- NULL
+
+# Recursively strip waiver objects from a snapshot structure so that
+# snapshots created with older code (which stored waivers) can be compared
+# with snapshots created by the current code (which normalises them to NULL).
+normalize_snapshot_structure <- function(x) {
+  if (inherits(x, "waiver"))
+    return(NULL)
+  if (is.list(x))
+    return(lapply(x, normalize_snapshot_structure))
+  x
+}
 
 compare_ggplot_structure_snapshot <- function(old, new) {
   .structuralDiffEnv$lastDiff <- NULL
@@ -403,6 +420,10 @@ compare_ggplot_structure_snapshot <- function(old, new) {
     .structuralDiffEnv$lastDiff <- "Could not read one or both .rds snapshot files."
     return(FALSE)
   }
+
+  # Normalize both sides so old snapshots (with waiver objects) match new ones
+  oldStructure <- normalize_snapshot_structure(oldStructure)
+  newStructure <- normalize_snapshot_structure(newStructure)
 
   tol <- getOption("jaspTools.plotStructure.tolerance", 1e-6)
   result <- all.equal(
@@ -453,7 +474,7 @@ ensure_snapshot_subdir <- function(name) {
 }
 
 extract_ggplot_structure <- function(plot) {
-  if (!inherits(plot, "ggplot"))
+  if (!is_ggplot(plot))
     stop("`plot` must inherit from 'ggplot'.")
 
   built <- ggplot2::ggplot_build(plot)
