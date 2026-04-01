@@ -25,8 +25,12 @@
 #' testPlot <- results[["state"]][["figures"]][[1]][["obj"]]
 #' expect_equal_plots(testPlot, "descriptives-1", dir = "BinomialTest")
 #'
+#' @param tolerance Optional numeric tolerance for the structural fallback
+#'   comparison (default \code{1e-6}). Set to a larger value (e.g. \code{1e-3})
+#'   for plots whose data vary across platforms (e.g. MCMC-based Bayesian plots).
+#'
 #' @export expect_equal_plots
-expect_equal_plots <- function(test, name, dir = lifecycle::deprecated()) {
+expect_equal_plots <- function(test, name, dir = lifecycle::deprecated(), tolerance = NULL) {
   if (length(test) == 0) {
     expect(FALSE, getEmptyTestMsg("expect_equal_plots()"))
     return()
@@ -39,25 +43,25 @@ expect_equal_plots <- function(test, name, dir = lifecycle::deprecated()) {
     subplots <- test$subplots
 
     for (i in seq_along(subplots))
-      expect_plot_with_fallback(paste(name, "subplot", i, sep = "-"), subplots[[i]])
+      expect_plot_with_fallback(paste(name, "subplot", i, sep = "-"), subplots[[i]], tolerance = tolerance)
 
   } else {
     if (inherits(test, "qgraph")) {
       qq <- test
       test <- function() plot(qq)
     }
-    expect_plot_with_fallback(name, test)
+    expect_plot_with_fallback(name, test, tolerance = tolerance)
   }
 }
 
-expect_plot_with_fallback <- function(name, test) {
+expect_plot_with_fallback <- function(name, test, tolerance = NULL) {
   result <- capture_vdiffr_expectation(name, test)
   if (isTRUE(result$passed)) {
     maybe_seed_ggplot_structure_snapshot(test, name)
     return(invisible(TRUE))
   }
 
-  fallbackResult <- expect_doppelganger_fallback(test, name, vdiffr_result = result)
+  fallbackResult <- expect_doppelganger_fallback(test, name, vdiffr_result = result, tolerance = tolerance)
   if (isTRUE(fallbackResult$passed)) {
     warning("vdiffr mismatch for '", name, "' accepted by structural fallback.", call. = FALSE)
     testthat::succeed(paste0("vdiffr mismatch for '", name, "' accepted by fallback."))
@@ -166,9 +170,9 @@ capture_vdiffr_expectation <- function(name, test) {
 }
 
 #' @noRd
-expect_doppelganger_fallback <- function(test, name, ...) {
+expect_doppelganger_fallback <- function(test, name, ..., tolerance = NULL) {
   if (is.function(test))
-    return(expect_doppelganger_fallback.default(test, name, ...))
+    return(expect_doppelganger_fallback.default(test, name, ..., tolerance = tolerance))
 
   # ggplot2 now prepends namespaced classes (e.g. "ggplot2::ggplot").
   # Strip prefixes so methods like *.ggplot are reachable.
@@ -199,12 +203,15 @@ expect_doppelganger_fallback.default <- function(test, name, ...) {
 #' @noRd
 #' @method expect_doppelganger_fallback ggplot
 #' @export
-expect_doppelganger_fallback.ggplot <- function(test, name, vdiffr_result = NULL, ...) {
-  expect_equal_ggplot_structure(test, name, vdiffr_result = vdiffr_result)
+expect_doppelganger_fallback.ggplot <- function(test, name, vdiffr_result = NULL, ..., tolerance = NULL) {
+  expect_equal_ggplot_structure(test, name, vdiffr_result = vdiffr_result, tolerance = tolerance)
 }
 
-expect_equal_ggplot_structure <- function(plot, name, vdiffr_result = NULL) {
+expect_equal_ggplot_structure <- function(plot, name, vdiffr_result = NULL, tolerance = NULL) {
   testthat::local_edition(3)
+
+  if (!is.null(tolerance))
+    withr::local_options(jaspTools.plotStructure.tolerance = tolerance)
 
   snapshotName <- ggplot_structure_snapshot_name(name)
   snapshotPath <- snapshot_relative_path(snapshotName)
