@@ -4,7 +4,7 @@
 \alias{expect_equal_plots}
 \title{Compares JASP plots in unit tests.}
 \usage{
-expect_equal_plots(test, name, dir = lifecycle::deprecated())
+expect_equal_plots(test, name, dir = lifecycle::deprecated(), tolerance = NULL)
 }
 \arguments{
 \item{test}{The plot object you wish to test (does not work well for non-ggplot2 objects).}
@@ -12,6 +12,8 @@ expect_equal_plots(test, name, dir = lifecycle::deprecated())
 \item{name}{The name of the reference plot (a .svg stored in /tests/testthat/_snaps).}
 
 \item{dir}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}}
+
+\item{tolerance}{Optional numeric tolerance for the structural fallback comparison (default \code{1e-6}). Set to a larger value (e.g. \code{1e-3}) for plots whose data vary across platforms (e.g. MCMC-based Bayesian plots).}
 }
 \description{
 This function compares a stored .svg of a plot, to the plot that is created when the tests are run.
