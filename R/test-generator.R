@@ -664,13 +664,17 @@ getTests <- function(results) {
       unitTestType <- "plot"
     }
 
-    if (!is.null(unitTestType) && unitTestType == "plot" || (unitTestType == "table" && length(x[["data"]]) > 0)) {
+    if (!is.null(unitTestType) && (unitTestType == "plot" || unitTestType == "table")) {
       testid <- length(tests)
       tests[[paste0("itemToUnitTest-", testid)]] <<- list(
         title = unlist(x[["title"]]),
         id = testid,
         type = unitTestType,
-        data = ifelse(unitTestType == "table", makeTestTable(x[["data"]], print = FALSE), "")
+        data = if (unitTestType == "table") {
+          if (length(x[["data"]]) > 0) makeTestTable(x[["data"]], print = FALSE) else "list()"
+        } else {
+          ""
+        }
       )
       x[["itemToUnitTest"]] <- testid
     }

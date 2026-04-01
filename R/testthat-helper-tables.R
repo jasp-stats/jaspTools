@@ -38,6 +38,10 @@
 #' @export expect_equal_tables
 expect_equal_tables <- function(test, ref, label=NULL) {
   if (length(test) == 0) {
+    if (length(ref) == 0) {
+      testthat::succeed()
+      return()
+    }
     expect(FALSE, getEmptyTestMsg("expect_equal_tables()"))
     return()
   }
