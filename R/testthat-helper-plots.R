@@ -512,7 +512,7 @@ normalize_data_frame_for_snapshot <- function(df) {
 }
 
 normalize_named_list <- function(x) {
-  if (is.null(x) || inherits(x, "waiver"))
+  if (is.null(x) || inherits(x, "waiver") || is.function(x))
     return(NULL)
 
   if (is.list(x) && !is.null(names(x))) {
@@ -561,25 +561,30 @@ extract_layout_spec <- function(plot, built) {
 }
 
 extract_scale_spec <- function(plot) {
-  scales <- plot$scales$scales
+  scales <- tryCatch(plot$scales$scales, error = function(e) list())
   lapply(scales, function(scale) {
     transName <- NULL
-    # ggplot2 >= 3.5.0 renamed $trans to $transform
-    transObj <- scale$transform %||% scale$trans
-    if (!is.null(transObj) && !is.null(transObj$name))
+    # ggplot2 >= 3.5.0 renamed $trans to $transform; in S7 builds
+    # $transform may be the transformation *function* rather than an object.
+    transObj <- tryCatch(scale$trans, error = function(e) NULL)
+    if (is.null(transObj))
+      transObj <- tryCatch(scale$transform, error = function(e) NULL)
+    if (!is.null(transObj) && !is.function(transObj) && !is.null(transObj$name))
       transName <- transObj$name
 
-    scaleName <- scale$name
-    if (inherits(scaleName, "waiver"))
+    scaleName <- tryCatch(scale$name, error = function(e) NULL)
+    if (is.function(scaleName) || inherits(scaleName, "waiver"))
       scaleName <- NULL
 
-    scaleLimits <- scale$limits
-    if (inherits(scaleLimits, "waiver"))
+    scaleLimits <- tryCatch(scale$limits, error = function(e) NULL)
+    if (is.function(scaleLimits) || inherits(scaleLimits, "waiver"))
       scaleLimits <- NULL
+
+    scaleAes <- tryCatch(scale$aesthetics, error = function(e) NULL)
 
     list(
       class = class(scale)[1],
-      aesthetics = if (is.null(scale$aesthetics)) NULL else sort(scale$aesthetics),
+      aesthetics = if (is.null(scaleAes)) NULL else sort(scaleAes),
       name = scaleName,
       limits = if (!is.null(scaleLimits)) normalize_named_list(scaleLimits) else NULL,
       trans = transName
