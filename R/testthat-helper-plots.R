@@ -390,12 +390,24 @@ compare_ggplot_structure_snapshot <- function(old, new) {
   if (inherits(oldStructure, "error") || inherits(newStructure, "error"))
     return(FALSE)
 
-  isTRUE(all.equal(
+  tol <- getOption("jaspTools.plotStructure.tolerance", 1e-6)
+  result <- all.equal(
     oldStructure,
     newStructure,
-    tolerance = getOption("jaspTools.plotStructure.tolerance", 1e-6),
+    tolerance = tol,
     check.attributes = FALSE
-  ))
+  )
+
+  if (!isTRUE(result)) {
+    diffSummary <- paste(utils::head(result, 10), collapse = "\n  ")
+    message(
+      "Structural fallback mismatch (tolerance = ", format(tol, scientific = TRUE), "):\n  ",
+      diffSummary,
+      if (length(result) > 10) paste0("\n  ... and ", length(result) - 10, " more differences")
+    )
+  }
+
+  isTRUE(result)
 }
 
 get_snapshotter <- function() {
