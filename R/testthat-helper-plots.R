@@ -61,6 +61,9 @@ expect_plot_with_fallback <- function(name, test, tolerance = NULL) {
     return(invisible(TRUE))
   }
 
+  # Save the CI-generated SVG so it can be uploaded as an artifact for comparison
+  save_failed_plot_svg(test, name)
+
   fallbackResult <- expect_doppelganger_fallback(test, name, vdiffr_result = result, tolerance = tolerance)
   if (isTRUE(fallbackResult$passed)) {
     warning("vdiffr mismatch for '", name, "' accepted by structural fallback.", call. = FALSE)
@@ -392,6 +395,28 @@ str_standardise_snapshot_name <- function(x, sep = "-") {
 # so plain inherits(x, "ggplot") may return FALSE.
 is_ggplot <- function(x) {
   "ggplot" %in% sub("^.*::", "", class(x))
+}
+
+# Save the plot as SVG in the _snaps folder when vdiffr fails.
+# This allows CI to upload the generated SVG as an artifact for visual comparison.
+save_failed_plot_svg <- function(test, name) {
+  tryCatch({
+    newSvgName <- paste0(str_standardise_snapshot_name(name), ".new.svg")
+    svgPath    <- snapshot_relative_path(newSvgName)
+    ensure_snapshot_subdir(newSvgName)
+
+    if (is_ggplot(test)) {
+      svglite::svglite(svgPath, width = 7, height = 5)
+      print(test)
+      dev.off()
+    } else if (is.function(test)) {
+      svglite::svglite(svgPath, width = 7, height = 5)
+      test()
+      dev.off()
+    }
+  }, error = function(e) {
+    # silently ignore — saving is best-effort
+  })
 }
 
 # Environment to store the last structural comparison details, so they can be
