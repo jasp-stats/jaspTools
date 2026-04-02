@@ -572,21 +572,11 @@ extract_scale_spec <- function(plot) {
     if (!is.null(transObj) && !is.function(transObj) && !is.null(transObj$name))
       transName <- transObj$name
 
-    scaleName <- tryCatch(scale$name, error = function(e) NULL)
-    if (is.function(scaleName) || inherits(scaleName, "waiver"))
-      scaleName <- NULL
-
-    scaleLimits <- tryCatch(scale$limits, error = function(e) NULL)
-    if (is.function(scaleLimits) || inherits(scaleLimits, "waiver"))
-      scaleLimits <- NULL
-
     scaleAes <- tryCatch(scale$aesthetics, error = function(e) NULL)
 
     list(
       class = class(scale)[1],
       aesthetics = if (is.null(scaleAes)) NULL else sort(scaleAes),
-      name = scaleName,
-      limits = if (!is.null(scaleLimits)) normalize_named_list(scaleLimits) else NULL,
       trans = transName
     )
   })
