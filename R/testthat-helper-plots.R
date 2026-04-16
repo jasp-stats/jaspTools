@@ -546,6 +546,9 @@ normalize_named_list <- function(x, .depth = 0L) {
   if (is.environment(x) || typeof(x) == "externalptr" || inherits(x, "igraph"))
     return(paste0("<", typeof(x), ">"))
 
+  if (inherits(x, "vctrs_rcrd"))
+    return(paste0("<", paste(class(x), collapse = "/"), ">"))
+
   if (is.call(x) || is.expression(x) || is.symbol(x))
     return(deparse(x))
 
