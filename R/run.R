@@ -493,7 +493,7 @@ processJsonResults <- function(jsonResults) {
   results <- .jaspSyntaxDecodeAnalysisResults(results)
 
   results[["state"]] <- .readRunState()
-  results[["state"]] <- decodeJaspResultState(results[["state"]])
+  results[["state"]] <- .jaspBaseDecodeJaspResultState(results[["state"]])
 
   figures <- results$state$figures
   if (length(figures) > 1 && !is.null(names(figures)))
@@ -533,26 +533,16 @@ processJsonResults <- function(jsonResults) {
   state
 }
 
-decodeJaspResultState <- function(state) {
-  if (!is.list(state) || is.null(state[["figures"]]))
-    return(state)
-
-  for (figureName in names(state[["figures"]])) {
-    figure <- state[["figures"]][[figureName]]
-    if (is.list(figure) && !is.null(figure[["obj"]])) {
-      figure[["obj"]] <- decodeJaspPlotObject(figure[["obj"]])
-      state[["figures"]][[figureName]] <- figure
-    }
+.jaspBaseDecodeJaspResultState <- function(state) {
+  if (!exists("decodeJaspResultState", envir = asNamespace("jaspBase"), inherits = FALSE)) {
+    stop(
+      "Installed jaspBase does not provide `decodeJaspResultState()`. ",
+      "Update jaspBase so jaspTools can decode result state through the public jaspBase API.",
+      call. = FALSE
+    )
   }
 
-  state
-}
-
-decodeJaspPlotObject <- function(plot) {
-  tryCatch(
-    jaspBase:::decodeplot(plot, returnGrob = FALSE),
-    error = function(e) plot
-  )
+  jaspBase::decodeJaspResultState(state)
 }
 
 .jaspSyntaxDecodeAnalysisResults <- function(results) {

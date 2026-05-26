@@ -94,7 +94,9 @@ test_that("state callback initializes the state file expected by jaspBase", {
 
 test_that("processed results read standalone jaspBase state from callback file", {
   restoreDecode <- localJaspToolsBinding(".jaspSyntaxDecodeAnalysisResults", function(results) results)
+  restoreStateDecode <- localJaspToolsBinding(".jaspBaseDecodeJaspResultState", function(state) state)
   on.exit(restoreDecode(), add = TRUE)
+  on.exit(restoreStateDecode(), add = TRUE)
   on.exit(jaspTools:::.resetRunStateFile(), add = TRUE)
 
   location <- jaspTools:::.requestStateFileNameNative()
@@ -105,6 +107,26 @@ test_that("processed results read standalone jaspBase state from callback file",
   results <- jaspTools:::processJsonResults('{"status":"complete","results":{}}')
 
   expect_equal(results$state, state)
+})
+
+test_that("processed results delegate state figure decoding to jaspBase", {
+  state <- list(figures = list("1.png" = list(obj = "encoded")))
+  observed <- NULL
+  restoreDecode <- localJaspToolsBinding(".jaspSyntaxDecodeAnalysisResults", function(results) results)
+  restoreReadState <- localJaspToolsBinding(".readRunState", function() state)
+  restoreStateDecode <- localJaspToolsBinding(".jaspBaseDecodeJaspResultState", function(state) {
+    observed <<- state
+    state$decodedByJaspBase <- TRUE
+    state
+  })
+  on.exit(restoreDecode(), add = TRUE)
+  on.exit(restoreReadState(), add = TRUE)
+  on.exit(restoreStateDecode(), add = TRUE)
+
+  results <- jaspTools:::processJsonResults('{"status":"complete","results":{}}')
+
+  expect_identical(observed, state)
+  expect_true(results$state$decodedByJaspBase)
 })
 
 test_that("rbridge globals are restored after temporary injection", {
