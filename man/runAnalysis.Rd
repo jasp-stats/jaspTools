@@ -11,7 +11,8 @@ runAnalysis(
   view = TRUE,
   quiet = TRUE,
   makeTests = FALSE,
-  modulePath = NULL
+  modulePath = NULL,
+  verbose = getOption("jaspTools.runAnalysis.verbose", NULL)
 )
 }
 \arguments{
@@ -27,9 +28,8 @@ By default the directory in Resources is checked first, unless called within a t
 
 \item{view}{Boolean indicating whether to view the results in a webbrowser.}
 
-\item{quiet}{Boolean indicating whether to suppress messages from the
-analysis. Quiet runs are evaluated in a subprocess to contain native bridge
-crashes and Desktop logging.}
+\item{quiet}{Boolean indicating whether to run with subprocess containment
+and suppress raw JASP/native output by default.}
 
 \item{makeTests}{Boolean indicating whether to create testthat unit tests and print them to the terminal.}
 
@@ -37,6 +37,13 @@ crashes and Desktop logging.}
 for QML resolution and wrapped execution. When omitted, jaspTools first
 uses a module path attached to \code{options} by \code{analysisOptions()}
 and then falls back to configured \code{module.dirs}.}
+
+\item{verbose}{Controls which output streams are replayed. Use \code{"all"}
+or \code{TRUE} for both analysis and JASP/native output, \code{"analysis"}
+for R analysis messages and warnings only, \code{"jasp"} for JASP/native
+output only, and \code{"none"} or \code{FALSE} for no replayed output. When
+omitted, quiet runs default to \code{"analysis"} and non-quiet runs default
+to \code{"all"}.}
 }
 \description{
 \code{runAnalysis} makes it possible to execute a JASP analysis in R. Usually this

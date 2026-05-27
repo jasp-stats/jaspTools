@@ -651,6 +651,36 @@ test_that("subprocess warnings are replayed in the parent session", {
   )
 })
 
+test_that("runAnalysis verbosity separates replayed subprocess streams", {
+  expect_identical(jaspTools:::normalizeRunAnalysisVerbose(NULL, quiet = TRUE), "analysis")
+  expect_identical(jaspTools:::normalizeRunAnalysisVerbose(NULL, quiet = FALSE), "all")
+  expect_identical(jaspTools:::normalizeRunAnalysisVerbose(TRUE), "all")
+  expect_identical(jaspTools:::normalizeRunAnalysisVerbose(FALSE), "none")
+  expect_identical(jaspTools:::normalizeRunAnalysisVerbose("jasp"), "jasp")
+  expect_error(
+    jaspTools:::normalizeRunAnalysisVerbose("loud"),
+    "`verbose` must be one of"
+  )
+
+  expect_message(
+    jaspTools:::replaySubprocessMessages("analysis message", verbose = "analysis"),
+    "analysis message"
+  )
+  expect_silent(jaspTools:::replaySubprocessMessages("analysis message", verbose = "jasp"))
+
+  expect_warning(
+    jaspTools:::replaySubprocessWarnings("analysis warning", verbose = "analysis"),
+    "analysis warning"
+  )
+  expect_silent(jaspTools:::replaySubprocessWarnings("analysis warning", verbose = "jasp"))
+
+  expect_output(
+    jaspTools:::replaySubprocessOutput("Desktop: native output", verbose = "jasp"),
+    "Desktop: native output"
+  )
+  expect_silent(jaspTools:::replaySubprocessOutput("Desktop: native output", verbose = "analysis"))
+})
+
 test_that("subprocess env only carries requested variables", {
   env <- jaspTools:::.jaspToolsSubprocessEnv("JASPTOOLS_FAKE_CHILD")
 
@@ -737,6 +767,8 @@ test_that("subprocess runAnalysis parent views returned processed results", {
         result = processed,
         lastResults = rawJson,
         htmlFiles = list(files = list()),
+        messages = character(0),
+        output = character(0),
         warnings = character(0)
       )
     },
@@ -758,6 +790,7 @@ test_that("subprocess runAnalysis parent views returned processed results", {
 
   expect_false(observedPayload$args$view)
   expect_false(observedPayload$args$makeTests)
+  expect_identical(observedPayload$args$verbose, "analysis")
   expect_identical(observedPayload$env$JASPTOOLS_RUNANALYSIS_CHILD, "true")
   expect_true(all(c("NOT_CRAN", "LANG", "LANGUAGE") %in% names(observedPayload$env)))
   expect_identical(result, processed)

@@ -75,6 +75,9 @@
     )
   }
 
+  if (is.list(result) && !inherits(result, "jaspTools.subprocessError"))
+    result$output <- .jaspToolsSubprocessLog(logPath)
+
   unlink(logPath, force = TRUE)
   result
 }
@@ -123,9 +126,14 @@
 
 .jaspToolsRunAnalysisSubprocess <- function(args) {
   warnings <- character(0)
+  messages <- character(0)
   result <- tryCatch(
     withCallingHandlers(
       do.call(jaspTools::runAnalysis, args),
+      message = function(m) {
+        messages <<- c(messages, conditionMessage(m))
+        tryInvokeRestart("muffleMessage")
+      },
       warning = function(w) {
         warnings <<- c(warnings, conditionMessage(w))
         tryInvokeRestart("muffleWarning")
@@ -140,6 +148,7 @@
     result = result,
     lastResults = tryCatch(jaspTools:::.getInternal("lastResults"), error = function(e) NULL),
     htmlFiles = tryCatch(jaspTools:::collectSubprocessHtmlFiles(), error = function(e) NULL),
+    messages = unique(messages),
     warnings = unique(warnings)
   )
 }
@@ -173,6 +182,13 @@
 
   logTail <- paste(utils::tail(readLines(logPath, warn = FALSE), n), collapse = "\n")
   if (nzchar(logTail)) paste0("\n", logTail) else ""
+}
+
+.jaspToolsSubprocessLog <- function(logPath) {
+  if (!file.exists(logPath))
+    return(character(0))
+
+  readLines(logPath, warn = FALSE)
 }
 
 .stopIfJaspToolsSubprocessError <- function(result) {

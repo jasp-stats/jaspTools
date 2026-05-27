@@ -18,9 +18,14 @@
 #' @param options List of options to supply to the analysis (see also
 #' \code{analysisOptions}).
 #' @param view Boolean indicating whether to view the results in a webbrowser.
-#' @param quiet Boolean indicating whether to suppress messages from the
-#' analysis. Quiet runs are evaluated in a subprocess to contain native bridge
-#' crashes and Desktop logging.
+#' @param quiet Boolean indicating whether to run with subprocess containment
+#' and suppress raw JASP/native output by default.
+#' @param verbose Controls which output streams are replayed. Use \code{"all"}
+#' or \code{TRUE} for both analysis and JASP/native output, \code{"analysis"}
+#' for R analysis messages and warnings only, \code{"jasp"} for JASP/native
+#' output only, and \code{"none"} or \code{FALSE} for no replayed output. When
+#' omitted, quiet runs default to \code{"analysis"} and non-quiet runs default
+#' to \code{"all"}.
 #' @param makeTests Boolean indicating whether to create testthat unit tests and print them to the terminal.
 #' @param modulePath Optional path to the module checkout that should be used
 #'   for QML resolution and wrapped execution. When omitted, jaspTools first
@@ -65,7 +70,8 @@
 #'
 #' @export runAnalysis
 runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = TRUE,
-                        makeTests = FALSE, modulePath = NULL) {
+                        makeTests = FALSE, modulePath = NULL,
+                        verbose = getOption("jaspTools.runAnalysis.verbose", NULL)) {
   if (is.list(options) && is.null(names(options)) && any(names(unlist(lapply(options, attributes))) == "analysisName"))
     stop("The provided list of options is not named. Did you mean to index in the options list (e.g., options[[1]])?")
 
@@ -91,6 +97,8 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = TRUE
     quiet <- TRUE
   }
 
+  verbose <- normalizeRunAnalysisVerbose(verbose, quiet = quiet)
+
   if (runAnalysisShouldUseSubprocess(quiet = quiet)) {
     return(runAnalysisInSubprocess(
       name = name,
@@ -99,7 +107,8 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = TRUE
       view = view,
       quiet = quiet,
       makeTests = makeTests,
-      modulePath = modulePath
+      modulePath = modulePath,
+      verbose = verbose
     ))
   }
 
@@ -110,6 +119,8 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = TRUE
   attr(args, "modulePath") <- NULL
   if ("quiet" %in% names(formals(runner)))
     args$quiet <- quiet
+  if ("verbose" %in% names(formals(runner)))
+    args$verbose <- verbose
 
   oldWd       <- getwd()
   oldLang     <- Sys.getenv("LANG")
@@ -132,7 +143,7 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = TRUE
     makeTests = makeTests
   )
 
-  if (quiet) {
+  if (quiet && !runAnalysisShowsJaspOutput(verbose)) {
     sink(tempfile())
     on.exit({suppressWarnings(sink(NULL))}, add = TRUE)
     returnVal <- do.call(runner, args)
@@ -168,8 +179,47 @@ runAnalysisShouldUseSubprocess <- function(quiet,
     !identical(Sys.getenv("JASPTOOLS_RUNANALYSIS_CHILD"), "true")
 }
 
+normalizeRunAnalysisVerbose <- function(verbose = NULL, quiet = NULL) {
+  if (is.null(verbose) || length(verbose) == 0L) {
+    if (isFALSE(quiet))
+      return("all")
+
+    return("analysis")
+  }
+
+  verbose <- verbose[[1L]]
+  if (is.na(verbose))
+    stop("`verbose` must be one of 'all', 'analysis', 'jasp', 'none', TRUE, or FALSE.", call. = FALSE)
+
+  if (is.logical(verbose))
+    return(if (isTRUE(verbose)) "all" else "none")
+
+  if (is.character(verbose)) {
+    verbose <- tolower(trimws(verbose))
+    if (verbose %in% c("true", "yes", "on", "1"))
+      return("all")
+    if (verbose %in% c("false", "no", "off", "0"))
+      return("none")
+    if (verbose %in% c("all", "analysis", "jasp", "none"))
+      return(verbose)
+  }
+
+  stop("`verbose` must be one of 'all', 'analysis', 'jasp', 'none', TRUE, or FALSE.", call. = FALSE)
+}
+
+runAnalysisShowsAnalysisOutput <- function(verbose) {
+  verbose %in% c("all", "analysis")
+}
+
+runAnalysisShowsJaspOutput <- function(verbose) {
+  verbose %in% c("all", "jasp")
+}
+
 runAnalysisInSubprocess <- function(name, dataset, options, view, quiet,
-                                    makeTests, modulePath = NULL) {
+                                    makeTests, modulePath = NULL,
+                                    verbose = NULL) {
+  verbose <- normalizeRunAnalysisVerbose(verbose, quiet = quiet)
+
   payload <- .jaspToolsSubprocessPayload(
     extra = list(args = list(
       name = name,
@@ -178,7 +228,8 @@ runAnalysisInSubprocess <- function(name, dataset, options, view, quiet,
       view = FALSE,
       quiet = FALSE,
       makeTests = FALSE,
-      modulePath = modulePath
+      modulePath = modulePath,
+      verbose = verbose
     )),
     env = .jaspToolsSubprocessEnv(
       "JASPTOOLS_RUNANALYSIS_CHILD",
@@ -201,7 +252,9 @@ runAnalysisInSubprocess <- function(name, dataset, options, view, quiet,
   restoreSubprocessHtmlFiles(subprocessResult$htmlFiles)
 
   result <- .runAnalysisSubprocessResult(subprocessResult)
-  replaySubprocessWarnings(subprocessResult$warnings)
+  replaySubprocessOutput(subprocessResult$output, verbose = verbose)
+  replaySubprocessMessages(subprocessResult$messages, verbose = verbose)
+  replaySubprocessWarnings(subprocessResult$warnings, verbose = verbose)
   .stopIfJaspToolsSubprocessError(result)
 
   viewRunAnalysisResults(result, view)
@@ -226,13 +279,40 @@ viewRunAnalysisResults <- function(results, enabled) {
   get("view", envir = asNamespace("jaspTools"), inherits = FALSE)(results)
 }
 
-replaySubprocessWarnings <- function(warnings) {
+replaySubprocessMessages <- function(messages, verbose = "analysis") {
+  if (!runAnalysisShowsAnalysisOutput(verbose))
+    return(invisible(FALSE))
+
+  if (!is.character(messages) || length(messages) == 0L)
+    return(invisible(FALSE))
+
+  for (messageText in messages)
+    message(messageText)
+
+  invisible(TRUE)
+}
+
+replaySubprocessWarnings <- function(warnings, verbose = "analysis") {
+  if (!runAnalysisShowsAnalysisOutput(verbose))
+    return(invisible(FALSE))
+
   if (!is.character(warnings) || length(warnings) == 0L)
     return(invisible(FALSE))
 
   for (warningMessage in warnings)
     warning(warningMessage, call. = FALSE, immediate. = TRUE)
 
+  invisible(TRUE)
+}
+
+replaySubprocessOutput <- function(output, verbose = "analysis") {
+  if (!runAnalysisShowsJaspOutput(verbose))
+    return(invisible(FALSE))
+
+  if (!is.character(output) || length(output) == 0L)
+    return(invisible(FALSE))
+
+  writeLines(output)
   invisible(TRUE)
 }
 
