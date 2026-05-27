@@ -108,6 +108,8 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = TRUE
   runner <- attr(args, "runner", exact = TRUE)
   attr(args, "runner") <- NULL
   attr(args, "modulePath") <- NULL
+  if ("quiet" %in% names(formals(runner)))
+    args$quiet <- quiet
 
   oldWd       <- getwd()
   oldLang     <- Sys.getenv("LANG")
