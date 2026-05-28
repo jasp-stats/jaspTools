@@ -681,6 +681,19 @@ test_that("runAnalysis verbosity separates replayed subprocess streams", {
   expect_silent(jaspTools:::replaySubprocessOutput("Desktop: native output", verbose = "analysis"))
 })
 
+test_that("runAnalysis verbosity honors jaspSyntax default option", {
+  oldOptions <- options(
+    jaspTools.runAnalysis.verbose = NULL,
+    jaspSyntax.verbose = "none"
+  )
+  on.exit(do.call(options, oldOptions), add = TRUE)
+
+  expect_identical(eval(formals(jaspTools::runAnalysis)$verbose), "none")
+
+  options(jaspTools.runAnalysis.verbose = "jasp")
+  expect_identical(eval(formals(jaspTools::runAnalysis)$verbose), "jasp")
+})
+
 test_that("subprocess env only carries requested variables", {
   env <- jaspTools:::.jaspToolsSubprocessEnv("JASPTOOLS_FAKE_CHILD")
 

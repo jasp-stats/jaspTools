@@ -42,8 +42,8 @@ and then falls back to configured \code{module.dirs}.}
 or \code{TRUE} for both analysis and JASP/native output, \code{"analysis"}
 for R analysis messages and warnings only, \code{"jasp"} for JASP/native
 output only, and \code{"none"} or \code{FALSE} for no replayed output. When
-omitted, quiet runs default to \code{"analysis"} and non-quiet runs default
-to \code{"all"}.}
+omitted, \code{getOption("jaspSyntax.verbose")} is honored first, then quiet
+runs default to \code{"analysis"} and non-quiet runs default to \code{"all"}.}
 }
 \description{
 \code{runAnalysis} makes it possible to execute a JASP analysis in R. Usually this

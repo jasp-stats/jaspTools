@@ -24,8 +24,8 @@
 #' or \code{TRUE} for both analysis and JASP/native output, \code{"analysis"}
 #' for R analysis messages and warnings only, \code{"jasp"} for JASP/native
 #' output only, and \code{"none"} or \code{FALSE} for no replayed output. When
-#' omitted, quiet runs default to \code{"analysis"} and non-quiet runs default
-#' to \code{"all"}.
+#' omitted, \code{getOption("jaspSyntax.verbose")} is honored first, then quiet
+#' runs default to \code{"analysis"} and non-quiet runs default to \code{"all"}.
 #' @param makeTests Boolean indicating whether to create testthat unit tests and print them to the terminal.
 #' @param modulePath Optional path to the module checkout that should be used
 #'   for QML resolution and wrapped execution. When omitted, jaspTools first
@@ -71,7 +71,7 @@
 #' @export runAnalysis
 runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = TRUE,
                         makeTests = FALSE, modulePath = NULL,
-                        verbose = getOption("jaspTools.runAnalysis.verbose", NULL)) {
+                        verbose = getOption("jaspTools.runAnalysis.verbose", getOption("jaspSyntax.verbose", NULL))) {
   if (is.list(options) && is.null(names(options)) && any(names(unlist(lapply(options, attributes))) == "analysisName"))
     stop("The provided list of options is not named. Did you mean to index in the options list (e.g., options[[1]])?")
 
