@@ -195,6 +195,9 @@ createHtmlFile <- function(json) {
 }
 
 moveJaspHtmlToDir <- function(dir) {
+  if (!dir.exists(dir))
+    dir.create(dir, recursive = TRUE)
+
   if (!"js" %in% list.dirs(dir, full.names = FALSE))
     file.copy(list.files(getPkgOption("html.dir"), full.names = TRUE), dir, recursive = TRUE)
 }
