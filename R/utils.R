@@ -68,6 +68,13 @@ isBinaryPackage <- function(modulePath) {
     length(list.files(file.path(modulePath, "R"))) == 3L
 }
 
+function_exists <- function(package, funcname) {
+  tryCatch({
+    utils::getFromNamespace(funcname, package)
+    TRUE
+  }, error = function(...) FALSE)
+}
+
 rFunctionExistsInModule <- function(funName, modulePath) {
 
   if (isBinaryPackage(modulePath)) {
@@ -79,18 +86,9 @@ rFunctionExistsInModule <- function(funName, modulePath) {
 
   } else {
 
-    env <- new.env()
-    rFiles <- list.files(file.path(modulePath, "R"), pattern = "\\.[RrSsQq]$", recursive = TRUE, full.names = TRUE)
-    if (length(rFiles) == 0)
-      return(FALSE)
-
-    for (rFile in rFiles)
-      source(rFile, local = env)
-
-    if (funName %in% names(env))
-      return(TRUE)
-
-    return(FALSE)
+    moduleName <- getModuleName(modulePath)
+    return(function_exists(moduleName, funName))
+  
   }
 }
 
