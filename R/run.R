@@ -575,7 +575,6 @@ processJsonResults <- function(jsonResults) {
   results <- .jaspSyntaxDecodeAnalysisResults(results)
 
   results[["state"]] <- .readRunState()
-  results[["state"]] <- .jaspBaseDecodeJaspResultState(results[["state"]])
 
   figures <- results$state$figures
   if (length(figures) > 1 && !is.null(names(figures)))
@@ -613,18 +612,6 @@ processJsonResults <- function(jsonResults) {
     return(NULL)
 
   state
-}
-
-.jaspBaseDecodeJaspResultState <- function(state) {
-  if (!exists("decodeJaspResultState", envir = asNamespace("jaspBase"), inherits = FALSE)) {
-    stop(
-      "Installed jaspBase does not provide `decodeJaspResultState()`. ",
-      "Update jaspBase so jaspTools can decode result state through the public jaspBase API.",
-      call. = FALSE
-    )
-  }
-
-  jaspBase::decodeJaspResultState(state)
 }
 
 .jaspSyntaxDecodeAnalysisResults <- function(results) {
