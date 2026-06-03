@@ -186,7 +186,7 @@ preloadDataset <- function(datasetPathOrObject, options, modulePath = NULL,
 
   if (is.null(datasetPathOrObject)) {
     .setInternal("preloadedDataset", data.frame())
-    .setInternal("preloadedColumnMapping", character(0))
+    .setInternal("preloadedColumnEncoderContext", NULL)
     return(invisible(NULL))
   }
 
@@ -217,10 +217,10 @@ preloadDataset <- function(datasetPathOrObject, options, modulePath = NULL,
   if (is.null(resultDecodingDataset))
     resultDecodingDataset <- requestedDataset
 
-  columnMapping <- .jaspSyntaxDatasetStateColumnMapping(datasetState)
+  columnEncoderContext <- .jaspSyntaxDatasetStateColumnEncoderContext(datasetState)
 
   .setInternal("preloadedDataset", resultDecodingDataset)
-  .setInternal("preloadedColumnMapping", columnMapping)
+  .setInternal("preloadedColumnEncoderContext", columnEncoderContext)
   invisible(requestedDataset)
 }
 
@@ -259,17 +259,11 @@ preloadDataset <- function(datasetPathOrObject, options, modulePath = NULL,
   )
 }
 
-.jaspSyntaxDatasetStateColumnMapping <- function(datasetState) {
-  if (!is.list(datasetState) || is.null(datasetState[["columnMapping"]]))
-    return(character(0))
+.jaspSyntaxDatasetStateColumnEncoderContext <- function(datasetState) {
+  if (!is.list(datasetState) || is.null(datasetState[["columnEncoderContext"]]))
+    return(NULL)
 
-  columnMapping <- datasetState[["columnMapping"]]
-  if (!is.character(columnMapping) || is.null(names(columnMapping)))
-    return(character(0))
-
-  valid <- !is.na(columnMapping) & nzchar(columnMapping) &
-    !is.na(names(columnMapping)) & nzchar(names(columnMapping))
-  columnMapping[valid]
+  datasetState[["columnEncoderContext"]]
 }
 
 .validateJaspSyntaxDataset <- function(dataset, source, required = TRUE) {

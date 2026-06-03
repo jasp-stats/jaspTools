@@ -623,14 +623,12 @@ processJsonResults <- function(jsonResults) {
   if (is.data.frame(requestedDataset) && ncol(requestedDataset) > 0L)
     args$requestedDataset <- requestedDataset
 
-  columnMapping <- tryCatch(
-    .getInternal("preloadedColumnMapping"),
+  columnEncoderContext <- tryCatch(
+    .getInternal("preloadedColumnEncoderContext"),
     error = function(e) NULL
   )
-  if (is.character(columnMapping) && length(columnMapping) > 0L &&
-      !is.null(names(columnMapping))) {
-    args$columnMapping <- columnMapping
-  }
+  if (!is.null(columnEncoderContext))
+    args$columnEncoderContext <- columnEncoderContext
 
   decoded <- .jaspSyntaxCall(
     "decodeAnalysisResults",
@@ -678,5 +676,5 @@ getJsonResultsFromJaspResultsLegacy <- function() {
   .setInternal("state", list())
   .setInternal("dataset", "")
   .setInternal("preloadedDataset", data.frame())
-  .setInternal("preloadedColumnMapping", character(0))
+  .setInternal("preloadedColumnEncoderContext", NULL)
 }

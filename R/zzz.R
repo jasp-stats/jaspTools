@@ -1,7 +1,7 @@
 .pkgenv <- list2env(list(
   internal   = list(jaspToolsPath     = "",
                     dataset           = "",
-                    preloadedColumnMapping = character(0),
+                    preloadedColumnEncoderContext = NULL,
                     state             = list(),
                     modulesMd5Sums    = list(),
                     setupCompleteOverride = FALSE

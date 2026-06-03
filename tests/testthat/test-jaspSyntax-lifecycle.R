@@ -339,7 +339,10 @@ test_that("preloadDataset delegates raw dataset preparation to jaspSyntax", {
   observed <- NULL
   requested <- data.frame(left = 1:2)
   resultDecodingDataset <- data.frame(left = factor(c("control", "treatment")))
-  columnMapping <- c(JaspColumn_1_Encoded = "left")
+  columnEncoderContext <- structure(
+    list(columns = list(list(name = "left", type = "scale"))),
+    class = "jaspSyntaxColumnEncoderContext"
+  )
 
   restore <- localJaspToolsBindings(
     .jaspSyntaxClearDatasetState = function(required) {
@@ -358,7 +361,7 @@ test_that("preloadDataset delegates raw dataset preparation to jaspSyntax", {
         loadedDataset = dataset,
         requestedDataset = requested,
         resultDecodingDataset = resultDecodingDataset,
-        columnMapping = columnMapping
+        columnEncoderContext = columnEncoderContext
       )
     }
   )
@@ -379,7 +382,7 @@ test_that("preloadDataset delegates raw dataset preparation to jaspSyntax", {
   expect_identical(observed$analysisName, "FakeAnalysis")
   expect_identical(observed$options, options)
   expect_equal(jaspTools:::.getInternal("preloadedDataset"), resultDecodingDataset)
-  expect_equal(jaspTools:::.getInternal("preloadedColumnMapping"), columnMapping)
+  expect_identical(jaspTools:::.getInternal("preloadedColumnEncoderContext"), columnEncoderContext)
 })
 
 test_that("preloadDataset clears stale native state for null datasets", {
@@ -398,25 +401,28 @@ test_that("preloadDataset clears stale native state for null datasets", {
 
   expect_equal(clearDatasetCalls, 1L)
   expect_equal(jaspTools:::.getInternal("preloadedDataset"), data.frame())
-  expect_equal(jaspTools:::.getInternal("preloadedColumnMapping"), character(0))
+  expect_null(jaspTools:::.getInternal("preloadedColumnEncoderContext"))
 })
 
 test_that("analysis result decoding delegates to jaspSyntax", {
   observed <- NULL
   requestedDataset <- data.frame(encoded = factor("a"))
-  columnMapping <- c(JaspColumn_1_Encoded = "encoded")
+  columnEncoderContext <- structure(
+    list(columns = list(list(name = "encoded", type = "nominal"))),
+    class = "jaspSyntaxColumnEncoderContext"
+  )
   oldPreloadedDataset <- tryCatch(
     jaspTools:::.getInternal("preloadedDataset"),
     error = function(e) NULL
   )
-  oldPreloadedColumnMapping <- tryCatch(
-    jaspTools:::.getInternal("preloadedColumnMapping"),
+  oldPreloadedColumnEncoderContext <- tryCatch(
+    jaspTools:::.getInternal("preloadedColumnEncoderContext"),
     error = function(e) character(0)
   )
   jaspTools:::.setInternal("preloadedDataset", requestedDataset)
-  jaspTools:::.setInternal("preloadedColumnMapping", columnMapping)
+  jaspTools:::.setInternal("preloadedColumnEncoderContext", columnEncoderContext)
   on.exit(jaspTools:::.setInternal("preloadedDataset", oldPreloadedDataset), add = TRUE)
-  on.exit(jaspTools:::.setInternal("preloadedColumnMapping", oldPreloadedColumnMapping), add = TRUE)
+  on.exit(jaspTools:::.setInternal("preloadedColumnEncoderContext", oldPreloadedColumnEncoderContext), add = TRUE)
 
   restore <- localJaspToolsBindings(
     .jaspSyntaxCall = function(names, args = list(), required = TRUE,
@@ -444,7 +450,7 @@ test_that("analysis result decoding delegates to jaspSyntax", {
   expect_equal(observed$names, "decodeAnalysisResults")
   expect_equal(observed$args$results, results)
   expect_identical(observed$args$requestedDataset, requestedDataset)
-  expect_identical(observed$args$columnMapping, columnMapping)
+  expect_identical(observed$args$columnEncoderContext, columnEncoderContext)
   expect_true(observed$required)
   expect_equal(observed$requiredArgs, "results")
 })
