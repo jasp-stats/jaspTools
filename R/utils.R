@@ -68,13 +68,6 @@ isBinaryPackage <- function(modulePath) {
     length(list.files(file.path(modulePath, "R"))) == 3L
 }
 
-function_exists <- function(package, funcname) {
-  tryCatch({
-    utils::getFromNamespace(funcname, package)
-    TRUE
-  }, error = function(...) FALSE)
-}
-
 rFunctionExistsInModule <- function(funName, modulePath) {
 
   if (isBinaryPackage(modulePath)) {
@@ -86,9 +79,9 @@ rFunctionExistsInModule <- function(funName, modulePath) {
 
   } else {
 
-    moduleName <- getModuleName(modulePath)
-    return(function_exists(moduleName, funName))
-  
+    nsFile <- file.path(modulePath, "NAMESPACE")
+    return(any(grepl(paste0("^export\\(", funName, "\\)$"), readLines(nsFile, warn = FALSE))))
+
   }
 }
 
