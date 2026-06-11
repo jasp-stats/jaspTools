@@ -80,7 +80,13 @@ rFunctionExistsInModule <- function(funName, modulePath) {
   } else {
 
     nsFile <- file.path(modulePath, "NAMESPACE")
-    return(any(grepl(paste0("^export\\(", funName, "\\)$"), readLines(nsFile, warn = FALSE))))
+    parsed <- tryCatch(parse(nsFile), error = function(...) NULL)
+    if (is.null(parsed)) return(FALSE)
+    for (expr in as.list(parsed)) {
+      if (is.call(expr) && identical(as.character(expr[[1]]), "export"))
+        if (funName %in% as.character(expr[-1])) return(TRUE)
+    }
+    return(FALSE)
 
   }
 }
