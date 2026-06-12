@@ -79,6 +79,7 @@ rFunctionExistsInModule <- function(funName, modulePath) {
 
   } else {
 
+    # this is a simplified version of what base::parseNamespaceFile does
     nsFile <- file.path(modulePath, "NAMESPACE")
     parsed <- tryCatch(parse(nsFile), error = function(...) NULL)
     if (is.null(parsed)) return(FALSE)
