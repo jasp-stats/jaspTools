@@ -68,13 +68,6 @@ isBinaryPackage <- function(modulePath) {
     length(list.files(file.path(modulePath, "R"))) == 3L
 }
 
-function_exists <- function(package, funcname) {
-  tryCatch({
-    utils::getFromNamespace(funcname, package)
-    TRUE
-  }, error = function(...) FALSE)
-}
-
 rFunctionExistsInModule <- function(funName, modulePath) {
 
   if (isBinaryPackage(modulePath)) {
@@ -86,9 +79,16 @@ rFunctionExistsInModule <- function(funName, modulePath) {
 
   } else {
 
-    moduleName <- getModuleName(modulePath)
-    return(function_exists(moduleName, funName))
-  
+    # this is a simplified version of what base::parseNamespaceFile does
+    nsFile <- file.path(modulePath, "NAMESPACE")
+    parsed <- tryCatch(parse(nsFile), error = function(...) NULL)
+    if (is.null(parsed)) return(FALSE)
+    for (expr in as.list(parsed)) {
+      if (is.call(expr) && identical(as.character(expr[[1]]), "export"))
+        if (funName %in% as.character(expr[-1])) return(TRUE)
+    }
+    return(FALSE)
+
   }
 }
 
