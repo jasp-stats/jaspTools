@@ -7,17 +7,28 @@
 expect_equal_plots(test, name, dir = lifecycle::deprecated(), tolerance = NULL)
 }
 \arguments{
-\item{test}{The plot object you wish to test (does not work well for non-ggplot2 objects).}
+\item{test}{The plot object or plot recipe you wish to test.}
 
 \item{name}{The name of the reference plot (a .svg stored in /tests/testthat/_snaps).}
 
 \item{dir}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}}
 
-\item{tolerance}{Optional numeric tolerance for the structural fallback comparison (default \code{1e-6}). Set to a larger value (e.g. \code{1e-3}) for plots whose data vary across platforms (e.g. MCMC-based Bayesian plots).}
+\item{tolerance}{Optional numeric tolerance for the structural fallback
+comparison (default \code{1e-6}). Set to a larger value (e.g. \code{1e-3})
+for plots whose data vary across platforms (e.g. MCMC-based Bayesian plots).}
 }
 \description{
 This function compares a stored .svg of a plot, to the plot that is created when the tests are run.
-If no .svg exists yet then you must first run \code{manageTestPlots}.
+If no visual reference (.svg) exists yet, \pkg{vdiffr} handles it like other visual snapshots.
+}
+\details{
+Plot recipes are materialized before they are passed to \pkg{vdiffr}. For
+rendered \pkg{ggplot2} objects, a structural fallback snapshot is also maintained.
+In interactive test runs, if that structural snapshot is missing, it is created automatically
+(even when the visual comparison passes).
+
+To accept changed structural snapshots, use \code{testthat::snapshot_accept()} from the
+package root after running tests.
 }
 \examples{
 
