@@ -1,64 +1,79 @@
-# functions / properties to replace JASP's rcpp functions / properties
-
-# These are not used in combination with getAnywhere() in the code so they cannot be found
-.insertRbridgeIntoEnv <- function(env) {
-  env[[".automaticColumnEncDecoding"]] <- FALSE
-  env[[".encodeColNamesStrict"]]       <- function(x) return(x)
-  env[[".decodeColNamesStrict"]]       <- function(x) return(x)
-  env[[".encodeColNamesLax"]]          <- function(x) return(x)
-  env[[".decodeColNamesLax"]]          <- function(x) return(x)
-  env[[".decodeColTypes"]]             <- function(x) return(x)
-  env[[".encodeColNamesStrict"]]       <- function(x) return(x)
-
-  env[[".setColumnDataAsScale"]]       <- function(...) return(TRUE)
-  env[[".setColumnDataAsOrdinal"]]     <- function(...) return(TRUE)
-  env[[".setColumnDataAsNominal"]]     <- function(...) return(TRUE)
-  env[[".setColumnDataAsNominalText"]] <- function(...) return(TRUE)
-
-  env[[".allColumnNamesDataset"]]      <- function(...) {
-    dataset <- .getInternal("dataset")
-    dataset <- loadCorrectDataset(dataset)
-    return(colnames(dataset))
-  }
+# Minimal local replacements for non-dataset JASP Rcpp bridge callbacks.
+#
+# The active contract is intentionally narrow: jaspTools only provides fallback
+# objects that jaspBase::runWrappedAnalysis()/runJaspResults() can request
+# through jaspBase:::.fromRCPP() while running outside Desktop. Dataset loading,
+# option parsing, option encoding, column encoding/decoding, and computed-column
+# mutation belong to jaspSyntax/SyntaxInterface or Desktop itself.
+#
+# The bridge objects are kept in the jaspTools namespace because
+# jaspBase:::.fromRCPP() resolves hidden functions via getAnywhere().
+.rbridgeNativeSymbols <- function() {
+  c(
+    ".baseCitation",
+    ".ppi",
+    ".requestTempFileNameNative",
+    ".requestTempRootNameNative",
+    ".requestStateFileNameNative",
+    ".imageBackground"
+  )
 }
 
-# These are used in combination with getAnywhere() and can stay in the jaspTools namespace
+.insertRbridgeIntoEnv <- function(env) {
+  namespace <- asNamespace("jaspTools")
+  for (symbol in .rbridgeNativeSymbols()) {
+    assign(symbol, get(symbol, envir = namespace, inherits = FALSE), envir = env)
+  }
+
+  invisible(env)
+}
+
+.snapshotRbridgeEnv <- function(env, symbols = .rbridgeNativeSymbols()) {
+  state <- lapply(symbols, function(symbol) {
+    if (!exists(symbol, envir = env, inherits = FALSE))
+      return(list(exists = FALSE, locked = FALSE, value = NULL))
+
+    list(
+      exists = TRUE,
+      locked = bindingIsLocked(symbol, env),
+      value = get(symbol, envir = env, inherits = FALSE)
+    )
+  })
+  names(state) <- symbols
+  state
+}
+
+.restoreRbridgeEnv <- function(env, state) {
+  if (!is.list(state))
+    return(invisible(FALSE))
+
+  for (symbol in names(state)) {
+    previous <- state[[symbol]]
+    currentlyExists <- exists(symbol, envir = env, inherits = FALSE)
+    currentlyLocked <- currentlyExists && bindingIsLocked(symbol, env)
+
+    if (currentlyLocked)
+      unlockBinding(symbol, env)
+
+    if (isTRUE(previous$exists)) {
+      assign(symbol, previous$value, envir = env)
+      if (isTRUE(previous$locked))
+        lockBinding(symbol, env)
+    } else if (currentlyExists) {
+      rm(list = symbol, envir = env)
+    }
+  }
+
+  invisible(TRUE)
+}
+
 .ppi <- 192
 
 .baseCitation <- "x"
 
-.readDatasetToEndNative <- function(columns = c(), columns.as.numeric = c(), columns.as.ordinal = c(),
-                                    columns.as.factor = c(), all.columns = FALSE) {
-
-  dataset <- .getInternal("dataset")
-  dataset <- loadCorrectDataset(dataset)
-
-  if (all.columns) {
-    columns <- colnames(dataset)
-    columns <- columns[columns != ""]
-  }
-  dataset <- jaspBase:::.vdf(dataset, columns, columns.as.numeric, columns.as.ordinal,
-                        columns.as.factor, all.columns, exclude.na.listwise = c())
-
-  return(dataset)
-}
-
-.readDataSetHeaderNative <- function(columns = c(), columns.as.numeric = c(), columns.as.ordinal = c(),
-                                     columns.as.factor = c(), all.columns = FALSE) {
-
-  dataset <- .readDatasetToEndNative(columns, columns.as.numeric, columns.as.ordinal,
-                                     columns.as.factor, all.columns)
-  dataset <- dataset[0, , drop = FALSE]
-
-  return(dataset)
-}
-
-.readDataSetRequestedNative <- function() {
-  return(.getInternal("preloadedDataset"))
-}
-
 .requestTempFileNameNative <- function(...) {
   root <- getTempOutputLocation("html")
+  dir.create(file.path(root, "plots"), recursive = TRUE, showWarnings = FALSE)
   numPlots <- length(list.files(file.path(root, "plots")))
   list(
     root = root,
@@ -66,13 +81,34 @@
   )
 }
 
+.requestTempRootNameNative <- function() {
+  root <- getTempOutputLocation("html")
+  dir.create(file.path(root, "plots"), recursive = TRUE, showWarnings = FALSE)
+  list(root = root, relativePath = "")
+}
+
 .requestStateFileNameNative <- function() {
-  root <- getTempOutputLocation("state")
-  name <- "state"
+  stateFile <- .runStateFilePath()
+  if (!file.exists(stateFile))
+    .resetRunStateFile()
+
   list(
-    root = root,
-    relativePath = name
+    root = dirname(stateFile),
+    relativePath = basename(stateFile)
   )
+}
+
+.runStateFilePath <- function() {
+  root <- getTempOutputLocation("state")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  file.path(root, "state")
+}
+
+.resetRunStateFile <- function() {
+  stateFile <- .runStateFilePath()
+  state <- NULL
+  save(state, file = stateFile, compress = FALSE)
+  invisible(stateFile)
 }
 
 .imageBackground <- function(...) return("white")

@@ -93,7 +93,7 @@ getPkgOption <- function(name) {
 
 # ... and the internally accessible options
 .setInternal <- function(name, value) {
-  .pkgenv[["internal"]][[name]] <- value
+  .pkgenv[["internal"]][name] <- list(value)
 }
 
 .getInternal <- function(name) {

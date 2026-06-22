@@ -7,7 +7,7 @@
 #'
 #' @param results A named R list returned from a JASP analysis, a json
 #' results string copied from the Qt terminal, or a path to a .jasp file.
-#' @return A html page is generated and placed in a temp directory
+#' @return Invisibly, the path to the generated HTML file.
 #' @examples
 #'
 #' options <- analysisOptions("BinomialTest")
@@ -114,6 +114,7 @@ view <- function(results) {
     viewer <- utils::browseURL
 
   viewer(html)
+  invisible(html)
 }
 
 makeHtmlFromList <- function(results) {

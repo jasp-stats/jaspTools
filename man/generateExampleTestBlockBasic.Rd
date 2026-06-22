@@ -9,8 +9,7 @@ generateExampleTestBlockBasic(
   analysisIndex,
   totalAnalyses,
   jaspFileName,
-  sourceFolder,
-  forceEncode = NULL
+  sourceFolder
 )
 }
 \arguments{
@@ -24,8 +23,6 @@ generateExampleTestBlockBasic(
 
 \item{sourceFolder}{String indicating the source folder: \code{"library"},
 \code{"verified"}, or \code{"other"}.}
-
-\item{forceEncode}{Optional character vector of option names to force-encode via regex.}
 }
 \value{
 Character string with the test_that block.

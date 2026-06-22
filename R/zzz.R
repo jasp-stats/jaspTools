@@ -1,8 +1,10 @@
 .pkgenv <- list2env(list(
   internal   = list(jaspToolsPath     = "",
                     dataset           = "",
+                    preloadedColumnEncoderContext = NULL,
                     state             = list(),
-                    modulesMd5Sums    = list()
+                    modulesMd5Sums    = list(),
+                    setupCompleteOverride = FALSE
                ),
   pkgOptions = list(module.dirs       = "",
                     reinstall.modules = TRUE,
@@ -15,7 +17,6 @@
 
 .onLoad <- function(libname, pkgname) {
   .setInternal("jaspToolsPath", normalizePath(file.path(libname, "jaspTools")))
-  .insertRbridgeIntoEnv(.GlobalEnv)
 
   if (.isSetupComplete()) {
     .initInternalPaths()

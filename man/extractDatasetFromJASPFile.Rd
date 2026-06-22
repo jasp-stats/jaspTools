@@ -10,33 +10,21 @@ extractDatasetFromJASPFile(jaspFile, dataSetIndex = 1L)
 \item{jaspFile}{Character string specifying the path to the .jasp file.}
 
 \item{dataSetIndex}{Integer specifying which dataset to extract if the JASP
-file contains multiple datasets. Default is 1 (the first dataset).}
+file contains multiple datasets. Currently only \code{1L} is supported because
+that is the index supported by the \code{jaspSyntax} backend.}
 }
 \value{
-A data.frame containing the extracted dataset with proper column names,
-types, and factor levels.
+Either a data.frame containing the extracted dataset or \code{NULL} when
+the \code{.jasp} file does not contain tabular data.
 }
 \description{
-This function extracts the dataset from a saved JASP file (.jasp) and returns
-it as a data.frame. JASP files are zip archives containing an SQLite database
-with the data and metadata.
+Thin compatibility wrapper around \code{jaspSyntax::readDatasetFromJaspFile()}.
 }
 \details{
-The function performs the following steps:
-\itemize{
-\item Unpacking the .jasp archive (which is a zip file)
-\item Reading the internal.sqlite database
-\item Converting Column_N_DBL and Column_N_INT columns to properly named columns
-\item Mapping factor levels from the Labels table to create proper R factors
-\item Handling both explicitly nominal columns and columns with label mappings
-}
-
-Special values like NA, NaN, and Inf are handled appropriately:
-\itemize{
-\item "nan" values in DBL columns are converted to NA
-\item "inf" values in DBL columns are converted to Inf
-\item -1 values in INT columns typically indicate missing values
-}
+\code{jaspTools} now relies on \code{jaspSyntax} for reading datasets from saved JASP
+files, so the native \code{.jasp} decoding and dataset reconstruction logic lives
+in one place. Numeric columns, including \code{Inf} and \code{-Inf}, are returned
+directly from the \code{jaspSyntax} backend without additional post-processing.
 }
 \examples{
 \dontrun{

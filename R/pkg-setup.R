@@ -1,4 +1,4 @@
-#' Setup the jaspTools package.
+#' Setup the jaspTools package
 #'
 #' Ensures that analyses can be run, tested and debugged locally by fetching all of the basic dependencies.
 #' This includes fetching the data library and html files and installing jaspBase and jaspGraphs.
@@ -133,6 +133,9 @@ getSetupCompleteFileName <- function() {
 }
 
 .isSetupComplete <- function() {
+  if (isTRUE(.pkgenv[["internal"]][["setupCompleteOverride"]]))
+    return(TRUE)
+
   return(file.exists(getSetupCompleteFileName()))
 }
 

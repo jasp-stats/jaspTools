@@ -10,7 +10,7 @@ jasptools uses three different mechanisms to share variables between inner funct
 1. `.internal`: environment that holds internal variables; these are used to pass information between functions.
 The state entry is special, because it interfaces directly with the JASP code. Rather than storing and then loading the state, it is passed to jasptools, which is much faster.
 2. `.pkgOptions`: environment that holds variables to be changed by users; mainly paths to resources.
-3. global variables: the rbridge in JASP defines certain global variables that JASP assumes are always globally accessible and these need to be matched in jasptools. They include `perform`, `.ppi` and `.baseCitation` (the global functions on the other hand are defined in the jasptools file rbridge.R). Global variables are set every time `run` is called through `.setRCPPMasks`.
+3. rbridge namespace objects: JASP Desktop defines Rcpp-backed objects that `jaspBase:::.fromRCPP()` can request while an analysis runs. `jaspTools` now keeps only the local developer-execution subset in its namespace, such as `.ppi`, `.baseCitation`, plot/state file providers, and `.imageBackground`. Dataset loading and column encode/decode semantics belong to `jaspSyntax`/SyntaxInterface or Desktop.
 
 #### Handling of S3 methods
 Currently it is necessary to export the S3 methods used for generic functions in JASP (e.g., those defined in `common.R`).  
@@ -22,8 +22,5 @@ jasp-desktop follows a fixed structure, meaning that in every development enviro
 Once jasptools verifies that it is located within /Tools/ it converts the relative paths to the resources to absolute paths.  
 Now, if these resources are changed, jasptools will need to be adjusted. Firstly, `zzz.R` needs to be modified where it states `# set locations of all required resources (json, analyses, html, packages)` and secondly `.pkgOptions` in `pkg-settings.R` must reflect the same changes.
 
-#### Changing to TOML
-At the moment jasptools only supports JSON format for the description files.  
-Should we decide to change this in the future, then the functions that interface with the description file must be adapted.  
-These functions can be found in `options.R` (`.analysisOptionsFromFile`), `main.R` (`run`) and in `utils.R` (`.getJSON`).  
-It is not a problem that the code that is send to `view` still uses JSON as this is unlikely to change.
+#### jaspSyntax boundary
+jaspTools now delegates module description parsing, QML option parsing, saved `.jasp` option extraction, and `.jasp` dataset extraction to `jaspSyntax`. The developer-facing contract lives in `options.R`, `dataset.R`, `run.R`, and `test-generator.R`; lower-level Desktop/SyntaxInterface behavior should stay in `jaspSyntax` rather than being reimplemented here.

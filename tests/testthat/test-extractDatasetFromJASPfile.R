@@ -73,32 +73,30 @@ test_that("extractDatasetFromJASPFile handles binary columns correctly", {
   df <- extractDatasetFromJASPFile(jaspFile)
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
-  # Binary columns like contBinom should have correct 0/1 values
-  expect_equal(sort(unique(na.omit(df[["contBinom"]]))), c(0L, 1L),
+  # jaspSyntax owns JASP's saved-dataset reconstruction. Binary nominal values
+  # are returned as labels rather than coerced by jaspTools.
+  expect_equal(sort(unique(na.omit(df[["contBinom"]]))), c("0", "1"),
                info = "contBinom should have values 0 and 1")
-  expect_equal(df[["contBinom"]], csv[["contBinom"]],
+  expect_equal(df[["contBinom"]], as.character(csv[["contBinom"]]),
                info = "contBinom values should match CSV")
 
-  expect_equal(sort(unique(na.omit(df[["debBinMiss20"]]))), c(0L, 1L),
+  expect_equal(sort(unique(na.omit(df[["debBinMiss20"]]))), c("0", "1"),
                info = "debBinMiss20 should have values 0 and 1 (with NAs)")
-  expect_equal(df[["debBinMiss20"]], csv[["debBinMiss20"]],
+  expect_equal(df[["debBinMiss20"]], as.character(csv[["debBinMiss20"]]),
                info = "debBinMiss20 values should match CSV")
 })
 
 test_that("extractDatasetFromJASPFile handles infinity correctly", {
 
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.jasp")
-  csvFile <- file.path(testthat::test_path(), "..", "JASPFiles", "debug-descriptives.csv")
 
   skip_if_not(file.exists(jaspFile), "Test JASP file not found")
 
   df <- extractDatasetFromJASPFile(jaspFile)
-  csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
-  # debInf should be character with infinity symbol
-  expect_type(df[["debInf"]], "character")
-  expect_equal(unique(df[["debInf"]]), "\u221e", info = "debInf should contain infinity symbol")
-  expect_equal(df[["debInf"]], csv[["debInf"]], info = "debInf should match CSV")
+  expect_type(df[["debInf"]], "double")
+  expect_true(all(is.infinite(df[["debInf"]])), info = "debInf should contain infinite numeric values")
+  expect_true(all(df[["debInf"]] > 0), info = "debInf should contain positive infinity values")
 })
 
 test_that("extractDatasetFromJASPFile handles NaN/NA correctly", {
@@ -159,10 +157,10 @@ test_that("extractDatasetFromJASPFile handles ordinal columns correctly", {
   df <- extractDatasetFromJASPFile(jaspFile)
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
-  # facFive is ordinal with values 1-5
-  expect_equal(sort(unique(df[["facFive"]])), 1:5,
+  # Ordinal labels are returned by jaspSyntax without jaspTools-side coercion.
+  expect_equal(sort(unique(df[["facFive"]])), as.character(1:5),
                info = "facFive should have values 1-5")
-  expect_equal(df[["facFive"]], csv[["facFive"]],
+  expect_equal(df[["facFive"]], as.character(csv[["facFive"]]),
                info = "facFive values should match CSV")
 })
 

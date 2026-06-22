@@ -33,7 +33,8 @@ makeTestsFromSingleJASPFile(
 \item{pkgAnalyses}{Optional character vector of allowed analysis names for this module.
 If provided, analyses not in this list will be skipped.}
 
-\item{forceEncode}{Optional character vector of option names to force-encode via regex.}
+\item{forceEncode}{Compatibility argument retained for older callers. Supplying
+a non-\code{NULL} value now aborts.}
 }
 \value{
 The path to the created test file (with attr "skipped" if skipped,

@@ -10,8 +10,7 @@ generateExampleTestBlock(
   totalAnalyses,
   jaspFileName,
   sourceFolder,
-  results,
-  forceEncode = NULL
+  results
 )
 }
 \arguments{
@@ -27,8 +26,6 @@ generateExampleTestBlock(
 \code{"verified"}, or \code{"other"}.}
 
 \item{results}{The analysis results.}
-
-\item{forceEncode}{Optional character vector of option names to force-encode via regex.}
 }
 \value{
 Character string with the test_that block.

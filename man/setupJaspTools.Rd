@@ -2,7 +2,7 @@
 % Please edit documentation in R/pkg-setup.R
 \name{setupJaspTools}
 \alias{setupJaspTools}
-\title{Setup the jaspTools package.}
+\title{Setup the jaspTools package}
 \usage{
 setupJaspTools(
   pathJaspDesktop = NULL,

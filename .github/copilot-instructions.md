@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-jaspTools is an R package that enables JASP developers to preview, debug, and test JASP analyses locally without rebuilding the entire JASP application. It replicates the JASP runtime environment in R, including RCPP bridges, data handling, and state management.
+jaspTools is an R package that enables JASP developers to preview, debug, and test JASP analyses locally without rebuilding the entire JASP application. It orchestrates the local JASP runtime in R while delegating native QML, saved `.jasp`, dataset encoding, and result-decoding semantics to `jaspSyntax` and Desktop.
 
 ## Architecture
 
@@ -16,10 +16,10 @@ jaspTools uses specialized environments for variable scoping:
 
 ### Analysis Execution Flow
 
-1. **Setup**: `setupJaspTools()` fetches dependencies (jaspBase, jaspGraphs, datasets, HTML resources) and validates paths
-2. **Options**: `analysisOptions()` parses QML files, JASP files, or JSON to generate option lists
+1. **Setup**: `setupJaspTools()` fetches dependencies (jaspBase, jaspSyntax, jaspGraphs, datasets, HTML resources) and validates paths
+2. **Options**: `analysisOptions()` reads QML defaults and saved `.jasp` options through `jaspSyntax`; JSON requests are parsed directly
 3. **Runtime Init**: `initAnalysisRuntime()` in `R/run.R` sets up dataset, state, and global RCPP masks
-4. **Execution**: `runAnalysis()` calls `jaspBase::runJaspResults()` with the analysis function
+4. **Execution**: `runAnalysis()` resolves the module QML through `jaspSyntax`, then calls `jaspBase::runWrappedAnalysis()` / `runJaspResults()`
 5. **Output**: Results are converted to JSON and optionally displayed via `view()` using JASP's HTML/JS/CSS
 
 **Critical**: S3 methods from `common.R` are temporarily exported to `.GlobalEnv` during analysis execution (see `Developers-note.md` "Handling of S3 methods").
@@ -70,28 +70,24 @@ options <- analysisOptions("path/to/analysis.jasp")  # Returns list if multiple 
 # For multi-analysis files, access by index: options[[1]], options[[2]], etc.
 ```
 
-### Encoding Options and Datasets
+### Native Option and Dataset Semantics
 
-For reproducible testing, use `encodeOptionsAndDataset()` to standardize variable names and types:
+Do not reimplement option encoding, type coercion, QML parsing, or saved `.jasp`
+dataset reconstruction in jaspTools. Those semantics belong to `jaspSyntax` and
+Desktop. jaspTools should pass saved options and extracted datasets into the
+bridge and let `jaspSyntax` return the runtime-ready dataset, column mapping,
+and decoded results.
 
 ```r
-# Encode options and dataset for reproducible testing
-options <- analysisOptions("path/to/file.jasp")
+savedOptions <- analysisOptions("path/to/file.jasp")
 dataset <- extractDatasetFromJASPFile("path/to/file.jasp")
 
-encoded <- encodeOptionsAndDataset(options, dataset)
-# encoded$options: Options with variables renamed to jaspColumn1, jaspColumn2, etc.
-# encoded$dataset: Dataset with matching column names and proper type coercion
-# encoded$encodingMap: Mapping from original names to encoded names
-
-# Run with encoded data (skip type detection)
-runAnalysis("AnalysisName", encoded$dataset, encoded$options, encodedDataset = TRUE)
+runAnalysis("AnalysisName", dataset, savedOptions)
 ```
 
-The encoding process:
-1. Scans options for variables with `.types` metadata (e.g., `variables` and `variables.types`)
-2. Creates unique variable-type pairs and maps them to `jaspColumn1`, `jaspColumn2`, etc.
-3. Applies type coercion: `"nominal"` → factor, `"ordinal"` → ordered, `"scale"` → numeric
+Use `analysisRuntimeOptions()` only for inspecting the backend-prepared option
+shape. Do not feed those options back into `runAnalysis()`, because that would
+prepare an already-prepared option payload a second time.
 
 ### Generating Tests from JASP Example Files
 
@@ -122,9 +118,9 @@ makeTestsFromExamples(sanitize = TRUE)
 ```
 
 **Source Folders**: JASP example files are stored in `tests/testthat/jaspfiles/{library,verified,other}/`. The `source` argument controls which folders to process:
-- `"library"` — JASP files from the analysis library
-- `"verified"` — Manually verified/curated test files
-- `"other"` — Other/imported JASP files (default target for `path` imports)
+- `"library"` - JASP files from the analysis library
+- `"verified"` - Manually verified/curated test files
+- `"other"` - Other/imported JASP files (default target for `path` imports)
 
 **Defaults**: When `overwrite = FALSE` (default), all three sources are processed. When `overwrite = TRUE`, only `"library"` and `"other"` are processed to protect verified tests.
 
@@ -176,11 +172,15 @@ Analysis functions may have `Internal` suffixes. `findCorrectFunction()` searche
 
 ### QML Parsing
 
-`readQML()` in `R/options-parser-qml.R` strips comments, whitespace, and newlines, then uses regex to extract QML form elements. Supports `IntegerField`, `CheckBox`, `DropDown`, `RadioButtonGroup`, etc. Static elements like `SetSeed` and `BayesFactorType` inject default options.
+jaspTools does not parse QML directly. Use `jaspSyntax::readDefaultAnalysisOptions()`,
+`jaspSyntax::readAnalysisOptionsFromJaspFile()`, and
+`jaspSyntax::resolveAnalysisQml()` for native option semantics.
 
 ### State Management
 
-**State is ignored** in jaspTools (noted in README limitations). State from JASP files is stored in `.internal` but not persisted between runs. Analyses should be stateless or handle missing state gracefully.
+jaspTools keeps a standalone state file for `jaspBase` replay and decodes
+returned plot state after analysis execution. Browser-only interactions are not
+replayed.
 
 ## Common Pitfalls
 
@@ -196,17 +196,17 @@ Analysis functions may have `Internal` suffixes. `findCorrectFunction()` searche
 - **jaspGraphs**: Plotting system for JASP-compatible graphics
 - **jaspResults**: Legacy state container (now merged into jaspBase)
 - **vdiffr**: Visual regression testing for plots
-- **testthat**: Unit testing framework (requires ≥3.2.2)
+- **testthat**: Unit testing framework (requires >=3.2.2)
 
 Check versions with `.checkUpdatesJaspCorePkgs()` on package load.
 
 ## File Organization
 
-- `R/run.R`: Analysis execution, RCPP mask setup, JSON conversion. Supports `encodedDataset` parameter for pre-encoded data.
+- `R/run.R`: Analysis execution, RCPP mask setup, native QML provenance, JSON conversion, state-file replay
 - `R/test.R`: Testing infrastructure, `testAnalysis()`, `testAll()`
 - `R/test-agent.R`: Agent-friendly test wrappers, `agentTestAll()`, `agentTestAnalysis()`
 - `R/options.R`: Option parsing from QML/JASP/JSON. Cross-platform path handling for `.jasp` files.
-- `R/dataset.R`: Dataset loading, type conversion, `extractDatasetFromJASPFile()`, `encodeOptionsAndDataset()`
+- `R/dataset.R`: Dataset loading orchestration and `jaspSyntax` bridge wrappers
 - `R/rbridge.R`: RCPP bridge replacements (`.readDatasetToEndNative`, `.requestTempFileNameNative`, etc.)
 - `R/pkg-setup.R`: Initial setup, dependency fetching
 - `R/utils.R`: Module path resolution, validation, helper functions

@@ -1,4 +1,4 @@
-#' Run a JASP analysis in R.
+#' Run a JASP analysis in R
 #'
 #' \code{runAnalysis} makes it possible to execute a JASP analysis in R. Usually this
 #' process is a bit cumbersome as there are a number of objects unique to the
@@ -18,10 +18,24 @@
 #' @param options List of options to supply to the analysis (see also
 #' \code{analysisOptions}).
 #' @param view Boolean indicating whether to view the results in a webbrowser.
-#' @param quiet Boolean indicating whether to suppress messages from the
-#' analysis.
+#' @param quiet Boolean indicating whether to suppress raw JASP/native output
+#' by default.
+#' @param verbose Controls which output streams are requested. Use \code{"all"}
+#' or \code{TRUE} for both analysis and JASP/native output, \code{"analysis"}
+#' for R analysis messages and warnings only, \code{"jasp"} for JASP/native
+#' output only, and \code{"none"} or \code{FALSE} for no output. When
+#' omitted, \code{getOption("jaspSyntax.verbose")} is honored first, then quiet
+#' runs default to \code{"analysis"} and non-quiet runs default to \code{"all"}.
 #' @param makeTests Boolean indicating whether to create testthat unit tests and print them to the terminal.
-#' @param encodedDataset Boolean indicating whether to assume that the dataset is already encoded.
+#' @param modulePath Optional path to the module checkout that should be used
+#'   for QML resolution and wrapped execution. When omitted, jaspTools first
+#'   uses a module path attached to \code{options} by \code{analysisOptions()}
+#'   and then falls back to configured \code{module.dirs}.
+#' @details
+#' Saved/QML-bound options are replayed through the native QML runtime path. Use
+#' \code{analysisOptions()} for options that should be passed to
+#' \code{runAnalysis()}; options returned by \code{analysisRuntimeOptions()} are
+#' backend-prepared diagnostics and are not accepted by this runner.
 #' @examples
 #'
 #' options <- analysisOptions("BinomialTest")
@@ -55,12 +69,22 @@
 #'
 #'
 #' @export runAnalysis
-runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALSE, makeTests = FALSE, encodedDataset = FALSE) {
+runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = TRUE,
+                        makeTests = FALSE, modulePath = NULL,
+                        verbose = getOption("jaspTools.runAnalysis.verbose", getOption("jaspSyntax.verbose", NULL))) {
   if (is.list(options) && is.null(names(options)) && any(names(unlist(lapply(options, attributes))) == "analysisName"))
     stop("The provided list of options is not named. Did you mean to index in the options list (e.g., options[[1]])?")
 
   if (!is.list(options) || is.null(names(options)))
     stop("The options should be a named list (you can obtain it through `analysisOptions()`")
+
+  if (isPreparedOptions(options)) {
+    stop(
+      "`runAnalysis()` expects saved/QML-bound options. ",
+      "`analysisRuntimeOptions()` returns backend-prepared options for inspection only; ",
+      "use `analysisOptions()` to obtain runnable options."
+    )
+  }
 
   if (missing(name)) {
     name <- attr(options, "analysisName")
@@ -73,26 +97,46 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
     quiet <- TRUE
   }
 
+  verbose <- normalizeRunAnalysisVerbose(verbose, quiet = quiet)
+
+  args <- fetchRunArgs(name, options, modulePath = modulePath)
+  modulePath <- attr(args, "modulePath", exact = TRUE)
+  runner <- attr(args, "runner", exact = TRUE)
+  attr(args, "runner") <- NULL
+  attr(args, "modulePath") <- NULL
+  if ("quiet" %in% names(formals(runner)))
+    args$quiet <- quiet
+  if ("verbose" %in% names(formals(runner)))
+    args$verbose <- verbose
+
   oldWd       <- getwd()
   oldLang     <- Sys.getenv("LANG")
   oldLanguage <- Sys.getenv("LANGUAGE")
+
+  rbridgeState <- .snapshotRbridgeEnv(.GlobalEnv)
   on.exit({
     .resetRunTimeInternals()
+    .restoreRbridgeEnv(.GlobalEnv, rbridgeState)
     setwd(oldWd)
     Sys.setenv(LANG = oldLang)
     Sys.setenv(LANGUAGE = oldLanguage)
   }, add = TRUE)
 
-  initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests, encodedDataset = encodedDataset)
-  args <- fetchRunArgs(name, options)
+  initAnalysisRuntime(
+    dataset = dataset,
+    options = options,
+    modulePath = modulePath,
+    analysisName = name,
+    makeTests = makeTests
+  )
 
-  if (quiet) {
+  if (quiet && !runAnalysisShowsJaspOutput(verbose)) {
     sink(tempfile())
     on.exit({suppressWarnings(sink(NULL))}, add = TRUE)
-    returnVal <- suppressWarnings(do.call(jaspBase::runJaspResults, args))
+    returnVal <- do.call(runner, args)
     sink(NULL)
   } else {
-    returnVal <- do.call(jaspBase::runJaspResults, args)
+    returnVal <- do.call(runner, args)
   }
 
   # always TRUE after jaspResults is merged into jaspBase
@@ -101,16 +145,13 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
   } else {
     getJsonResultsFromJaspResultsLegacy()
   }
+  storeRawLastResults(jsonResults)
 
   transferPlotsFromjaspResults()
 
   results <- processJsonResults(jsonResults)
 
-  if (insideTestEnvironment())
-    .setInternal("lastResults", jsonResults)
-
-  if (view)
-    view(jsonResults)
+  viewRunAnalysisResults(results, view)
 
   if (makeTests)
     makeUnitTestsFromResults(results, name, dataset, options)
@@ -118,31 +159,189 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
   return(invisible(results))
 }
 
-fetchRunArgs <- function(name, options) {
-  possibleArgs <- list(
-    name = name,
-    functionCall = findCorrectFunction(name),
-    title = "",
-    requiresInit = TRUE,
-    options = jsonlite::toJSON(options),
-    dataKey = "null",
-    resultsMeta = "null",
-    stateKey = "null",
-    preloadData = parsePreloadDataFromDescriptionQml(name)
-  )
+normalizeRunAnalysisVerbose <- function(verbose = NULL, quiet = NULL) {
+  if (is.null(verbose) || length(verbose) == 0L) {
+    if (isFALSE(quiet))
+      return("all")
 
-  runArgs <- formals(jaspBase::runJaspResults)
-  argNames <- intersect(names(possibleArgs), names(runArgs))
-  return(possibleArgs[argNames])
+    return("analysis")
+  }
+
+  verbose <- verbose[[1L]]
+  if (is.na(verbose))
+    stop("`verbose` must be one of 'all', 'analysis', 'jasp', 'none', TRUE, or FALSE.", call. = FALSE)
+
+  if (is.logical(verbose))
+    return(if (isTRUE(verbose)) "all" else "none")
+
+  if (is.character(verbose)) {
+    verbose <- tolower(trimws(verbose))
+    if (verbose %in% c("true", "yes", "on", "1"))
+      return("all")
+    if (verbose %in% c("false", "no", "off", "0"))
+      return("none")
+    if (verbose %in% c("all", "analysis", "jasp", "none"))
+      return(verbose)
+  }
+
+  stop("`verbose` must be one of 'all', 'analysis', 'jasp', 'none', TRUE, or FALSE.", call. = FALSE)
 }
 
-initAnalysisRuntime <- function(dataset, options, makeTests, encodedDataset = FALSE, ...) {
+runAnalysisShowsJaspOutput <- function(verbose) {
+  verbose %in% c("all", "jasp")
+}
+
+viewRunAnalysisResults <- function(results, enabled) {
+  if (!isTRUE(enabled))
+    return(invisible(NULL))
+
+  get("view", envir = asNamespace("jaspTools"), inherits = FALSE)(results)
+}
+
+fetchRunArgs <- function(name, options, modulePath = NULL) {
+  fetchWrappedRunArgs(name, options, modulePath = modulePath)
+}
+
+fetchWrappedRunArgs <- function(name, options, modulePath = NULL) {
+  runner <- .jaspBaseRunWrappedAnalysis()
+  .validateRunWrappedAnalysisContract(runner)
+
+  modulePath <- .resolveRunModulePath(name, options, modulePath = modulePath)
+  resolved <- .jaspSyntaxResolveAnalysisQml(modulePath, name)
+  .validateOptionsMatchResolvedAnalysis(options, resolved)
+
+  possibleArgs <- list(
+    moduleName = resolved$moduleName,
+    analysisName = resolved$analysisName,
+    qmlFileName = resolved$qmlFileName,
+    qmlFile = resolved$qmlFile,
+    modulePath = modulePath,
+    options = options,
+    version = resolved$version,
+    preloadData = resolved$preloadData
+  )
+
+  runArgs <- formals(runner)
+  argNames <- intersect(names(possibleArgs), names(runArgs))
+  args <- possibleArgs[argNames]
+  attr(args, "runner") <- runner
+  attr(args, "modulePath") <- modulePath
+  return(args)
+}
+
+.jaspBaseRunWrappedAnalysis <- function() {
+  if (!exists("runWrappedAnalysis", envir = asNamespace("jaspBase"), inherits = FALSE)) {
+    stop(
+      "Installed jaspBase does not provide `runWrappedAnalysis()`. ",
+      "Update jaspBase so jaspTools can use the native QML/options runtime path."
+    )
+  }
+
+  get("runWrappedAnalysis", envir = asNamespace("jaspBase"), inherits = FALSE)
+}
+
+.validateRunWrappedAnalysisContract <- function(runner) {
+  requiredArgs <- c(
+    "moduleName",
+    "analysisName",
+    "qmlFileName",
+    "options",
+    "version",
+    "preloadData",
+    "modulePath",
+    "qmlFile"
+  )
+  missingArgs <- setdiff(requiredArgs, names(formals(runner)))
+
+  if (length(missingArgs) > 0L) {
+    stop(
+      "Installed jaspBase::runWrappedAnalysis() does not support source-module ",
+      "replay arguments: ", paste(missingArgs, collapse = ", "), ". ",
+      "Install jaspBase >= 0.20.5 from the matching jasp-desktop checkout so ",
+      "jaspTools can pass resolved QML and module provenance.",
+      call. = FALSE
+    )
+  }
+
+  invisible(TRUE)
+}
+
+.resolveRunModulePath <- function(name, options, modulePath = NULL) {
+  if (!is.null(modulePath))
+    return(.normalizeRunModulePath(modulePath))
+
+  optionModulePath <- attr(options, "modulePath", exact = TRUE)
+  if (!is.null(optionModulePath))
+    return(.normalizeRunModulePath(optionModulePath))
+
+  getModulePathFromRFunction(name)
+}
+
+.normalizeRunModulePath <- function(modulePath) {
+  if (!is.character(modulePath) || length(modulePath) != 1L ||
+      is.na(modulePath) || !nzchar(modulePath)) {
+    stop("`modulePath` must be a single non-empty string.", call. = FALSE)
+  }
+
+  normalizePath(modulePath, winslash = "/", mustWork = FALSE)
+}
+
+.validateOptionsMatchResolvedAnalysis <- function(options, resolved) {
+  optionAnalysisName <- .scalarOptionAttribute(options, "analysisName")
+  if (!is.null(optionAnalysisName) &&
+      !identical(optionAnalysisName, as.character(resolved$analysisName))) {
+    stop(
+      "`options` are tagged for analysis `", optionAnalysisName,
+      "`, but `runAnalysis()` is running `", resolved$analysisName, "`."
+    )
+  }
+
+  optionModuleName <- .scalarOptionAttribute(options, "moduleName")
+  if (!is.null(optionModuleName) &&
+      !identical(optionModuleName, as.character(resolved$moduleName))) {
+    stop(
+      "`options` are tagged for module `", optionModuleName,
+      "`, but `runAnalysis()` resolved module `", resolved$moduleName, "`."
+    )
+  }
+
+  invisible(TRUE)
+}
+
+.scalarOptionAttribute <- function(options, name) {
+  value <- attr(options, name, exact = TRUE)
+  if (is.null(value) || length(value) == 0L || is.na(value[[1L]]) || !nzchar(value[[1L]]))
+    return(NULL)
+
+  as.character(value[[1L]])
+}
+
+.jaspSyntaxResolveAnalysisQml <- function(modulePath, analysisName) {
+  if (!exists("resolveAnalysisQml", envir = asNamespace("jaspSyntax"), inherits = FALSE)) {
+    stop(
+      "Installed jaspSyntax does not provide `resolveAnalysisQml()`. ",
+      "Install the jaspSyntax build that exposes the native QML parser API."
+    )
+  }
+
+  jaspSyntax::resolveAnalysisQml(modulePath, analysisName)
+}
+
+initAnalysisRuntime <- function(dataset, options, makeTests, modulePath = NULL,
+                                analysisName = NULL, ...) {
   # first we reinstall any changed modules in the personal library
   reinstallChangedModules()
 
   # dataset to be found in the analysis when it needs to be read
   .setInternal("dataset", dataset)
-  preloadDataset(dataset, options, encodedDataset = encodedDataset)
+  .resetRunStateFile()
+  preloadDataset(
+    dataset,
+    options,
+    modulePath = modulePath,
+    analysisName = analysisName
+  )
+  .insertRbridgeIntoEnv(.GlobalEnv)
 
   # prevent the results from being translated (unless the user explicitly wants to)
   Sys.setenv(LANG = getPkgOption("language"))
@@ -215,13 +414,83 @@ processJsonResults <- function(jsonResults) {
   else
     stop("Could not process json result from jaspResults")
 
-  results[["state"]] <- .getInternal("state")
+  results <- .jaspSyntaxDecodeAnalysisResults(results)
+
+  results[["state"]] <- .readRunState()
 
   figures <- results$state$figures
   if (length(figures) > 1 && !is.null(names(figures)))
     results$state$figures <- figures[order(as.numeric(tools::file_path_sans_ext(basename(names(figures)))))]
 
   return(results)
+}
+
+.readRunState <- function() {
+  fileState <- .readRunStateFile()
+  if (!is.null(fileState))
+    return(fileState)
+
+  .getInternal("state")
+}
+
+.readRunStateFile <- function() {
+  location <- tryCatch(
+    .requestStateFileNameNative(),
+    error = function(e) NULL
+  )
+  if (!is.list(location) || is.null(location$root) || is.null(location$relativePath))
+    return(NULL)
+
+  stateFile <- file.path(location$root, location$relativePath)
+  if (!file.exists(stateFile))
+    return(NULL)
+
+  state <- NULL
+  loaded <- tryCatch(
+    load(stateFile),
+    error = function(e) character(0)
+  )
+  if (!"state" %in% loaded)
+    return(NULL)
+
+  state
+}
+
+.jaspSyntaxDecodeAnalysisResults <- function(results) {
+  requestedDataset <- tryCatch(
+    .getInternal("preloadedDataset"),
+    error = function(e) NULL
+  )
+  args <- list(results = results)
+  if (is.data.frame(requestedDataset) && ncol(requestedDataset) > 0L)
+    args$requestedDataset <- requestedDataset
+
+  columnEncoderContext <- tryCatch(
+    .getInternal("preloadedColumnEncoderContext"),
+    error = function(e) NULL
+  )
+  if (!is.null(columnEncoderContext))
+    args$columnEncoderContext <- columnEncoderContext
+
+  decoded <- .jaspSyntaxCall(
+    "decodeAnalysisResults",
+    args = args,
+    required = TRUE,
+    feature = "native analysis result decoding API",
+    requiredArgs = "results"
+  )
+
+  if (is.null(decoded))
+    return(results)
+
+  decoded
+}
+
+storeRawLastResults <- function(jsonResults) {
+  if (is.character(jsonResults) && length(jsonResults) == 1L)
+    .setInternal("lastResults", jsonResults)
+
+  invisible(jsonResults)
 }
 
 transferPlotsFromjaspResults <- function() {
@@ -244,6 +513,10 @@ getJsonResultsFromJaspResultsLegacy <- function() {
 }
 
 .resetRunTimeInternals <- function() {
+  .jaspSyntaxClearNativeState(required = FALSE)
+  .resetRunStateFile()
   .setInternal("state", list())
   .setInternal("dataset", "")
+  .setInternal("preloadedDataset", data.frame())
+  .setInternal("preloadedColumnEncoderContext", NULL)
 }

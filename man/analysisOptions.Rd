@@ -2,12 +2,18 @@
 % Please edit documentation in R/options.R
 \name{analysisOptions}
 \alias{analysisOptions}
-\title{Obtain options to run JASP analyses with.}
+\title{Obtain options to run JASP analyses with}
 \usage{
-analysisOptions(source)
+analysisOptions(source, modulePath = NULL)
 }
 \arguments{
 \item{source}{One of three: (1) R function name, (2) path to .jasp file or (3) json string. See the details section for more information.}
+
+\item{modulePath}{Optional module path, or named list/vector of module paths
+keyed by module name or analysis name. When omitted, jaspTools infers the
+module from configured module paths or the active module context. Pass this
+only to pin a source checkout for .jasp replay, generated tests, or
+ambiguous multi-module archives.}
 }
 \value{
 A list containing options of the analysis. If \code{source} is a .jasp file with multiple analyses, then a list of lists.
@@ -20,7 +26,13 @@ left empty.
 }
 \details{
 There are three types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools will attempt to read the .qml file for that analysis and create a set of default options.
-2) the path to .jasp file that has one or more analyses. Or (3) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
+2) the path to .jasp file that has one or more analyses. For .jasp files,
+saved QML-bound options are returned so they can be supplied to
+\code{runAnalysis()} and replayed once through the native JASP option
+pipeline. Use \code{analysisRuntimeOptions()} only when you need
+backend-prepared runtime options for diagnostics. Or (3) a json string that was sent by the
+JASP application. This json can be obtained by having JASP log to file
+(JASP>Preferences>Advanced>Log to file).
 The logs can be found by clicking 'Show logs" in the "Logging options". Click on the file "\emph{Engine}.log" that has "Engine::receiveAnalysisMessage:" (usually Engine 1), copy the content between the \{ and \}.
 Be sure to use single quotes (') when supplying this string.
 }

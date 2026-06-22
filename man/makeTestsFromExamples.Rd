@@ -36,11 +36,9 @@ with hyphens. If FALSE (default), preserves original spacing and characters in f
 \item{overwrite}{Logical. If TRUE, overwrites existing test files. If FALSE (default),
 skips files that already exist.}
 
-\item{forceEncode}{Optional character vector of option names that should be forcibly
-encoded using regular expression replacement. This is useful for options like
-\code{model} that contain variable names embedded in strings (e.g., formula syntax
-"A~B") but do not have a parallel \code{.types} entry. These options will have all
-column names replaced with their encoded equivalents using word-boundary-aware regex.}
+\item{forceEncode}{Compatibility argument retained for older callers. Supplying
+a non-\code{NULL} value now aborts because generated tests run directly against
+the extracted options and dataset without a separate encoding step.}
 }
 \value{
 Invisibly returns a character vector of created/processed test file paths.
@@ -62,7 +60,6 @@ blocks within the same test file.
 \strong{Prerequisites:}
 \itemize{
 \item \code{setupJaspTools()} must be run before using this function
-\item Packages 'DBI' and 'RSQLite' are required for extracting data from JASP files
 }
 }
 \examples{
@@ -86,8 +83,6 @@ makeTestsFromExamples(path = "path/to/jasp/files", module.dir = "path/to/module"
 # Overwrite existing test files (skips verified by default)
 makeTestsFromExamples(overwrite = TRUE)
 
-# Force encode 'model' option for analyses with embedded variable names
-makeTestsFromExamples(forceEncode = "model")
 }
 
 }
