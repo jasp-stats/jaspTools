@@ -68,8 +68,7 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
       stop("Please supply an analysis name")
   }
 
-  testing <- insideTestEnvironment()
-  if (testing) {
+  if (insideTestEnvironment()) {
     view  <- FALSE
     quiet <- TRUE
   }
@@ -83,11 +82,6 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
     Sys.setenv(LANG = oldLang)
     Sys.setenv(LANGUAGE = oldLanguage)
   }, add = TRUE)
-
-  if (testing) {
-    restorePlotRendering <- useFastTestPlotImages()
-    on.exit(restorePlotRendering(), add = TRUE)
-  }
 
   initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests, encodedDataset = encodedDataset)
   args <- fetchRunArgs(name, options)
@@ -112,7 +106,7 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
 
   results <- processJsonResults(jsonResults)
 
-  if (testing)
+  if (insideTestEnvironment())
     .setInternal("lastResults", jsonResults)
 
   if (view)
@@ -122,60 +116,6 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
     makeUnitTestsFromResults(results, name, dataset, options)
 
   return(invisible(results))
-}
-
-useFastTestPlotImages <- function() {
-  noop <- function() invisible(FALSE)
-
-  if (isFALSE(getOption("jaspTools.test.skipPlotRendering", TRUE)))
-    return(noop)
-
-  ns <- asNamespace("jaspBase")
-  fnName <- "writeImageJaspResults"
-  if (!exists(fnName, envir = ns, inherits = FALSE))
-    return(noop)
-
-  original <- get(fnName, envir = ns)
-  if (isTRUE(attr(original, "jaspToolsFastTestPlotImages")))
-    return(noop)
-
-  fastWriteImageJaspResults <- function(plot, width = 320, height = 320, obj = TRUE,
-                                        relativePathpng = NULL, relativePathJson = NULL,
-                                        ppi = 300, backgroundColor = "white",
-                                        location = jaspBase:::getImageLocation(),
-                                        oldPlotInfo = list()) {
-    if (is.null(relativePathpng))
-      relativePathpng <- location$relativePath
-
-    image <- list(
-      png = relativePathpng,
-      editOptions = "{}",
-      interactive = FALSE
-    )
-
-    if (isTRUE(obj)) {
-      decodePlot <- get0(".decodeJaspPlotObject", envir = ns, inherits = FALSE)
-      image[["obj"]] <- if (is.function(decodePlot)) {
-        decodePlot(plot, returnGrob = FALSE)
-      } else {
-        plot
-      }
-    }
-
-    image
-  }
-  attr(fastWriteImageJaspResults, "jaspToolsFastTestPlotImages") <- TRUE
-
-  unlockBinding(fnName, ns)
-  assign(fnName, fastWriteImageJaspResults, envir = ns)
-  lockBinding(fnName, ns)
-
-  function() {
-    unlockBinding(fnName, ns)
-    assign(fnName, original, envir = ns)
-    lockBinding(fnName, ns)
-    invisible(TRUE)
-  }
 }
 
 fetchRunArgs <- function(name, options) {
