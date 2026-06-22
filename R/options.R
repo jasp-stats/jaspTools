@@ -1,11 +1,13 @@
-#' Obtain options to run JASP analyses with.
+#' Obtain options to run JASP analyses with
 #'
 #' \code{analysisOptions} provides an easy way to create analysis options that can be supplied to \code{runAnalysis}.
 #'
 #' @param source One of three: (1) R function name, (2) path to .jasp file or (3) json string. See the details section for more information.
 #' @param modulePath Optional module path, or named list/vector of module paths
-#'   keyed by module name or analysis name. Used for .jasp replay and for
-#'   analysis-name defaults when the module checkout should be pinned.
+#'   keyed by module name or analysis name. When omitted, jaspTools infers the
+#'   module from configured module paths or the active module context. Pass this
+#'   only to pin a source checkout for .jasp replay, generated tests, or
+#'   ambiguous multi-module archives.
 #'
 #' @details
 #' There are three types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools will attempt to read the .qml file for that analysis and create a set of default options.

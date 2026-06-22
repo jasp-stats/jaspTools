@@ -2,7 +2,7 @@
 % Please edit documentation in R/run.R
 \name{runAnalysis}
 \alias{runAnalysis}
-\title{Run a JASP analysis in R.}
+\title{Run a JASP analysis in R}
 \usage{
 runAnalysis(
   name,
@@ -12,7 +12,7 @@ runAnalysis(
   quiet = TRUE,
   makeTests = FALSE,
   modulePath = NULL,
-  verbose = getOption("jaspTools.runAnalysis.verbose", NULL)
+  verbose = getOption("jaspTools.runAnalysis.verbose", getOption("jaspSyntax.verbose", NULL))
 )
 }
 \arguments{
@@ -28,8 +28,8 @@ By default the directory in Resources is checked first, unless called within a t
 
 \item{view}{Boolean indicating whether to view the results in a webbrowser.}
 
-\item{quiet}{Boolean indicating whether to run with subprocess containment
-and suppress raw JASP/native output by default.}
+\item{quiet}{Boolean indicating whether to suppress raw JASP/native output
+by default.}
 
 \item{makeTests}{Boolean indicating whether to create testthat unit tests and print them to the terminal.}
 
@@ -38,10 +38,10 @@ for QML resolution and wrapped execution. When omitted, jaspTools first
 uses a module path attached to \code{options} by \code{analysisOptions()}
 and then falls back to configured \code{module.dirs}.}
 
-\item{verbose}{Controls which output streams are replayed. Use \code{"all"}
+\item{verbose}{Controls which output streams are requested. Use \code{"all"}
 or \code{TRUE} for both analysis and JASP/native output, \code{"analysis"}
 for R analysis messages and warnings only, \code{"jasp"} for JASP/native
-output only, and \code{"none"} or \code{FALSE} for no replayed output. When
+output only, and \code{"none"} or \code{FALSE} for no output. When
 omitted, \code{getOption("jaspSyntax.verbose")} is honored first, then quiet
 runs default to \code{"analysis"} and non-quiet runs default to \code{"all"}.}
 }

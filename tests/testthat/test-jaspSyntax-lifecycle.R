@@ -613,51 +613,7 @@ test_that("fetchRunArgs requires jaspBase modulePath and qmlFile provenance supp
   )
 })
 
-test_that("quiet runAnalysis uses subprocess containment outside testthat", {
-  restoreOption <- localJaspToolsOptions(list(jaspTools.runAnalysis.subprocess = TRUE))
-  on.exit(restoreOption(), add = TRUE)
-
-  expect_true(jaspTools:::runAnalysisShouldUseSubprocess(
-    quiet = TRUE,
-    testEnvironment = FALSE
-  ))
-  expect_false(jaspTools:::runAnalysisShouldUseSubprocess(
-    quiet = FALSE,
-    testEnvironment = FALSE
-  ))
-  expect_true(jaspTools:::runAnalysisShouldUseSubprocess(
-    quiet = FALSE,
-    testEnvironment = TRUE
-  ))
-})
-
-test_that("subprocess html files can be collected and restored", {
-  sourceRoot <- tempfile("source-html-")
-  targetRoot <- tempfile("target-html-")
-  dir.create(file.path(sourceRoot, "plots"), recursive = TRUE)
-  writeBin(as.raw(c(1, 2, 3, 4)), file.path(sourceRoot, "plots", "plot.png"))
-  writeLines("<html></html>", file.path(sourceRoot, "tmp-index.html"))
-
-  files <- jaspTools:::collectSubprocessHtmlFiles(sourceRoot)
-  restored <- jaspTools:::restoreSubprocessHtmlFiles(files, targetRoot)
-
-  expect_true(restored)
-  expect_equal(
-    readBin(file.path(targetRoot, "plots", "plot.png"), what = "raw", n = 4L),
-    as.raw(c(1, 2, 3, 4))
-  )
-  expect_true(file.exists(file.path(targetRoot, "tmp-index.html")))
-})
-
-test_that("subprocess warnings are replayed in the parent session", {
-  expect_warning(
-    jaspTools:::replaySubprocessWarnings("first warning"),
-    "first warning",
-    fixed = TRUE
-  )
-})
-
-test_that("runAnalysis verbosity separates replayed subprocess streams", {
+test_that("runAnalysis verbosity normalizes user-facing values", {
   expect_identical(jaspTools:::normalizeRunAnalysisVerbose(NULL, quiet = TRUE), "analysis")
   expect_identical(jaspTools:::normalizeRunAnalysisVerbose(NULL, quiet = FALSE), "all")
   expect_identical(jaspTools:::normalizeRunAnalysisVerbose(TRUE), "all")
@@ -667,24 +623,6 @@ test_that("runAnalysis verbosity separates replayed subprocess streams", {
     jaspTools:::normalizeRunAnalysisVerbose("loud"),
     "`verbose` must be one of"
   )
-
-  expect_message(
-    jaspTools:::replaySubprocessMessages("analysis message", verbose = "analysis"),
-    "analysis message"
-  )
-  expect_silent(jaspTools:::replaySubprocessMessages("analysis message", verbose = "jasp"))
-
-  expect_warning(
-    jaspTools:::replaySubprocessWarnings("analysis warning", verbose = "analysis"),
-    "analysis warning"
-  )
-  expect_silent(jaspTools:::replaySubprocessWarnings("analysis warning", verbose = "jasp"))
-
-  expect_output(
-    jaspTools:::replaySubprocessOutput("Desktop: native output", verbose = "jasp"),
-    "Desktop: native output"
-  )
-  expect_silent(jaspTools:::replaySubprocessOutput("Desktop: native output", verbose = "analysis"))
 })
 
 test_that("runAnalysis verbosity honors jaspSyntax default option", {
@@ -698,22 +636,6 @@ test_that("runAnalysis verbosity honors jaspSyntax default option", {
 
   options(jaspTools.runAnalysis.verbose = "jasp")
   expect_identical(eval(formals(jaspTools::runAnalysis)$verbose), "jasp")
-})
-
-test_that("subprocess env only carries requested variables", {
-  env <- jaspTools:::.jaspToolsSubprocessEnv("JASPTOOLS_FAKE_CHILD")
-
-  expect_named(env, "JASPTOOLS_FAKE_CHILD")
-  expect_identical(env$JASPTOOLS_FAKE_CHILD, "true")
-})
-
-test_that("subprocess payload carries selected R options", {
-  restoreOption <- localJaspToolsOptions(list(jaspLegacyRngKind = FALSE))
-  on.exit(restoreOption(), add = TRUE)
-
-  payload <- jaspTools:::.jaspToolsSubprocessPayload()
-
-  expect_identical(payload$rOptions$jaspLegacyRngKind, FALSE)
 })
 
 test_that("runAnalysis sends processed results to the viewer", {
@@ -765,81 +687,6 @@ test_that("runAnalysis sends processed results to the viewer", {
   expect_identical(viewed, processed)
   expect_identical(jaspTools:::.getInternal("lastResults"), rawJson)
   expect_equal(observedOrder, c("fetch", "init"))
-})
-
-test_that("subprocess runAnalysis parent views returned processed results", {
-  rawJson <- '{"status":"complete","results":{"table":{"data":[{"name":"JaspColumn_1_Encoded"}]}}}'
-  processed <- list(
-    status = "complete",
-    results = list(table = list(data = list(list(name = "decoded name"))))
-  )
-  viewed <- NULL
-  observedPayload <- NULL
-
-  restore <- localJaspToolsBindings(
-    .jaspToolsRunSubprocess = function(task, payload, failureMessage, isError) {
-      observedPayload <<- payload
-      expect_equal(task, "runAnalysis")
-      expect_match(failureMessage, "runAnalysis", fixed = TRUE)
-      expect_false(isError(list(result = processed)))
-      list(
-        result = processed,
-        lastResults = rawJson,
-        htmlFiles = list(files = list()),
-        messages = character(0),
-        output = character(0),
-        warnings = character(0)
-      )
-    },
-    view = function(results) {
-      viewed <<- results
-      invisible("fake.html")
-    }
-  )
-  on.exit(restore(), add = TRUE)
-
-  result <- jaspTools:::runAnalysisInSubprocess(
-    name = "FakeAnalysis",
-    dataset = data.frame(x = 1),
-    options = list(variable = "x"),
-    view = TRUE,
-    quiet = TRUE,
-    makeTests = FALSE
-  )
-
-  expect_false(observedPayload$args$view)
-  expect_false(observedPayload$args$makeTests)
-  expect_identical(observedPayload$args$verbose, "analysis")
-  expect_identical(observedPayload$env$JASPTOOLS_RUNANALYSIS_CHILD, "true")
-  expect_true(all(c("NOT_CRAN", "LANG", "LANGUAGE") %in% names(observedPayload$env)))
-  expect_identical(result, processed)
-  expect_identical(viewed, processed)
-  expect_identical(jaspTools:::.getInternal("lastResults"), rawJson)
-})
-
-test_that("native QML replay accepts saved bound scalar options", {
-  fixtureModule <- normalizePath(
-    file.path(testthat::test_path(), "fixtures", "minimalModule"),
-    winslash = "/",
-    mustWork = FALSE
-  )
-  testthat::skip_if_not(dir.exists(fixtureModule), "minimal module fixture is unavailable")
-
-  opts <- jaspSyntax::readAnalysisOptionsFromQml(
-    fixtureModule,
-    "MinimalAnalysis",
-    options = list(
-      choice = "one",
-      flag = FALSE,
-      threshold = 2.5
-    ),
-    fresh = TRUE,
-    includeMeta = FALSE
-  )
-
-  expect_equal(opts$choice, "one")
-  expect_false(opts$flag)
-  expect_equal(opts$threshold, 2.5)
 })
 
 test_that("run argument construction rejects analysis and module metadata mismatch", {

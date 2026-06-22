@@ -1,4 +1,4 @@
-#' Run a JASP analysis in R.
+#' Run a JASP analysis in R
 #'
 #' \code{runAnalysis} makes it possible to execute a JASP analysis in R. Usually this
 #' process is a bit cumbersome as there are a number of objects unique to the
@@ -18,12 +18,12 @@
 #' @param options List of options to supply to the analysis (see also
 #' \code{analysisOptions}).
 #' @param view Boolean indicating whether to view the results in a webbrowser.
-#' @param quiet Boolean indicating whether to run with subprocess containment
-#' and suppress raw JASP/native output by default.
-#' @param verbose Controls which output streams are replayed. Use \code{"all"}
+#' @param quiet Boolean indicating whether to suppress raw JASP/native output
+#' by default.
+#' @param verbose Controls which output streams are requested. Use \code{"all"}
 #' or \code{TRUE} for both analysis and JASP/native output, \code{"analysis"}
 #' for R analysis messages and warnings only, \code{"jasp"} for JASP/native
-#' output only, and \code{"none"} or \code{FALSE} for no replayed output. When
+#' output only, and \code{"none"} or \code{FALSE} for no output. When
 #' omitted, \code{getOption("jaspSyntax.verbose")} is honored first, then quiet
 #' runs default to \code{"analysis"} and non-quiet runs default to \code{"all"}.
 #' @param makeTests Boolean indicating whether to create testthat unit tests and print them to the terminal.
@@ -99,19 +99,6 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = TRUE
 
   verbose <- normalizeRunAnalysisVerbose(verbose, quiet = quiet)
 
-  if (runAnalysisShouldUseSubprocess(quiet = quiet)) {
-    return(runAnalysisInSubprocess(
-      name = name,
-      dataset = dataset,
-      options = options,
-      view = view,
-      quiet = quiet,
-      makeTests = makeTests,
-      modulePath = modulePath,
-      verbose = verbose
-    ))
-  }
-
   args <- fetchRunArgs(name, options, modulePath = modulePath)
   modulePath <- attr(args, "modulePath", exact = TRUE)
   runner <- attr(args, "runner", exact = TRUE)
@@ -172,13 +159,6 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = TRUE
   return(invisible(results))
 }
 
-runAnalysisShouldUseSubprocess <- function(quiet,
-                                           testEnvironment = insideTestEnvironment()) {
-  isTRUE(getOption("jaspTools.runAnalysis.subprocess", TRUE)) &&
-    (isTRUE(quiet) || isTRUE(testEnvironment)) &&
-    !identical(Sys.getenv("JASPTOOLS_RUNANALYSIS_CHILD"), "true")
-}
-
 normalizeRunAnalysisVerbose <- function(verbose = NULL, quiet = NULL) {
   if (is.null(verbose) || length(verbose) == 0L) {
     if (isFALSE(quiet))
@@ -207,69 +187,8 @@ normalizeRunAnalysisVerbose <- function(verbose = NULL, quiet = NULL) {
   stop("`verbose` must be one of 'all', 'analysis', 'jasp', 'none', TRUE, or FALSE.", call. = FALSE)
 }
 
-runAnalysisShowsAnalysisOutput <- function(verbose) {
-  verbose %in% c("all", "analysis")
-}
-
 runAnalysisShowsJaspOutput <- function(verbose) {
   verbose %in% c("all", "jasp")
-}
-
-runAnalysisInSubprocess <- function(name, dataset, options, view, quiet,
-                                    makeTests, modulePath = NULL,
-                                    verbose = NULL) {
-  verbose <- normalizeRunAnalysisVerbose(verbose, quiet = quiet)
-
-  payload <- .jaspToolsSubprocessPayload(
-    extra = list(args = list(
-      name = name,
-      dataset = dataset,
-      options = options,
-      view = FALSE,
-      quiet = FALSE,
-      makeTests = FALSE,
-      modulePath = modulePath,
-      verbose = verbose
-    )),
-    env = .jaspToolsSubprocessEnv(
-      "JASPTOOLS_RUNANALYSIS_CHILD",
-      inherited = c("NOT_CRAN", "LANG", "LANGUAGE")
-    )
-  )
-
-  subprocessResult <- .jaspToolsRunSubprocess(
-    task = "runAnalysis",
-    payload = payload,
-    failureMessage = "`runAnalysis()` subprocess failed",
-    isError = function(result) {
-      inherits(.runAnalysisSubprocessResult(result), "jaspTools.subprocessError")
-    }
-  )
-
-  if (is.list(subprocessResult) && !is.null(subprocessResult$lastResults))
-    .setInternal("lastResults", subprocessResult$lastResults)
-
-  restoreSubprocessHtmlFiles(subprocessResult$htmlFiles)
-
-  result <- .runAnalysisSubprocessResult(subprocessResult)
-  replaySubprocessOutput(subprocessResult$output, verbose = verbose)
-  replaySubprocessMessages(subprocessResult$messages, verbose = verbose)
-  replaySubprocessWarnings(subprocessResult$warnings, verbose = verbose)
-  .stopIfJaspToolsSubprocessError(result)
-
-  viewRunAnalysisResults(result, view)
-
-  if (makeTests)
-    makeUnitTestsFromResults(result, name, dataset, options)
-
-  invisible(result)
-}
-
-.runAnalysisSubprocessResult <- function(subprocessResult) {
-  if (is.list(subprocessResult) && "result" %in% names(subprocessResult))
-    return(subprocessResult$result)
-
-  subprocessResult
 }
 
 viewRunAnalysisResults <- function(results, enabled) {
@@ -277,83 +196,6 @@ viewRunAnalysisResults <- function(results, enabled) {
     return(invisible(NULL))
 
   get("view", envir = asNamespace("jaspTools"), inherits = FALSE)(results)
-}
-
-replaySubprocessMessages <- function(messages, verbose = "analysis") {
-  if (!runAnalysisShowsAnalysisOutput(verbose))
-    return(invisible(FALSE))
-
-  if (!is.character(messages) || length(messages) == 0L)
-    return(invisible(FALSE))
-
-  for (messageText in messages)
-    message(messageText)
-
-  invisible(TRUE)
-}
-
-replaySubprocessWarnings <- function(warnings, verbose = "analysis") {
-  if (!runAnalysisShowsAnalysisOutput(verbose))
-    return(invisible(FALSE))
-
-  if (!is.character(warnings) || length(warnings) == 0L)
-    return(invisible(FALSE))
-
-  for (warningMessage in warnings)
-    warning(warningMessage, call. = FALSE, immediate. = TRUE)
-
-  invisible(TRUE)
-}
-
-replaySubprocessOutput <- function(output, verbose = "analysis") {
-  if (!runAnalysisShowsJaspOutput(verbose))
-    return(invisible(FALSE))
-
-  if (!is.character(output) || length(output) == 0L)
-    return(invisible(FALSE))
-
-  writeLines(output)
-  invisible(TRUE)
-}
-
-collectSubprocessHtmlFiles <- function(root = getTempOutputLocation("html")) {
-  if (!dir.exists(root))
-    return(list(files = list()))
-
-  paths <- list.files(root, all.files = TRUE, no.. = TRUE, recursive = TRUE,
-                      full.names = TRUE, include.dirs = FALSE)
-  if (length(paths) == 0L)
-    return(list(files = list()))
-
-  root <- normalizePath(root, winslash = "/", mustWork = TRUE)
-  files <- lapply(paths, function(path) {
-    normalizedPath <- normalizePath(path, winslash = "/", mustWork = TRUE)
-    relativePath <- substring(normalizedPath, nchar(root) + 2L)
-    fileSize <- file.info(normalizedPath)$size
-    list(
-      path = relativePath,
-      bytes = readBin(normalizedPath, what = "raw", n = fileSize)
-    )
-  })
-
-  list(files = files)
-}
-
-restoreSubprocessHtmlFiles <- function(htmlFiles, root = getTempOutputLocation("html")) {
-  if (!is.list(htmlFiles) || length(htmlFiles$files) == 0L)
-    return(invisible(FALSE))
-
-  dir.create(root, recursive = TRUE, showWarnings = FALSE)
-  for (file in htmlFiles$files) {
-    if (!is.list(file) || is.null(file$path) || is.null(file$bytes))
-      next
-
-    target <- file.path(root, file$path)
-    dir.create(dirname(target), recursive = TRUE, showWarnings = FALSE)
-    writeBin(file$bytes, target)
-  }
-
-  invisible(TRUE)
 }
 
 fetchRunArgs <- function(name, options, modulePath = NULL) {

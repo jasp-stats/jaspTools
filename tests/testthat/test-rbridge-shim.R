@@ -130,7 +130,6 @@ test_that("rbridge globals are restored after temporary injection", {
 })
 
 test_that("runAnalysis restores rbridge globals when the runner errors", {
-  restoreOption <- localJaspToolsOptions(list(jaspTools.runAnalysis.subprocess = FALSE))
   originalBaseCitation <- function() "original"
   restoreGlobal <- localGlobalSymbol(".baseCitation", originalBaseCitation)
 
@@ -156,7 +155,6 @@ test_that("runAnalysis restores rbridge globals when the runner errors", {
   })
   restoreReset <- localJaspToolsBinding(".resetRunTimeInternals", function() invisible(NULL))
 
-  on.exit(restoreOption(), add = TRUE)
   on.exit(restoreGlobal(), add = TRUE)
   on.exit(restoreFetch(), add = TRUE)
   on.exit(restoreInit(), add = TRUE)

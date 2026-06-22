@@ -1,14 +1,14 @@
-#' Setup the jaspTools package.
+#' Setup the jaspTools package
 #'
 #' Ensures that analyses can be run, tested and debugged locally by fetching all of the basic dependencies.
-#' This includes fetching the data library and html files and installing jaspBase, jaspGraphs and jaspSyntax.
+#' This includes fetching the data library and html files and installing jaspBase and jaspGraphs.
 #' If no parameters are supplied the function will interactively ask for the location of these dependencies.
 #'
 #' @param pathJaspDesktop (optional) Character path to the root of jasp-desktop if present on the system.
 #' @param installJaspModules (optional) Boolean. Should jaspTools install all the JASP analysis modules as R packages (e.g., jaspAnova, jaspFrequencies)?
-#' @param installJaspCorePkgs (optional) Boolean. Should jaspTools install jaspBase, jaspSyntax, jaspResults and jaspGraphs?
+#' @param installJaspCorePkgs (optional) Boolean. Should jaspTools install jaspBase, jaspResults and jaspGraphs?
 #' @param quiet (optional) Boolean. Should the installation of R packages produce output?
-#' @param force (optional) Boolean. Should a fresh installation of jaspResults, jaspBase, jaspSyntax, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.
+#' @param force (optional) Boolean. Should a fresh installation of jaspResults, jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.
 #'
 #' @export setupJaspTools
 setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, installJaspCorePkgs = TRUE, quiet = FALSE, force = TRUE) {
@@ -44,9 +44,9 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
 
     if (missing(installJaspCorePkgs)) {
       title <- if (jaspBaseIsLegacyVersion()) {
-        "- Would you like jaspTools to install jaspResults, jaspBase, jaspSyntax and jaspGraphs? If you opt no, you must install them yourself."
+        "- Would you like jaspTools to install jaspResults, jaspBase and jaspGraphs? If you opt no, you must install them yourself."
       } else {
-        "- Would you like jaspTools to install jaspBase, jaspSyntax and jaspGraphs? If you opt no, you must install them yourself."
+        "- Would you like jaspTools to install jaspBase and jaspGraphs? If you opt no, you must install them yourself."
       }
       wantsInstallJaspCorePkgs <- menu(c("Yes", "No"), title = title)
       if (wantsInstallJaspCorePkgs == 0) return(message("Setup aborted."))
@@ -75,14 +75,14 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
             If this problem persists clone jasp-stats/jasp-desktop manually.")
 
   if (on_ci() || on_github_actions()) {
-    message("Skipping installation of jaspBase, jaspSyntax and jaspGraphs on CI.\n")
+    message("Skipping installation of jaspBase and jaspGraphs on CI.\n")
   } else {
 
     if (isTRUE(installJaspCorePkgs)) {
       jaspCorePkgs <- if (jaspBaseIsLegacyVersion())
-        c("jaspBase", "jaspSyntax", "jaspGraphs", "jaspResults")
+        c("jaspBase", "jaspGraphs", "jaspResults")
       else
-        c("jaspBase", "jaspSyntax", "jaspGraphs")
+        c("jaspBase", "jaspGraphs")
       installJaspPkg(jaspCorePkgs, quiet = quiet, force = force)
 
     }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/options.R
 \name{analysisOptions}
 \alias{analysisOptions}
-\title{Obtain options to run JASP analyses with.}
+\title{Obtain options to run JASP analyses with}
 \usage{
 analysisOptions(source, modulePath = NULL)
 }
@@ -10,8 +10,10 @@ analysisOptions(source, modulePath = NULL)
 \item{source}{One of three: (1) R function name, (2) path to .jasp file or (3) json string. See the details section for more information.}
 
 \item{modulePath}{Optional module path, or named list/vector of module paths
-keyed by module name or analysis name. Used for .jasp replay and for
-analysis-name defaults when the module checkout should be pinned.}
+keyed by module name or analysis name. When omitted, jaspTools infers the
+module from configured module paths or the active module context. Pass this
+only to pin a source checkout for .jasp replay, generated tests, or
+ambiguous multi-module archives.}
 }
 \value{
 A list containing options of the analysis. If \code{source} is a .jasp file with multiple analyses, then a list of lists.
