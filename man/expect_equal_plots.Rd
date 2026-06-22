@@ -13,11 +13,27 @@ expect_equal_plots(test, name, dir = lifecycle::deprecated(), tolerance = NULL)
 
 \item{dir}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}}
 
-\item{tolerance}{Optional numeric tolerance for the structural fallback comparison (default \code{1e-6}). Set to a larger value (e.g. \code{1e-3}) for plots whose data vary across platforms (e.g. MCMC-based Bayesian plots).}
+\item{tolerance}{Optional numeric tolerance for the structural fallback
+comparison (default \code{1e-6}). Set to a larger value (e.g. \code{1e-3})
+for plots whose data vary across platforms (e.g. MCMC-based Bayesian plots).}
 }
 \description{
 This function compares a stored .svg of a plot, to the plot that is created when the tests are run.
-If no .svg exists yet then you must first run \code{manageTestPlots}.
+If no visual reference (.svg) exists yet, \pkg{vdiffr} handles it like other visual snapshots.
+}
+\details{
+For \pkg{ggplot2} objects, a structural fallback snapshot is also maintained.
+When a visual comparison passes, missing structural snapshots are created in
+interactive test runs, in update mode (\code{options(jaspTools.plotStructure.update = TRUE)}
+or \code{JASP_PLOT_STRUCTURE_UPDATE=true}), and for newly generated visual snapshots.
+They are not created after a visual mismatch against an existing visual snapshot.
+
+If a visual mismatch is accepted by the structural fallback, inspect and accept
+the generated visual snapshot with \code{manageTestPlots()} so future runs do
+not keep using the slower fallback.
+Plot snapshot rendering triggers garbage collection by default to avoid
+accumulated \pkg{ggplot2} build state slowing large generated test files; set
+\code{options(jaspTools.plotSnapshot.gc = FALSE)} to disable this.
 }
 \examples{
 
