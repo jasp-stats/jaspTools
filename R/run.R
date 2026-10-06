@@ -55,7 +55,7 @@
 #'
 #'
 #' @export runAnalysis
-runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALSE, makeTests = FALSE, encodedDataset = FALSE) {
+runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALSE, makeTests = FALSE, encodedDataset = FALSE, datasets = NULL) {
   if (is.list(options) && is.null(names(options)) && any(names(unlist(lapply(options, attributes))) == "analysisName"))
     stop("The provided list of options is not named. Did you mean to index in the options list (e.g., options[[1]])?")
 
@@ -83,8 +83,8 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
     Sys.setenv(LANGUAGE = oldLanguage)
   }, add = TRUE)
 
-  initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests, encodedDataset = encodedDataset)
-  args <- fetchRunArgs(name, options)
+  initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests, encodedDataset = encodedDataset, datasets = datasets)
+  args <- fetchRunArgs(name, options, datasets)
 
   if (quiet) {
     sink(tempfile())
@@ -118,7 +118,7 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
   return(invisible(results))
 }
 
-fetchRunArgs <- function(name, options) {
+fetchRunArgs <- function(name, options, datasets = NULL) {
   possibleArgs <- list(
     name = name,
     functionCall = findCorrectFunction(name),
@@ -131,18 +131,30 @@ fetchRunArgs <- function(name, options) {
     preloadData = parsePreloadDataFromDescriptionQml(name)
   )
 
+  # multiDataSetAware runs (runAnalysis(..., datasets = <named list of dataframes>)): hand jaspBase
+  # the same {ids, names} blob the engine does; the slice queue in rbridge.R then feeds it.
+  if (!is.null(datasets)) {
+    titles <- attr(datasets, "dataSetNames")
+    if (is.null(titles)) titles <- names(datasets)
+    possibleArgs$multiDataSetJson <- jsonlite::toJSON(list(
+      ids   = names(datasets),
+      names = as.list(titles[names(datasets)])
+    ), auto_unbox = TRUE)
+  }
+
   runArgs <- formals(jaspBase::runJaspResults)
   argNames <- intersect(names(possibleArgs), names(runArgs))
   return(possibleArgs[argNames])
 }
 
-initAnalysisRuntime <- function(dataset, options, makeTests, encodedDataset = FALSE, ...) {
+initAnalysisRuntime <- function(dataset, options, makeTests, encodedDataset = FALSE, datasets = NULL, ...) {
   # first we reinstall any changed modules in the personal library
   reinstallChangedModules()
 
   # dataset to be found in the analysis when it needs to be read
   .setInternal("dataset", dataset)
   preloadDataset(dataset, options, encodedDataset = encodedDataset)
+  setupMultiDataSet(datasets)
 
   # prevent the results from being translated (unless the user explicitly wants to)
   Sys.setenv(LANG = getPkgOption("language"))
@@ -243,7 +255,34 @@ getJsonResultsFromJaspResultsLegacy <- function() {
   return(jaspResults$.__enclos_env__$private$getResults())
 }
 
+#' Queue up the datasets of a multiDataSetAware run (runAnalysis(..., datasets=...)).
+#' `datasets` is a named list of dataframes keyed by dataset id, optionally with titles in
+#' attr(datasets, "dataSetNames") - exactly what jaspBase hands an aware analysis. The slices
+#' are handed out in order by .readDataSetRequestedNative (mirroring the engine's slice queue),
+#' and a per-dataset encoded-name map (JASPColumn_<id>_<columnIndex>, like DataSet::setupEncoderPrefix)
+#' backs the .decodeColNamesForDataSet stub so encoded option values route to the right column.
+setupMultiDataSet <- function(datasets) {
+  if (is.null(datasets))
+    return(invisible(NULL))
+
+  if (!is.list(datasets) || is.null(names(datasets)) || any(!nzchar(names(datasets))))
+    stop("`datasets` must be a named list of dataframes, keyed by dataset id")
+
+  .setInternal("multiDataSetQueue", datasets)
+
+  maps <- lapply(seq_along(datasets), function(i) {
+    columns <- names(datasets[[i]])
+    encoded <- sprintf("JASPColumn_%s_%d", names(datasets)[[i]], seq_along(columns) - 1L)
+    stats::setNames(columns, encoded)
+  })
+  names(maps) <- names(datasets)
+  .setInternal("multiDataSetNameMaps", maps)
+
+  invisible(NULL)
+}
+
 .resetRunTimeInternals <- function() {
   .setInternal("state", list())
   .setInternal("dataset", "")
+  .setInternal("multiDataSetQueue", NULL)
 }
