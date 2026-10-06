@@ -15,6 +15,20 @@
   env[[".setColumnDataAsNominal"]]     <- function(...) return(TRUE)
   env[[".setColumnDataAsNominalText"]] <- function(...) return(TRUE)
 
+  # Stand-in for the engine's dataset-aware decoder (rbridge_decodeColumnNameForDataSet): resolves
+  # "JASPColumn_<id>_<n>(.<type>)" against the column names of the dataset with that id, using the
+  # per-dataset maps from setupMultiDataSet. Unknown ids/values pass through unchanged.
+  env[[".decodeColNamesForDataSet"]]   <- function(x, dataSetId) {
+    maps <- if ("multiDataSetNameMaps" %in% names(.pkgenv[["internal"]])) .getInternal("multiDataSetNameMaps") else NULL
+    map  <- maps[[as.character(dataSetId)]]
+    if (is.null(map)) return(x)
+    vapply(as.character(x), function(value) {
+      base   <- sub("\\.(scale|ordinal|nominal)$", "", value)
+      suffix <- substring(value, nchar(base) + 1L)
+      if (base %in% names(map)) paste0(map[[base]], suffix) else value
+    }, character(1L), USE.NAMES = FALSE)
+  }
+
   env[[".allColumnNamesDataset"]]      <- function(...) {
     dataset <- .getInternal("dataset")
     dataset <- loadCorrectDataset(dataset)
@@ -54,6 +68,15 @@
 }
 
 .readDataSetRequestedNative <- function() {
+  # Multi-dataset aware runs (see setupMultiDataSet): hand out the queued slices one read at a
+  # time, exactly like rbridge_readDataSetRequested does in the engine. Then fall back to the
+  # single preloaded dataset.
+  queue <- if ("multiDataSetQueue" %in% names(.pkgenv[["internal"]])) .getInternal("multiDataSetQueue") else NULL
+  if (length(queue) > 0) {
+    .setInternal("multiDataSetQueue", queue[-1])
+    return(queue[[1]])
+  }
+
   return(.getInternal("preloadedDataset"))
 }
 
