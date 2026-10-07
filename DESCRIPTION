@@ -29,5 +29,5 @@ Imports:
   vdiffr (>= 1.0.7)
 Suggests:
   ggplot2
-RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.0.0

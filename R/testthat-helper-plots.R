@@ -3,6 +3,10 @@
 #' This function compares a stored .svg of a plot, to the plot that is created when the tests are run.
 #' If no visual reference (.svg) exists yet, \pkg{vdiffr} handles it like other visual snapshots.
 #'
+#' Plot recipes are materialized before they are passed to \pkg{vdiffr}. For
+#' rendered \pkg{ggplot2} objects, a structural fallback snapshot is also maintained.
+#' In interactive test runs, if that structural snapshot is missing, it is created automatically
+#' (even when the visual comparison passes).
 #' For \pkg{ggplot2} objects, a structural fallback snapshot is also maintained.
 #' When a visual comparison passes, missing structural snapshots are created in
 #' interactive test runs, in update mode (\code{options(jaspTools.plotStructure.update = TRUE)}
@@ -17,7 +21,7 @@
 #' \code{options(jaspTools.plotSnapshot.gc = FALSE)} to disable this.
 #'
 #'
-#' @param test The plot object you wish to test (does not work well for non-ggplot2 objects).
+#' @param test The plot object or plot recipe you wish to test.
 #' @param name The name of the reference plot (a .svg stored in /tests/testthat/_snaps).
 #' @param dir `r lifecycle::badge('deprecated')`
 #'
@@ -42,6 +46,9 @@ expect_equal_plots <- function(test, name, dir = lifecycle::deprecated(), tolera
     return()
   }
 
+  originalTest <- test
+  test <- materialize_plot_for_vdiffr(test)
+
   skip_if_grob(test)
   skip_if_recordedPlot(test)
 
@@ -55,12 +62,25 @@ expect_equal_plots <- function(test, name, dir = lifecycle::deprecated(), tolera
     if (inherits(test, "qgraph")) {
       qq <- test
       test <- function() plot(qq)
+      originalTest <- test
     }
-    expect_plot_with_fallback(name, test, tolerance = tolerance)
+    fallbackTest <- if (is_ggplot(test)) test else originalTest
+    expect_plot_with_fallback(name, test, fallback_test = fallbackTest, tolerance = tolerance)
   }
 }
 
-expect_plot_with_fallback <- function(name, test, tolerance = NULL) {
+materialize_plot_for_vdiffr <- function(test) {
+  if (!("jaspPlotRecipe" %in% sub("^.*::", "", class(test))))
+    return(test)
+
+  if (!requireNamespace("jaspGraphs", quietly = TRUE))
+    stop("Package 'jaspGraphs' is required to render a jaspPlotRecipe.", call. = FALSE)
+
+  materialize <- getExportedValue("jaspGraphs", "materializeJaspPlotRecipe")
+  materialize(test)
+}
+
+expect_plot_with_fallback <- function(name, test, fallback_test = test, tolerance = NULL) {
   result <- capture_vdiffr_expectation(name, test)
   freshVisual <- is_fresh_visual_snapshot(result)
 
@@ -78,7 +98,7 @@ expect_plot_with_fallback <- function(name, test, tolerance = NULL) {
   if (freshVisual)
     fail_fresh_visual_snapshot(name, result)
 
-  fallbackResult <- expect_doppelganger_fallback(test, name, vdiffr_result = result, tolerance = tolerance)
+  fallbackResult <- expect_doppelganger_fallback(fallback_test, name, vdiffr_result = result, tolerance = tolerance)
   if (isTRUE(fallbackResult$passed)) {
     warning(build_structural_fallback_review_message(name, result), call. = FALSE)
     testthat::succeed(paste0("vdiffr mismatch for '", name, "' accepted by fallback."))
