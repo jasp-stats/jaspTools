@@ -258,9 +258,9 @@ getJsonResultsFromJaspResultsLegacy <- function() {
 #' Queue up the datasets of a multiDataSetAware run (runAnalysis(..., datasets=...)).
 #' `datasets` is a named list of dataframes keyed by dataset id, optionally with titles in
 #' attr(datasets, "dataSetNames") - exactly what jaspBase hands an aware analysis. The slices
-#' are handed out in order by .readDataSetRequestedNative (mirroring the engine's slice queue),
-#' and a per-dataset encoded-name map (JASPColumn_<id>_<columnIndex>, like DataSet::setupEncoderPrefix)
-#' backs the .decodeColNamesForDataSet stub so encoded option values route to the right column.
+#' are handed out in order by .readDataSetRequestedNative (mirroring the engine's slice queue).
+#' Note that jaspTools does not encode column names (longstanding), so option values and the
+#' dataframes' names must already be in the same namespace for the analysis to match them.
 setupMultiDataSet <- function(datasets) {
   if (is.null(datasets))
     return(invisible(NULL))
@@ -269,14 +269,6 @@ setupMultiDataSet <- function(datasets) {
     stop("`datasets` must be a named list of dataframes, keyed by dataset id")
 
   .setInternal("multiDataSetQueue", datasets)
-
-  maps <- lapply(seq_along(datasets), function(i) {
-    columns <- names(datasets[[i]])
-    encoded <- sprintf("JASPColumn_%s_%d", names(datasets)[[i]], seq_along(columns) - 1L)
-    stats::setNames(columns, encoded)
-  })
-  names(maps) <- names(datasets)
-  .setInternal("multiDataSetNameMaps", maps)
 
   invisible(NULL)
 }
