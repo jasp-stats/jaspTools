@@ -225,9 +225,9 @@ initAnalysisRuntime <- function(dataset, options, makeTests, datasets = NULL, ..
     if (!is.list(datasets) || is.null(names(datasets)) || any(!nzchar(names(datasets))))
       stop("`datasets` must be a named list of dataframes - the names become the dataset titles")
     datasets <- lapply(datasets, loadCorrectDataset)
-    jaspSyntax::loadDataSets(datasets)
+    invisible(jaspSyntax::loadDataSets(datasets))
   } else if (!is.null(dataset)) {
-    jaspSyntax::loadDataSet(loadCorrectDataset(dataset))
+    invisible(jaspSyntax::loadDataSet(loadCorrectDataset(dataset)))
   } else {
     jaspSyntax::clearDatasetState()
   }
