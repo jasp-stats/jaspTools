@@ -43,6 +43,14 @@
   return(dataset)
 }
 
+.readFullDatasetToEnd <- function() {
+
+  dataset <- .getInternal("dataset")
+  dataset <- loadCorrectDataset(dataset)
+
+  return(dataset)
+}
+
 .readDataSetHeaderNative <- function(columns = c(), columns.as.numeric = c(), columns.as.ordinal = c(),
                                      columns.as.factor = c(), all.columns = FALSE) {
 
