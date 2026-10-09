@@ -27,11 +27,11 @@
 #' @param quiet Boolean indicating whether to suppress messages from the
 #' analysis.
 #' @param makeTests Boolean indicating whether to create testthat unit tests and print them to the terminal.
-#' @param datasets Named list of dataframes for a multiDataSetAware analysis (the syntax-mode
-#' flow, and what the engine hands such analyses): the names become the dataset titles and may
-#' be referenced by the form's dataset selection options, one DataSet per entry is loaded into
-#' the bridge workspace, and the slices arrive at the analysis keyed by filter id (see
-#' \code{jaspBase::getSliceKey} etc.). \code{dataset} must then be NULL.
+#' @param datasets Named list of dataframes for a multiDataSetAware analysis: the names become
+#' the dataset titles and may be referenced by the form's dataset selection options, one DataSet
+#' per entry is loaded into the bridge workspace, and the slices arrive at the analysis keyed by
+#' filter id - the same id the selection option holds, so \code{datasets[[key]]} is the whole
+#' API (see the datasets contract in \code{jaspBase}). \code{dataset} must then be NULL.
 #' @examples
 #'
 #' options <- analysisOptions("BinomialTest")
