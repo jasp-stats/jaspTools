@@ -9,8 +9,7 @@ makeTestsFromExamples(
   module.dir,
   source,
   sanitize = FALSE,
-  overwrite = FALSE,
-  forceEncode = NULL
+  overwrite = FALSE
 )
 }
 \arguments{
@@ -36,11 +35,6 @@ with hyphens. If FALSE (default), preserves original spacing and characters in f
 \item{overwrite}{Logical. If TRUE, overwrites existing test files. If FALSE (default),
 skips files that already exist.}
 
-\item{forceEncode}{Optional character vector of option names that should be forcibly
-encoded using regular expression replacement. This is useful for options like
-\code{model} that contain variable names embedded in strings (e.g., formula syntax
-"A~B") but do not have a parallel \code{.types} entry. These options will have all
-column names replaced with their encoded equivalents using word-boundary-aware regex.}
 }
 \value{
 Invisibly returns a character vector of created/processed test file paths.
@@ -85,9 +79,6 @@ makeTestsFromExamples(path = "path/to/jasp/files", module.dir = "path/to/module"
 
 # Overwrite existing test files (skips verified by default)
 makeTestsFromExamples(overwrite = TRUE)
-
-# Force encode 'model' option for analyses with embedded variable names
-makeTestsFromExamples(forceEncode = "model")
 }
 
 }

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-jaspTools is an R package that enables JASP developers to preview, debug, and test JASP analyses locally without rebuilding the entire JASP application. It replicates the JASP runtime environment in R, including RCPP bridges, data handling, and state management.
+jaspTools is an R package that enables JASP developers to preview, debug, and test JASP analyses locally without rebuilding the entire JASP application. It runs the real JASP runtime in R through the SyntaxInterface bridge (the same native library jaspSyntax uses): datasets become genuine JASP DataSets, options are validated and encoded by the analysis' own QML form, and results are decoded on the way out.
 
 ## Architecture
 
@@ -12,15 +12,16 @@ jaspTools uses specialized environments for variable scoping:
 
 1. **`.pkgenv$internal`**: Internal runtime state (dataset, state, module MD5 checksums). Access via `.setInternal()` and `.getInternal()` in `R/pkg-settings.R`.
 2. **`.pkgenv$pkgOptions`**: User-configurable settings (module paths, HTML directory, data directories). Access via `setPkgOption()` and `getPkgOption()`.
-3. **`.GlobalEnv`**: RCPP bridge functions that JASP analyses expect globally (`.ppi`, `.baseCitation`, `.readDatasetToEndNative`, etc.). Injected by `.insertRbridgeIntoEnv()` in `R/rbridge.R`.
+3. **`.GlobalEnv`**: RCPP bridge functions that JASP analyses expect globally (`.ppi`, `.baseCitation`, `.readDatasetToEndNative`, etc.). These are the REAL engine implementations, installed into `.GlobalEnv` when the SyntaxInterface bridge initializes (any `jaspSyntax::loadDataSet(s)` call). jaspTools no longer fakes them.
 
 ### Analysis Execution Flow
 
 1. **Setup**: `setupJaspTools()` fetches dependencies (jaspBase, jaspGraphs, datasets, HTML resources) and validates paths
 2. **Options**: `analysisOptions()` parses QML files, JASP files, or JSON to generate option lists
-3. **Runtime Init**: `initAnalysisRuntime()` in `R/run.R` sets up dataset, state, and global RCPP masks
-4. **Execution**: `runAnalysis()` calls `jaspBase::runJaspResults()` with the analysis function
-5. **Output**: Results are converted to JSON and optionally displayed via `view()` using JASP's HTML/JS/CSS
+3. **Runtime Init**: `initAnalysisRuntime()` in `R/run.R` loads the data into the bridge workspace as real DataSets (`jaspSyntax::loadDataSet(s)`; a named `datasets` list for multiDataSetAware runs)
+4. **Options**: `parseOptionsThroughBridge()` resolves the analysis through `jaspSyntax::resolveAnalysisQml()` (Description.qml is authoritative for func -> qml/preloadData) and validates + encodes the options via `jaspSyntax::loadQmlAndParseOptionsStatus()` - the same preparation the engine performs (junk options are rejected, `.meta` is stamped, multi-dataset slices are queued keyed by filter id)
+5. **Execution**: `runAnalysis()` calls `jaspBase::runJaspResults()` with the parsed options (and the bridge `multiDataSetJson` for aware runs); the analyses read their (encoded) data through the bridge hooks in `.GlobalEnv`
+6. **Output**: the results JSON is decoded against every workspace encoder (`jaspSyntax::decodeJsonText()`, jaspTools' equivalent of Engine::sendString) so callers keep seeing plain column names, and optionally displayed via `view()` using JASP's HTML/JS/CSS
 
 **Critical**: S3 methods from `common.R` are temporarily exported to `.GlobalEnv` during analysis execution (see `Developers-note.md` "Handling of S3 methods").
 
@@ -70,28 +71,20 @@ options <- analysisOptions("path/to/analysis.jasp")  # Returns list if multiple 
 # For multi-analysis files, access by index: options[[1]], options[[2]], etc.
 ```
 
-### Encoding Options and Datasets
+### Encoding Is the Bridge's Job
 
-For reproducible testing, use `encodeOptionsAndDataset()` to standardize variable names and types:
+Options and datasets are passed in PLAIN user names; the bridge encodes them exactly like the
+engine does (real `JASPColumn_<dataSetId>_<n>_Encoded` names from the DataSet's ColumnEncoder)
+and `runAnalysis()` decodes the results again before returning. There is no R-side encoding
+helper anymore - if you find yourself renaming columns to `jaspColumn*` by hand, stop: that was
+the pre-parity mirror and it cannot survive a real bridge run (the bridge re-encodes whatever
+it loads).
 
 ```r
-# Encode options and dataset for reproducible testing
 options <- analysisOptions("path/to/file.jasp")
 dataset <- extractDatasetFromJASPFile("path/to/file.jasp")
-
-encoded <- encodeOptionsAndDataset(options, dataset)
-# encoded$options: Options with variables renamed to jaspColumn1, jaspColumn2, etc.
-# encoded$dataset: Dataset with matching column names and proper type coercion
-# encoded$encodingMap: Mapping from original names to encoded names
-
-# Run with encoded data (skip type detection)
-runAnalysis("AnalysisName", encoded$dataset, encoded$options, encodedDataset = TRUE)
+runAnalysis("AnalysisName", dataset, options)   # plain in, plain out; engine semantics in between
 ```
-
-The encoding process:
-1. Scans options for variables with `.types` metadata (e.g., `variables` and `variables.types`)
-2. Creates unique variable-type pairs and maps them to `jaspColumn1`, `jaspColumn2`, etc.
-3. Applies type coercion: `"nominal"` → factor, `"ordinal"` → ordered, `"scale"` → numeric
 
 ### Generating Tests from JASP Example Files
 
@@ -202,12 +195,11 @@ Check versions with `.checkUpdatesJaspCorePkgs()` on package load.
 
 ## File Organization
 
-- `R/run.R`: Analysis execution, RCPP mask setup, JSON conversion. Supports `encodedDataset` parameter for pre-encoded data.
+- `R/run.R`: Analysis execution through the SyntaxInterface bridge (option parsing, results decoding). `datasets` parameter for multiDataSetAware runs.
 - `R/test.R`: Testing infrastructure, `testAnalysis()`, `testAll()`
 - `R/test-agent.R`: Agent-friendly test wrappers, `agentTestAll()`, `agentTestAnalysis()`
 - `R/options.R`: Option parsing from QML/JASP/JSON. Cross-platform path handling for `.jasp` files.
-- `R/dataset.R`: Dataset loading, type conversion, `extractDatasetFromJASPFile()`, `encodeOptionsAndDataset()`
-- `R/rbridge.R`: RCPP bridge replacements (`.readDatasetToEndNative`, `.requestTempFileNameNative`, etc.)
+- `R/dataset.R`: Dataset loading/resolution (`loadCorrectDataset`), `extractDatasetFromJASPFile()`
 - `R/pkg-setup.R`: Initial setup, dependency fetching
 - `R/utils.R`: Module path resolution, validation, helper functions
 - `R/test-generator.R`: Auto-generate test expectations from results, `makeTestsFromExamples()`. JASP files live in `tests/testthat/jaspfiles/{library,verified,other}/`; generated tests are named `test-{source}-{name}.R`.
