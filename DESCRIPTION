@@ -17,6 +17,7 @@ Imports:
   data.table,
   DBI,
   httr,
+  jaspSyntax,
   jsonlite,
   lifecycle,
   pkgload,

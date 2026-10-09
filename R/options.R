@@ -366,24 +366,6 @@ fixOptionsForVariableTypes <- function(options) {
 
 
 
-parseDescriptionQmlFromAnalysisName <- function(analysisName) {
-
-  modulePath <- getModulePathFromRFunction(analysisName)
-  if (isBinaryPackage(modulePath)) {
-    instDir <- modulePath
-  } else { # source pkg
-    instDir <- file.path(modulePath, "inst")
-  }
-
-  pathToDescriptionQml <- file.path(instDir, "Description.qml")
-  if (!file.exists(pathToDescriptionQml)) {
-    warning("Could not locate Description.qml in ", modulePath, ". Assuming the module preloads data.")
-    return(TRUE)
-  }
-
-  return(parseDescriptionQmlFromPath(pathToDescriptionQml))
-}
-
 # some code to test the function below on all Description.qml files in jasp
 # dirs <- list.dirs("~/github/jasp/jasp-desktop/Modules", recursive = FALSE)
 # qmls <- file.path(dirs, "inst", "Description.qml")
@@ -486,32 +468,3 @@ parseDescriptionQmlFromPath <- function(pathToDescriptionQml) {
 
 }
 
-parsePreloadDataFromDescriptionQml <- function(analysisName) {
-
-  description <- parseDescriptionQmlFromAnalysisName(analysisName)
-
-  # is preloadData globally set to TRUE?
-  preloadDataGlobalSpecified <-  "preloadData" %in% names(description[["Description"]])
-  preloadGlobalValue         <-  preloadDataGlobalSpecified && isTRUE(description[["Description"]][["preloadData"]])
-  # is preloadData even set for this specific analysis?
-  specifiedPreloadDataLocal  <- "preloadData" %in% names(description[[analysisName]])
-  # is preloadData set to TRUE for this specific analysis?
-
-  preloadDataAnalysis <- specifiedPreloadDataLocal && isTRUE(description[[analysisName]][["preloadData"]])
-  # if preloadData set to TRUE for the analysis, or if set globally to TRUE and not set for the analysis
-  preloadData <- (specifiedPreloadDataLocal && preloadDataAnalysis) || (!specifiedPreloadDataLocal && preloadDataGlobalSpecified && preloadGlobalValue)
-
-  # new default, if not specified set to TRUE
-  if (!specifiedPreloadDataLocal && !preloadDataGlobalSpecified)
-    preloadData <- TRUE
-
-  # show a warning but if preloadData is not set for the analysis
-  if (!preloadData)
-    lifecycle::deprecate_warn(
-      when = "0.19.2",
-      what = I(sprintf("The analysis `%s` does not preload data. Please update inst/Description.qml, add `preloadData: true`, and fix any minor issues.", analysisName))
-    )
-
-  return(preloadData)
-
-}

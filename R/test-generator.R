@@ -19,11 +19,6 @@
 #'   with hyphens. If FALSE (default), preserves original spacing and characters in filenames.
 #' @param overwrite Logical. If TRUE, overwrites existing test files. If FALSE (default),
 #'   skips files that already exist.
-#' @param forceEncode Optional character vector of option names that should be forcibly
-#'   encoded using regular expression replacement. This is useful for options like
-#'   \code{model} that contain variable names embedded in strings (e.g., formula syntax
-#'   "A~B") but do not have a parallel \code{.types} entry. These options will have all
-#'   column names replaced with their encoded equivalents using word-boundary-aware regex.
 #'
 #' @details
 #' This function processes JASP example files stored under
@@ -62,14 +57,12 @@
 #'
 #' # Overwrite existing test files (skips verified by default)
 #' makeTestsFromExamples(overwrite = TRUE)
-#'
-#' # Force encode 'model' option for analyses with embedded variable names
-#' makeTestsFromExamples(forceEncode = "model")
+
 #' }
 #'
 #' @export makeTestsFromExamples
 makeTestsFromExamples <- function(path, module.dir, source, sanitize = FALSE,
-                                  overwrite = FALSE, forceEncode = NULL) {
+                                  overwrite = FALSE) {
   validSources <- c("library", "verified", "other")
 
   # Determine module directory
@@ -124,8 +117,7 @@ makeTestsFromExamples <- function(path, module.dir, source, sanitize = FALSE,
       sanitize        = sanitize,
       overwrite       = overwrite,
       copyToJaspfiles = TRUE,
-      pkgAnalyses     = pkgAnalyses,
-      forceEncode     = forceEncode
+      pkgAnalyses     = pkgAnalyses
     )
 
     .printTestGenerationSummary(result$created, result$skipped, result$copied, "other")
@@ -184,8 +176,7 @@ makeTestsFromExamples <- function(path, module.dir, source, sanitize = FALSE,
       sanitize        = sanitize,
       overwrite       = overwrite,
       copyToJaspfiles = FALSE,
-      pkgAnalyses     = pkgAnalyses,
-      forceEncode     = forceEncode
+      pkgAnalyses     = pkgAnalyses
     )
     createdFiles <- c(createdFiles, result$created)
     skippedFiles <- c(skippedFiles, result$skipped)
@@ -229,8 +220,7 @@ makeTestsFromExamples <- function(path, module.dir, source, sanitize = FALSE,
 # collect created/skipped/copied paths, and report per-file progress.
 # Returns a list with components $created, $skipped, $copied.
 .processJaspFiles <- function(jaspFiles, module.dir, sourceFolder, sanitize,
-                              overwrite, copyToJaspfiles, pkgAnalyses,
-                              forceEncode) {
+                              overwrite, copyToJaspfiles, pkgAnalyses) {
   createdFiles <- character(0)
   skippedFiles <- character(0)
   copiedFiles  <- character(0)
@@ -246,8 +236,7 @@ makeTestsFromExamples <- function(path, module.dir, source, sanitize = FALSE,
           sanitize        = sanitize,
           overwrite       = overwrite,
           copyToJaspfiles = copyToJaspfiles,
-          pkgAnalyses     = pkgAnalyses,
-          forceEncode     = forceEncode
+          pkgAnalyses     = pkgAnalyses
         )
         if (!is.null(result)) {
           if (!is.null(attr(result, "copiedTo"))) {
@@ -288,7 +277,6 @@ makeTestsFromExamples <- function(path, module.dir, source, sanitize = FALSE,
 #'   \code{tests/testthat/jaspfiles/{sourceFolder}/}.
 #' @param pkgAnalyses Optional character vector of allowed analysis names for this module.
 #'   If provided, analyses not in this list will be skipped.
-#' @param forceEncode Optional character vector of option names to force-encode via regex.
 #'
 #' @return The path to the created test file (with attr "skipped" if skipped,
 #'   and attr "copiedTo" if copied), or NULL if no tests were generated
@@ -297,7 +285,7 @@ makeTestsFromExamples <- function(path, module.dir, source, sanitize = FALSE,
 makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
                                         sanitize = FALSE, overwrite = FALSE,
                                         copyToJaspfiles = FALSE,
-                                        pkgAnalyses = NULL, forceEncode = NULL) {
+                                        pkgAnalyses = NULL) {
   # Extract options from the JASP file
   allOptions <- analysisOptions(jaspFile)
 
@@ -378,15 +366,13 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
 
     cli::cli_inform("Running analysis {i}/{length(allOptions)}: {.val {analysisName}}")
 
-    # Encode options and dataset
-    encoded <- encodeOptionsAndDataset(opts, dataset, forceEncode = forceEncode)
-
-    # Run the analysis to get results
+    # Run the analysis to get results - jaspTools goes through the real JASP bridge, so the
+    # plain opts/dataset are validated and encoded engine-style and the results come back decoded
     tryCatch(
       {
         set.seed(1)
-        results <- runAnalysis(analysisName, encoded$dataset, encoded$options,
-          view = FALSE, quiet = TRUE, encodedDataset = TRUE
+        results <- runAnalysis(analysisName, dataset, opts,
+          view = FALSE, quiet = TRUE
         )
 
         # Generate test block with expectations from results
@@ -396,8 +382,7 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
           totalAnalyses = length(allOptions),
           jaspFileName = basename(jaspFile),
           sourceFolder = sourceFolder,
-          results = results,
-          forceEncode = forceEncode
+          results = results
         )
 
         testBlocks <- c(testBlocks, list(testBlock))
@@ -410,8 +395,7 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
           analysisIndex = i,
           totalAnalyses = length(allOptions),
           jaspFileName = basename(jaspFile),
-          sourceFolder = sourceFolder,
-          forceEncode = forceEncode
+          sourceFolder = sourceFolder
         )
         testBlocks <<- c(testBlocks, list(testBlock))
       }
@@ -477,12 +461,11 @@ generateExampleTestFileContent <- function(baseName, sanitizedName, sourceFolder
 #' @param sourceFolder String indicating the source folder: \code{"library"},
 #'   \code{"verified"}, or \code{"other"}.
 #' @param results The analysis results.
-#' @param forceEncode Optional character vector of option names to force-encode via regex.
 #'
 #' @return Character string with the test_that block.
 #' @keywords internal
 generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses, jaspFileName,
-                                     sourceFolder, results, forceEncode = NULL) {
+                                     sourceFolder, results) {
   # Extract tests from results
   tests <- tryCatch(
     {
@@ -522,16 +505,11 @@ generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses,
   lines <- c(lines, "  dataset <- jaspTools::extractDatasetFromJASPFile(jaspFile)")
   lines <- c(lines, "")
 
-  # Encode and run - include forceEncode if provided
-  lines <- c(lines, "  # Encode and run analysis")
-  if (!is.null(forceEncode) && length(forceEncode) > 0) {
-    forceEncodeStr <- paste0('c("', paste(forceEncode, collapse = '", "'), '")')
-    lines <- c(lines, paste0("  encoded <- jaspTools:::encodeOptionsAndDataset(opts, dataset, forceEncode = ", forceEncodeStr, ")"))
-  } else {
-    lines <- c(lines, "  encoded <- jaspTools:::encodeOptionsAndDataset(opts, dataset)")
-  }
+  # Run analysis - the bridge validates + encodes like the engine and decodes the results
+  # again, so opts and dataset stay in plain user names throughout
+  lines <- c(lines, "  # Run analysis")
   lines <- c(lines, "  set.seed(1)")
-  lines <- c(lines, paste0('  results <- jaspTools::runAnalysis("', analysisName, '", encoded$dataset, encoded$options, encodedDataset = TRUE)'))
+  lines <- c(lines, paste0('  results <- jaspTools::runAnalysis("', analysisName, '", dataset, opts)'))
   lines <- c(lines, "")
 
   # Add expectations
@@ -578,12 +556,11 @@ generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses,
 #' @param jaspFileName Name of the JASP file.
 #' @param sourceFolder String indicating the source folder: \code{"library"},
 #'   \code{"verified"}, or \code{"other"}.
-#' @param forceEncode Optional character vector of option names to force-encode via regex.
 #'
 #' @return Character string with the test_that block.
 #' @keywords internal
 generateExampleTestBlockBasic <- function(analysisName, analysisIndex, totalAnalyses, jaspFileName,
-                                          sourceFolder, forceEncode = NULL) {
+                                          sourceFolder) {
   lines <- character(0)
 
   # Test description
@@ -612,16 +589,11 @@ generateExampleTestBlockBasic <- function(analysisName, analysisIndex, totalAnal
   lines <- c(lines, "  dataset <- jaspTools::extractDatasetFromJASPFile(jaspFile)")
   lines <- c(lines, "")
 
-  # Encode and run - include forceEncode if provided
-  lines <- c(lines, "  # Encode and run analysis")
-  if (!is.null(forceEncode) && length(forceEncode) > 0) {
-    forceEncodeStr <- paste0('c("', paste(forceEncode, collapse = '", "'), '")')
-    lines <- c(lines, paste0("  encoded <- jaspTools:::encodeOptionsAndDataset(opts, dataset, forceEncode = ", forceEncodeStr, ")"))
-  } else {
-    lines <- c(lines, "  encoded <- jaspTools:::encodeOptionsAndDataset(opts, dataset)")
-  }
+  # Run analysis - the bridge validates + encodes like the engine and decodes the results
+  # again, so opts and dataset stay in plain user names throughout
+  lines <- c(lines, "  # Run analysis")
   lines <- c(lines, "  set.seed(1)")
-  lines <- c(lines, paste0('  results <- jaspTools::runAnalysis("', analysisName, '", encoded$dataset, encoded$options, encodedDataset = TRUE)'))
+  lines <- c(lines, paste0('  results <- jaspTools::runAnalysis("', analysisName, '", dataset, opts)'))
   lines <- c(lines, "")
 
   # Basic expectation

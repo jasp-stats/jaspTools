@@ -11,7 +11,7 @@ runAnalysis(
   view = TRUE,
   quiet = FALSE,
   makeTests = FALSE,
-  encodedDataset = FALSE
+  datasets = NULL
 )
 }
 \arguments{
@@ -20,7 +20,8 @@ identical to that of the main function in a JASP analysis.}
 
 \item{dataset}{Data.frame, matrix, string name or string path; if it's a string then jaspTools
 first checks if it's valid path and if it isn't if the string matches one of the JASP datasets (e.g., "debug.csv").
-By default the directory in Resources is checked first, unless called within a testthat environment, in which case tests/datasets is checked first.}
+By default the directory in Resources is checked first, unless called within a testthat environment, in which case tests/datasets is checked first.
+Ignored when \code{datasets} is given.}
 
 \item{options}{List of options to supply to the analysis (see also
 \code{analysisOptions}).}
@@ -32,16 +33,25 @@ analysis.}
 
 \item{makeTests}{Boolean indicating whether to create testthat unit tests and print them to the terminal.}
 
-\item{encodedDataset}{Boolean indicating whether to assume that the dataset is already encoded.}
+\item{datasets}{Named list of dataframes for a multiDataSetAware analysis (the syntax-mode
+flow, and what the engine hands such analyses): the names become the dataset titles and may
+be referenced by the form's dataset selection options, one DataSet per entry is loaded into
+the bridge workspace, and the slices arrive at the analysis keyed by filter id (see
+\code{jaspBase::getSliceKey} etc.). \code{dataset} must then be NULL.}
 }
 \description{
 \code{runAnalysis} makes it possible to execute a JASP analysis in R. Usually this
 process is a bit cumbersome as there are a number of objects unique to the
-JASP environment. Think .ppi, data-reading, etc. These (rcpp) objects are
-replaced in the jaspTools so you do not have to deal with them. Note that
-\code{runAnalysis} sources JASP analyses every time it runs, so any change in
-analysis code between calls is incorporated. The output of the analysis is
-shown automatically through a call to \code{view} and returned
+JASP environment. Think .ppi, data-reading, etc. jaspTools sets those up for
+you by running the real JASP bridge (the SyntaxInterface library that powers
+jaspSyntax): the dataset is loaded as a genuine JASP DataSet, the options are
+validated, encoded and stamped with provenance by the analysis' own QML form,
+and the results are decoded on the way out - exactly like the engine does.
+This means a jaspTools run behaves like a JASP run: plain column names go in,
+plain column names come out, and invalid options are rejected the same way.
+Note that \code{runAnalysis} sources JASP analyses every time it runs, so any
+change in analysis code between calls is incorporated. The output of the
+analysis is shown automatically through a call to \code{view} and returned
 invisibly.
 }
 \examples{

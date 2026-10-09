@@ -2,11 +2,16 @@
 #'
 #' \code{runAnalysis} makes it possible to execute a JASP analysis in R. Usually this
 #' process is a bit cumbersome as there are a number of objects unique to the
-#' JASP environment. Think .ppi, data-reading, etc. These (rcpp) objects are
-#' replaced in the jaspTools so you do not have to deal with them. Note that
-#' \code{runAnalysis} sources JASP analyses every time it runs, so any change in
-#' analysis code between calls is incorporated. The output of the analysis is
-#' shown automatically through a call to \code{view} and returned
+#' JASP environment. Think .ppi, data-reading, etc. jaspTools sets those up for
+#' you by running the real JASP bridge (the SyntaxInterface library that powers
+#' jaspSyntax): the dataset is loaded as a genuine JASP DataSet, the options are
+#' validated, encoded and stamped with provenance by the analysis' own QML form,
+#' and the results are decoded on the way out - exactly like the engine does.
+#' This means a jaspTools run behaves like a JASP run: plain column names go in,
+#' plain column names come out, and invalid options are rejected the same way.
+#' Note that \code{runAnalysis} sources JASP analyses every time it runs, so any
+#' change in analysis code between calls is incorporated. The output of the
+#' analysis is shown automatically through a call to \code{view} and returned
 #' invisibly.
 #'
 #'
@@ -15,13 +20,18 @@
 #' @param dataset Data.frame, matrix, string name or string path; if it's a string then jaspTools
 #' first checks if it's valid path and if it isn't if the string matches one of the JASP datasets (e.g., "debug.csv").
 #' By default the directory in Resources is checked first, unless called within a testthat environment, in which case tests/datasets is checked first.
+#' Ignored when \code{datasets} is given.
 #' @param options List of options to supply to the analysis (see also
 #' \code{analysisOptions}).
 #' @param view Boolean indicating whether to view the results in a webbrowser.
 #' @param quiet Boolean indicating whether to suppress messages from the
 #' analysis.
 #' @param makeTests Boolean indicating whether to create testthat unit tests and print them to the terminal.
-#' @param encodedDataset Boolean indicating whether to assume that the dataset is already encoded.
+#' @param datasets Named list of dataframes for a multiDataSetAware analysis (the syntax-mode
+#' flow, and what the engine hands such analyses): the names become the dataset titles and may
+#' be referenced by the form's dataset selection options, one DataSet per entry is loaded into
+#' the bridge workspace, and the slices arrive at the analysis keyed by filter id (see
+#' \code{jaspBase::getSliceKey} etc.). \code{dataset} must then be NULL.
 #' @examples
 #'
 #' options <- analysisOptions("BinomialTest")
@@ -55,7 +65,7 @@
 #'
 #'
 #' @export runAnalysis
-runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALSE, makeTests = FALSE, encodedDataset = FALSE, datasets = NULL) {
+runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALSE, makeTests = FALSE, datasets = NULL) {
   if (is.list(options) && is.null(names(options)) && any(names(unlist(lapply(options, attributes))) == "analysisName"))
     stop("The provided list of options is not named. Did you mean to index in the options list (e.g., options[[1]])?")
 
@@ -67,6 +77,9 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
     if (is.null(name))
       stop("Please supply an analysis name")
   }
+
+  if (!is.null(datasets) && !is.null(dataset))
+    stop("`datasets` (multiDataSetAware run) and `dataset` (single dataset run) are mutually exclusive")
 
   if (insideTestEnvironment()) {
     view  <- FALSE
@@ -83,8 +96,15 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
     Sys.setenv(LANGUAGE = oldLanguage)
   }, add = TRUE)
 
-  initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests, encodedDataset = encodedDataset, datasets = datasets)
-  args <- fetchRunArgs(name, options, datasets)
+  initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests, datasets = datasets)
+
+  # Validate + encode the options exactly like the engine does: through the analysis' own QML
+  # form via the SyntaxInterface bridge. This fills defaults, rejects junk, binds each form to
+  # the dataset its selection option names (multiDataSetAware runs), stamps the .meta
+  # provenance, encodes column values per dataset and queues the per-(dataset,filter) slices.
+  parsed <- parseOptionsThroughBridge(name, options)
+
+  args <- fetchRunArgs(name, parsed)
 
   if (quiet) {
     sink(tempfile())
@@ -102,6 +122,11 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
     getJsonResultsFromJaspResultsLegacy()
   }
 
+  # The analysis only ever saw encoded names (the engine's contract too); decode the whole
+  # results payload against every dataset the bridge workspace holds - jaspTools' equivalent
+  # of Engine's sendString - so test authors keep matching on the plain names they typed.
+  jsonResults <- jaspSyntax::decodeJsonText(jsonResults)
+
   transferPlotsFromjaspResults()
 
   results <- processJsonResults(jsonResults)
@@ -118,43 +143,94 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
   return(invisible(results))
 }
 
-fetchRunArgs <- function(name, options, datasets = NULL) {
+# Analysis metadata straight from the module's Description.qml, through the bridge's own
+# description parser (jaspSyntax::resolveAnalysisQml) - the func -> qml mapping cannot be
+# guessed from conventions (e.g. func "multiDataSetFunc" lives in "testMultiDataSet.qml" in
+# jaspTestModule), and preloadData/awareness come from the same authoritative source.
+analysisRunInfo <- function(name) {
+  modulePath <- getModulePathFromRFunction(name)
+
+  resolved <- tryCatch(
+    jaspSyntax::resolveAnalysisQml(modulePath, name),
+    error = function(e) {
+      if (endsWith(name, "Internal"))
+        tryCatch(jaspSyntax::resolveAnalysisQml(modulePath, sub("Internal$", "", name)), error = function(e2) NULL)
+      else
+        NULL
+    }
+  )
+
+  if (is.null(resolved))
+    stop("Could not find analysis `", name, "` in the Description.qml of the module at ",
+         modulePath, " - please use the name it declares there.", call. = FALSE)
+
+  if (!isTRUE(file.exists(resolved$qmlFile)))
+    stop("QML file `", resolved$qmlFileName, "` of analysis `", name, "` not found at ",
+         resolved$qmlFile, call. = FALSE)
+
+  resolved
+}
+
+parseOptionsThroughBridge <- function(name, options) {
+  info <- analysisRunInfo(name)
+
+  # Same serialization jaspBase uses for the syntax wrapper (common.R toJSON): auto_unbox so
+  # scalar options ("Score", TRUE, filter ids, dataset names in selection options) arrive as
+  # scalars - boxed one-element arrays are rejected by the bridge.
+  optionsJson <- as.character(jsonlite::toJSON(options, auto_unbox = TRUE, digits = NA, null = "null"))
+
+  status <- jaspSyntax::loadQmlAndParseOptionsStatus(
+    info$moduleName, info$analysisName, info$qmlFile, optionsJson, info$version, info$preloadData)
+
+  list(
+    options          = status$options,
+    multiDataSetJson = if (nzchar(status$multiDataSetJson)) status$multiDataSetJson else NULL,
+    preloadData      = info$preloadData
+  )
+}
+
+fetchRunArgs <- function(name, parsed) {
   possibleArgs <- list(
     name = name,
     functionCall = findCorrectFunction(name),
     title = "",
     requiresInit = TRUE,
-    options = jsonlite::toJSON(options),
+    options = parsed$options,
     dataKey = "null",
     resultsMeta = "null",
     stateKey = "null",
-    preloadData = parsePreloadDataFromDescriptionQml(name)
+    preloadData = parsed$preloadData
   )
 
-  # multiDataSetAware runs (runAnalysis(..., datasets = <named list of dataframes>)): hand jaspBase
-  # the same {ids, names} blob the engine does; the slice queue in rbridge.R then feeds it.
-  if (!is.null(datasets)) {
-    titles <- attr(datasets, "dataSetNames")
-    if (is.null(titles)) titles <- names(datasets)
-    possibleArgs$multiDataSetJson <- jsonlite::toJSON(list(
-      ids   = names(datasets),
-      names = as.list(titles[names(datasets)])
-    ), auto_unbox = TRUE)
-  }
+  # For multiDataSetAware runs: the blob the bridge built while parsing ({ids = filter keys,
+  # names, dataSetIds, primary}) - jaspBase::runJaspResults then pulls the queued slices from
+  # the bridge, one read at a time, and hands the analysis `datasets` keyed by filter id.
+  if (!is.null(parsed$multiDataSetJson))
+    possibleArgs$multiDataSetJson <- parsed$multiDataSetJson
 
   runArgs <- formals(jaspBase::runJaspResults)
   argNames <- intersect(names(possibleArgs), names(runArgs))
   return(possibleArgs[argNames])
 }
 
-initAnalysisRuntime <- function(dataset, options, makeTests, encodedDataset = FALSE, datasets = NULL, ...) {
+initAnalysisRuntime <- function(dataset, options, makeTests, datasets = NULL, ...) {
   # first we reinstall any changed modules in the personal library
   reinstallChangedModules()
 
-  # dataset to be found in the analysis when it needs to be read
-  .setInternal("dataset", dataset)
-  preloadDataset(dataset, options, encodedDataset = encodedDataset)
-  setupMultiDataSet(datasets)
+  # data goes into the bridge workspace as real DataSets (id + column encoder + default
+  # filter), before the options are parsed: the QML forms need them to bind columns and to
+  # resolve the dataset selection options. Both loaders clear previous state themselves,
+  # repeated runs never inherit datasets; without data the workspace is cleared explicitly.
+  if (!is.null(datasets)) {
+    if (!is.list(datasets) || is.null(names(datasets)) || any(!nzchar(names(datasets))))
+      stop("`datasets` must be a named list of dataframes - the names become the dataset titles")
+    datasets <- lapply(datasets, loadCorrectDataset)
+    jaspSyntax::loadDataSets(datasets)
+  } else if (!is.null(dataset)) {
+    jaspSyntax::loadDataSet(loadCorrectDataset(dataset))
+  } else {
+    jaspSyntax::clearDatasetState()
+  }
 
   # prevent the results from being translated (unless the user explicitly wants to)
   Sys.setenv(LANG = getPkgOption("language"))
@@ -201,7 +277,7 @@ reinstallChangedModules <- function() {
       } else {
         # to prevent the installation output from cluttering the console on each analysis run, we do this quietly.
         # however, it is kinda nice to show errors, so we call the function again here and allow it to print this time (tryCatch/sink doesn't catch the installation failure reason).
-        install.packages(modulePath, type = "source", repos = NULL, INSTALL_opts = "--no-multiarch")
+        install.packages(modulePath, type = "source", repos = NULL, quiet = TRUE, INSTALL_opts = "--no-multiarch")
         if (!moduleName %in% installed.packages())
           stop("The installation of ", moduleName, " failed; you will need to fix the issue that prevents `install.packages()` from installing the module before any analysis will work")
       }
@@ -255,26 +331,6 @@ getJsonResultsFromJaspResultsLegacy <- function() {
   return(jaspResults$.__enclos_env__$private$getResults())
 }
 
-#' Queue up the datasets of a multiDataSetAware run (runAnalysis(..., datasets=...)).
-#' `datasets` is a named list of dataframes keyed by dataset id, optionally with titles in
-#' attr(datasets, "dataSetNames") - exactly what jaspBase hands an aware analysis. The slices
-#' are handed out in order by .readDataSetRequestedNative (mirroring the engine's slice queue).
-#' Note that jaspTools does not encode column names (longstanding), so option values and the
-#' dataframes' names must already be in the same namespace for the analysis to match them.
-setupMultiDataSet <- function(datasets) {
-  if (is.null(datasets))
-    return(invisible(NULL))
-
-  if (!is.list(datasets) || is.null(names(datasets)) || any(!nzchar(names(datasets))))
-    stop("`datasets` must be a named list of dataframes, keyed by dataset id")
-
-  .setInternal("multiDataSetQueue", datasets)
-
-  invisible(NULL)
-}
-
 .resetRunTimeInternals <- function() {
   .setInternal("state", list())
-  .setInternal("dataset", "")
-  .setInternal("multiDataSetQueue", NULL)
 }
