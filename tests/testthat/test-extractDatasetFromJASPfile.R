@@ -209,37 +209,72 @@ test_that("extractDatasetFromJASPFile returns NULL for JASP files without data",
   expect_null(result, info = "JASP files without data should return NULL")
 })
 
-test_that("extractDatasetFromJASPFile falls back to the original value for labels without text", {
+# Writes a minimal .jasp file (internal.sqlite only) and returns its path.
+# `columns`, `labels` and `data` are SQL "VALUES" lists for the Columns, Labels and DataSet_1 tables.
+makeMinimalJaspFile <- function(columns, labels, data, nColumns = 1L) {
 
-  # JASP stores no label text for numeric ordinal/nominal columns and shows the original value instead
   jaspFile <- tempfile(fileext = ".jasp")
-  on.exit(unlink(jaspFile), add = TRUE)
-
-  dbDir <- tempfile("jasp_fixture_")
+  dbDir    <- tempfile("jasp_fixture_")
   dir.create(dbDir)
   on.exit(unlink(dbDir, recursive = TRUE), add = TRUE)
+
+  dataColumns <- paste0("Column_", seq_len(nColumns), "_DBL REAL, Column_", seq_len(nColumns), "_INT INT", collapse = ", ")
 
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(dbDir, "internal.sqlite"))
   DBI::dbExecute(con, "CREATE TABLE Columns (id INTEGER PRIMARY KEY, dataSet INT, name TEXT, columnType TEXT, colIdx INT)")
   DBI::dbExecute(con, "CREATE TABLE Labels (id INTEGER PRIMARY KEY, columnId INT, value INT, label TEXT, originalValueJson TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE DataSet_1 (rowNumber INTEGER PRIMARY KEY, Column_1_DBL REAL, Column_1_INT INT, Column_2_DBL REAL, Column_2_INT INT)")
-  DBI::dbExecute(con, "INSERT INTO Columns VALUES (1, 1, 'ordinalNumbers', 'ordinal', 0), (2, 1, 'nominalText', 'nominal', 1)")
-  # column 1: no text for the numbers, text for the missing value label
-  # column 2: no text for the strings (value 1 is 'low', value 2 is 'high')
-  DBI::dbExecute(con, paste(
-    "INSERT INTO Labels (columnId, value, label, originalValueJson) VALUES",
-    "(1, 4, '', '1.0\n'), (1, 1, '', '2.0\n'), (1, 2, '', '3.0\n'), (1, 3, 'NA', '\"NA\"\n'),",
-    "(2, 1, 'low', '\"low\"\n'), (2, 2, '', '\"high\"\n')"
-  ))
-  DBI::dbExecute(con, "INSERT INTO DataSet_1 VALUES (1, 2.0, 1, 0.0, 1), (2, 3.0, 2, 0.0, 2), (3, 1.0, 4, 0.0, 2), (4, 'nan', 3, 0.0, 1)")
+  DBI::dbExecute(con, paste("CREATE TABLE DataSet_1 (rowNumber INTEGER PRIMARY KEY,", dataColumns, ")"))
+  DBI::dbExecute(con, paste("INSERT INTO Columns VALUES", columns))
+  DBI::dbExecute(con, paste("INSERT INTO Labels (columnId, value, label, originalValueJson) VALUES", labels))
+  DBI::dbExecute(con, paste("INSERT INTO DataSet_1 VALUES", data))
   DBI::dbDisconnect(con)
 
   oldWd <- setwd(dbDir)
+  on.exit(setwd(oldWd), add = TRUE, after = FALSE)
   archive::archive_write_files(jaspFile, "internal.sqlite", format = "zip")
-  setwd(oldWd)
+
+  return(jaspFile)
+}
+
+test_that("extractDatasetFromJASPFile falls back to the original value for labels without text", {
+
+  # JASP stores no label text for numeric ordinal/nominal columns and shows the original value instead
+  # column 1: no text for the numbers, text for the missing value label
+  # column 2: no text for one of the strings
+  jaspFile <- makeMinimalJaspFile(
+    columns = "(1, 1, 'ordinalNumbers', 'ordinal', 0), (2, 1, 'nominalText', 'nominal', 1)",
+    labels  = paste(
+      "(1, 4, '', '1.0\n'), (1, 1, '', '2.0\n'), (1, 2, '', '3.0\n'), (1, 3, 'NA', '\"NA\"\n'),",
+      "(2, 1, 'low', '\"low\"\n'), (2, 2, '', '\"high\"\n')"
+    ),
+    data = "(1, 2.0, 1, 0.0, 1), (2, 3.0, 2, 0.0, 2), (3, 1.0, 4, 0.0, 2), (4, 'nan', 3, 0.0, 1)",
+    nColumns = 2L
+  )
+  on.exit(unlink(jaspFile), add = TRUE)
 
   df <- extractDatasetFromJASPFile(jaspFile)
 
   expect_equal(df[["ordinalNumbers"]], c("2", "3", "1", "NA"))
   expect_equal(df[["nominalText"]],    c("low", "high", "high", "low"))
+})
+
+test_that("extractDatasetFromJASPFile treats NULL labels like empty labels", {
+
+  # same column stored once with NULL and once with empty labels: the result must be identical
+  columns <- "(1, 1, 'binary', 'nominal', 0)"
+  data    <- "(1, 0.0, 1), (2, 1.0, 2), (3, 0.0, 1)"
+
+  emptyFile <- makeMinimalJaspFile(columns, "(1, 1, '', '0.0\n'), (1, 2, '', '1.0\n')", data)
+  nullFile  <- makeMinimalJaspFile(columns, "(1, 1, NULL, '0.0\n'), (1, 2, NULL, '1.0\n')", data)
+  noneFile  <- makeMinimalJaspFile(columns, "(1, 1, NULL, NULL), (1, 2, NULL, NULL)", data)
+  on.exit(unlink(c(emptyFile, nullFile, noneFile)), add = TRUE)
+
+  empty <- extractDatasetFromJASPFile(emptyFile)
+  null  <- extractDatasetFromJASPFile(nullFile)
+  none  <- extractDatasetFromJASPFile(noneFile)
+
+  expect_equal(empty[["binary"]], c(0L, 1L, 0L))
+  expect_equal(null,  empty)
+  # without any label or original value the integer codes are all that is left
+  expect_equal(none[["binary"]], c(1L, 2L, 1L))
 })

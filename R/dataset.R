@@ -118,6 +118,9 @@ extractDatasetFromJASPFile <- function(jaspFile, dataSetIndex = 1L) {
 
     # Get labels for this column
     colLabels <- labels[labels$columnId == colId, ]
+    # NULL labels and original values are treated like empty ones
+    colLabels$label[is.na(colLabels$label)] <- ""
+    colLabels$originalValueJson[is.na(colLabels$originalValueJson)] <- ""
 
     if (colType %in% c("nominal", "nominalText", "ordinal")) {
       # This is a categorical column - use INT values mapped to labels
@@ -129,8 +132,7 @@ extractDatasetFromJASPFile <- function(jaspFile, dataSetIndex = 1L) {
       if (hasTextLabels) {
         # Labels without text (JASP shows the original value then) fall back to the original value,
         # otherwise those values would end up as empty strings
-        labelText <- colLabels$label
-        labelText[is.na(labelText)] <- ""
+        labelText  <- colLabels$label
         emptyLabel <- !nzchar(labelText)
         if (any(emptyLabel))
           labelText[emptyLabel] <- originalValueAsText(colLabels$originalValueJson[emptyLabel])
