@@ -453,15 +453,13 @@ recursivelyLoopOptions <- function(x, allColumnNames, resultEnv) {
     if (length(idx) > 0) {
       resultEnv$variables <- c(resultEnv$variables, unlist(x[idx], use.names = FALSE))
 
-      nm <- names(x)[idx]
-      idx2 <- vapply(nm, predicateVariableTypes, logical(1L), lst = x)
-
-      for (i in seq_along(idx2)) {
-        if (idx2[i]) {
-          idx3 <- paste0(nm[idx[i]], ".types")
-          resultEnv$types <- c(resultEnv$types, unlist(x[idx3], use.names = FALSE))
+      # idx holds positions in x, so look up names and values per position (keeps types aligned with variables)
+      for (i in idx) {
+        nm <- names(x)[i]
+        if (!is.null(nm) && predicateVariableTypes(x, nm)) {
+          resultEnv$types <- c(resultEnv$types, unlist(x[[paste0(nm, ".types")]], use.names = FALSE))
         } else {
-          resultEnv$types <- c(resultEnv$types, rep(NA_character_, length(x[idx[i]])))
+          resultEnv$types <- c(resultEnv$types, rep(NA_character_, length(x[[i]])))
         }
       }
 
