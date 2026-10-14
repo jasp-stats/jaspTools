@@ -118,6 +118,9 @@ extractDatasetFromJASPFile <- function(jaspFile, dataSetIndex = 1L) {
 
     # Get labels for this column
     colLabels <- labels[labels$columnId == colId, ]
+    # NULL labels and original values are treated like empty ones
+    colLabels$label[is.na(colLabels$label)] <- ""
+    colLabels$originalValueJson[is.na(colLabels$originalValueJson)] <- ""
 
     if (colType %in% c("nominal", "nominalText", "ordinal")) {
       # This is a categorical column - use INT values mapped to labels
@@ -127,8 +130,15 @@ extractDatasetFromJASPFile <- function(jaspFile, dataSetIndex = 1L) {
       hasTextLabels <- nrow(colLabels) > 0 && any(nzchar(colLabels$label))
 
       if (hasTextLabels) {
+        # Labels without text (JASP shows the original value then) fall back to the original value,
+        # otherwise those values would end up as empty strings
+        labelText  <- colLabels$label
+        emptyLabel <- !nzchar(labelText)
+        if (any(emptyLabel))
+          labelText[emptyLabel] <- originalValueAsText(colLabels$originalValueJson[emptyLabel])
+
         # Create a lookup from value to label
-        labelLookup <- stats::setNames(colLabels$label, as.character(colLabels$value))
+        labelLookup <- stats::setNames(labelText, as.character(colLabels$value))
 
         # Map integer values to labels
         # -1 typically means NA
@@ -195,6 +205,22 @@ extractDatasetFromJASPFile <- function(jaspFile, dataSetIndex = 1L) {
   }
 
   return(result)
+}
+
+# Converts the originalValueJson entries of the Labels table (e.g. "1.0\n" or "\"low\"\n") to the text
+# JASP displays for them (e.g. "1" or "low"). Entries that cannot be parsed are returned trimmed as they are.
+originalValueAsText <- function(originalValueJson) {
+  vapply(originalValueJson, function(json) {
+    json <- trimws(json)
+    value <- tryCatch(jsonlite::fromJSON(json), error = function(e) json)
+    if (is.null(value))
+      return("")
+    if (length(value) != 1L || is.na(value))
+      return(json)
+    if (is.numeric(value))
+      return(format(value, digits = 15L, scientific = FALSE, trim = TRUE))
+    as.character(value)
+  }, character(1L), USE.NAMES = FALSE)
 }
 
 loadCorrectDataset <- function(x) {
@@ -453,15 +479,13 @@ recursivelyLoopOptions <- function(x, allColumnNames, resultEnv) {
     if (length(idx) > 0) {
       resultEnv$variables <- c(resultEnv$variables, unlist(x[idx], use.names = FALSE))
 
-      nm <- names(x)[idx]
-      idx2 <- vapply(nm, predicateVariableTypes, logical(1L), lst = x)
-
-      for (i in seq_along(idx2)) {
-        if (idx2[i]) {
-          idx3 <- paste0(nm[idx[i]], ".types")
-          resultEnv$types <- c(resultEnv$types, unlist(x[idx3], use.names = FALSE))
+      # idx holds positions in x, so look up names and values per position (keeps types aligned with variables)
+      for (i in idx) {
+        nm <- names(x)[i]
+        if (!is.null(nm) && predicateVariableTypes(x, nm)) {
+          resultEnv$types <- c(resultEnv$types, unlist(x[[paste0(nm, ".types")]], use.names = FALSE))
         } else {
-          resultEnv$types <- c(resultEnv$types, rep(NA_character_, length(x[idx[i]])))
+          resultEnv$types <- c(resultEnv$types, rep(NA_character_, length(x[[i]])))
         }
       }
 
