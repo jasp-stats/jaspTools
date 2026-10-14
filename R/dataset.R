@@ -127,8 +127,16 @@ extractDatasetFromJASPFile <- function(jaspFile, dataSetIndex = 1L) {
       hasTextLabels <- nrow(colLabels) > 0 && any(nzchar(colLabels$label))
 
       if (hasTextLabels) {
+        # Labels without text (JASP shows the original value then) fall back to the original value,
+        # otherwise those values would end up as empty strings
+        labelText <- colLabels$label
+        labelText[is.na(labelText)] <- ""
+        emptyLabel <- !nzchar(labelText)
+        if (any(emptyLabel))
+          labelText[emptyLabel] <- originalValueAsText(colLabels$originalValueJson[emptyLabel])
+
         # Create a lookup from value to label
-        labelLookup <- stats::setNames(colLabels$label, as.character(colLabels$value))
+        labelLookup <- stats::setNames(labelText, as.character(colLabels$value))
 
         # Map integer values to labels
         # -1 typically means NA
@@ -195,6 +203,22 @@ extractDatasetFromJASPFile <- function(jaspFile, dataSetIndex = 1L) {
   }
 
   return(result)
+}
+
+# Converts the originalValueJson entries of the Labels table (e.g. "1.0\n" or "\"low\"\n") to the text
+# JASP displays for them (e.g. "1" or "low"). Entries that cannot be parsed are returned trimmed as they are.
+originalValueAsText <- function(originalValueJson) {
+  vapply(originalValueJson, function(json) {
+    json <- trimws(json)
+    value <- tryCatch(jsonlite::fromJSON(json), error = function(e) json)
+    if (is.null(value))
+      return("")
+    if (length(value) != 1L || is.na(value))
+      return(json)
+    if (is.numeric(value))
+      return(format(value, digits = 15L, scientific = FALSE, trim = TRUE))
+    as.character(value)
+  }, character(1L), USE.NAMES = FALSE)
 }
 
 loadCorrectDataset <- function(x) {
