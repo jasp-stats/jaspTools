@@ -86,6 +86,11 @@ rFunctionExistsInModule <- function(funName, modulePath) {
     for (expr in as.list(parsed)) {
       if (is.call(expr) && identical(as.character(expr[[1]]), "export"))
         if (funName %in% as.character(expr[-1])) return(TRUE)
+      # JASP modules typically have a bare `exportPattern("^[[:alpha:]]+")` NAMESPACE, which the
+      # export() scan above misses: evaluate exportPattern() patterns against the name too.
+      if (is.call(expr) && identical(as.character(expr[[1]]), "exportPattern"))
+        for (arg in as.list(expr)[-1])
+          if (is.character(arg) && grepl(arg, funName)) return(TRUE)
     }
     return(FALSE)
 

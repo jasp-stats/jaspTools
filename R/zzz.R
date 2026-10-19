@@ -15,7 +15,6 @@
 
 .onLoad <- function(libname, pkgname) {
   .setInternal("jaspToolsPath", normalizePath(file.path(libname, "jaspTools")))
-  .insertRbridgeIntoEnv(.GlobalEnv)
 
   if (.isSetupComplete()) {
     .initInternalPaths()
