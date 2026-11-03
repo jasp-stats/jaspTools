@@ -103,10 +103,32 @@ analysisOptionsFromQMLFile <- function(analysis) {
     includeTypeOptions = FALSE,
     isolated           = FALSE
   )
-  options <- options[!vapply(options, function(x) is.list(x) && length(x) == 0L, logical(1L))]
+  options <- dropEmptyListOptions(options)
   attr(options, "analysisName") <- analysis
 
   return(options)
+}
+
+dropEmptyListOptions <- function(options) {
+  options[!vapply(options, function(x) is.list(x) && length(x) == 0L, logical(1L))]
+}
+
+# Deprecated, kept for the module test helpers that still call jaspTools:::readQML(). A form file is
+# loaded through the bridge like in analysisOptions(); a QML file a form imports cannot be loaded on
+# its own and gives no options, as analysisOptions() already includes them.
+readQML <- function(file) {
+  lifecycle::deprecate_warn("0.20.1", "readQML()", "analysisOptions()", env = asNamespace("jaspTools"))
+
+  options <- tryCatch(
+    jaspSyntax::parseQmlOptions(file, includeMeta = FALSE, includeTypeOptions = FALSE, isolated = FALSE),
+    error = function(e) {
+      if (!grepl("Cannot create QML Form", conditionMessage(e), fixed = TRUE))
+        stop(e)
+      list()
+    }
+  )
+
+  return(dropEmptyListOptions(options))
 }
 
 analysisOptionsFromJSONString <- function(x) {
@@ -337,108 +359,3 @@ fixOptionsForVariableTypes <- function(options) {
   return(options)
 
 }
-
-
-
-# some code to test the function below on all Description.qml files in jasp
-# dirs <- list.dirs("~/github/jasp/jasp-desktop/Modules", recursive = FALSE)
-# qmls <- file.path(dirs, "inst", "Description.qml")
-# qmls <- Filter(file.exists, qmls)
-# nms <- basename(dirname(dirname(qmls)))
-# names(qmls) <- nms
-# results <- vector("list", length(nms))
-# names(results) <- nms
-# for (nm in nms) {
-#   cat(nm, "\n")
-#   results[[nm]] <- jaspTools:::parseDescriptionQmlFromPath(qmls[[nm]])
-# }
-parseDescriptionQmlFromPath <- function(pathToDescriptionQml) {
-
-  raw <- trimws(readLines(pathToDescriptionQml))
-  raw <- raw[raw != ""]
-  # drop import statements
-  raw <- raw[!startsWith(raw, "import")]
-  # ensure that everything is on a newline
-  raw <- trimws(unlist(strsplit(raw, ";", fixed = TRUE), use.names = FALSE))
-  # remove any whitespace
-  raw <- gsub("\\s", "", raw)
-  # transform "Description{}" to c("Description", "{", "})
-  raw <- trimws(unlist(strsplit(raw, "(?=\\{)", perl = TRUE), use.names = FALSE))
-  raw <- trimws(unlist(strsplit(raw, "(?=\\})", perl = TRUE), use.names = FALSE))
-  # "qsTr(\"bla\")" -> "\"bla\""
-  raw <- gsub('qsTr\\("(.*)"\\)', "\\1", raw)
-
-  result <- list()
-  subResults <- NULL
-  subNames   <- character(0L)
-  depth <- 0L
-  skipUntilClose <- FALSE
-  skipCount <- 0L
-
-  groupsToskip <- c("GroupTitle", "Separator", "Timer")
-  for (i in seq_along(raw)) {
-
-    if (!skipUntilClose) {
-
-      hasColon <- grepl(":", raw[i], fixed = TRUE)
-      if (!hasColon && grepl("{", raw[i + 1], fixed = TRUE)) {
-
-        if (any(vapply(groupsToskip, function(x) identical(raw[i], x), FUN.VALUE = logical(1L)))) {
-          skipUntilClose <- TRUE
-          next
-        }
-
-        depth <- depth + 1L
-        subNames[[depth]] <- raw[i]
-        subResult <- list()
-        subResults[[depth]] <- list()
-
-      } else if (hasColon) {
-
-        match <- regexec("([^:]+):(.*)", raw[i])
-        parts <- regmatches(raw[i], match)[[1]]
-        key <- parts[2]
-        value <- parts[3]
-        # remove quotes at the start and end of the string
-        value <- gsub("^[\"']|[\"']$", "", value)
-
-        subResults[[depth]][[key]] <- switch(
-          value,
-          "false" = FALSE,
-          "true"  = TRUE,
-          value
-        )
-
-      } else if (grepl("}", raw[i], fixed = TRUE)) {
-
-        subName <- subNames[[depth]]
-        subResult <- subResults[[depth]]
-        if (!is.null(subResult) && length(subResult) > 0L) {
-
-          # rather than "Analysis", use the name of the R function
-          if (subName == "Analysis")
-            subName <- subResult[["func"]]
-
-          result[[subName]] <- subResult
-
-        }
-
-        result[[subName]] <- subResult
-        depth <- depth - 1L
-      }
-
-    } else if (grepl("{" , raw[i], fixed = TRUE)) {
-      skipCount <- skipCount + 1L
-    } else if (grepl("}", raw[i], fixed = TRUE)) {
-
-      skipCount <- skipCount - 1L
-      if (skipCount == 0)
-        skipUntilClose <- FALSE
-
-    }
-  }
-
-  return(result)
-
-}
-

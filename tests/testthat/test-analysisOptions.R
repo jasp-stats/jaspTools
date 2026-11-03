@@ -162,3 +162,39 @@ test_that("analysisOptions takes the defaults of an analysis from its QML form, 
   # an empty list is left out, so the bridge fills it like JASP does
   expect_false("variables" %in% names(opts))
 })
+
+test_that("the deprecated readQML loads a form through the bridge and gives nothing for an imported QML file", {
+
+  qmlDir <- tempfile("jaspToolsQml")
+  dir.create(qmlDir)
+  on.exit(unlink(qmlDir, recursive = TRUE))
+
+  formFile <- file.path(qmlDir, "SomeForm.qml")
+  writeLines(c(
+    'import QtQuick',
+    'import JASP.Controls',
+    'Form',
+    '{',
+    '  CheckBox { name: "formCheck"; checked: true }',
+    '  DropDown { name: "formChoice"; values: [{ label: "A", value: "a", info: qsTr("First.") }, { label: "B", value: "b" }] }',
+    '}'
+  ), formFile)
+
+  importedFile <- file.path(qmlDir, "SomeSection.qml")
+  writeLines(c(
+    'import QtQuick',
+    'import JASP.Controls',
+    'Section',
+    '{',
+    '  title: "Imported"',
+    '  CheckBox { name: "importedCheck" }',
+    '}'
+  ), importedFile)
+
+  formOptions <- lifecycle::expect_deprecated(jaspTools:::readQML(formFile))
+  expect_identical(formOptions$formCheck, TRUE)
+  expect_identical(formOptions$formChoice, "a")
+
+  importedOptions <- suppressWarnings(jaspTools:::readQML(importedFile))
+  expect_identical(importedOptions, list())
+})

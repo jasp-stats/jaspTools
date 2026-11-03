@@ -83,8 +83,7 @@ makeTestsFromExamples <- function(path, module.dir, source, sanitize = FALSE,
   }
 
   if (file.exists(qmlPath)) {
-    qmlContent <- parseDescriptionQmlFromPath(qmlPath)
-    pkgAnalyses <- setdiff(names(qmlContent), "Description")
+    pkgAnalyses <- names(jaspSyntax::parseModuleDescription(module.dir)$analyses)
   } else {
     cli::cli_abort(c(
       "{.file Description.qml} not found at path: {.path {qmlPath}}.",
