@@ -11,15 +11,14 @@ analysisOptions(source)
 }
 \value{
 A list containing options of the analysis. If \code{source} is a .jasp file with multiple analyses, then a list of lists.
-If \code{source} is the name of the R function of the analysis then all default options have been
-filled in and booleans set to FALSE. The options that have no default are
-left empty.
+If \code{source} is the name of the R function of the analysis then it holds every option of the form,
+also those of the QML files it imports, with the default value JASP gives it.
 }
 \description{
 \code{analysisOptions} provides an easy way to create analysis options that can be supplied to \code{runAnalysis}.
 }
 \details{
-There are three types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools will attempt to read the .qml file for that analysis and create a set of default options.
+There are three types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools loads the QML form of that analysis through jaspSyntax, as JASP does, and returns its default options.
 2) the path to .jasp file that has one or more analyses. Or (3) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
 The logs can be found by clicking 'Show logs" in the "Logging options". Click on the file "\emph{Engine}.log" that has "Engine::receiveAnalysisMessage:" (usually Engine 1), copy the content between the \{ and \}.
 Be sure to use single quotes (') when supplying this string.

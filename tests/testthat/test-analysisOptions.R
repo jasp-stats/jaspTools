@@ -98,3 +98,67 @@ test_that("analysisOptions extracts options from no-data JASP file", {
   # Should have an analysisName attribute
   expect_true(!is.null(attr(opts, "analysisName")))
 })
+
+test_that("analysisOptions takes the defaults of an analysis from its QML form, also from the QML files it imports", {
+
+  # a minimal source module: Description.qml declares the analysis, its form uses a sibling QML file
+  modulePath <- file.path(tempfile("jaspToolsModule"), "jaspFakeModule")
+  dir.create(file.path(modulePath, "inst", "qml"), recursive = TRUE)
+  on.exit(unlink(dirname(modulePath), recursive = TRUE))
+
+  writeLines(c("Package: jaspFakeModule", "Version: 0.1.0", "Title: Fake module", "License: GPL (>= 2)"),
+             file.path(modulePath, "DESCRIPTION"))
+  writeLines("export(FakeAnalysis)", file.path(modulePath, "NAMESPACE"))
+  writeLines(c(
+    'import QtQuick',
+    'import JASP.Module',
+    'Description',
+    '{',
+    '  title: "Fake module"',
+    '  Analysis { title: "Fake analysis"; func: "FakeAnalysis"; qml: "FakeAnalysis.qml" }',
+    '}'
+  ), file.path(modulePath, "inst", "Description.qml"))
+  writeLines(c(
+    'import QtQuick',
+    'import JASP.Controls',
+    'Form',
+    '{',
+    '  VariablesForm',
+    '  {',
+    '    AvailableVariablesList { name: "allVariables" }',
+    '    AssignedVariablesList  { name: "variables" }',
+    '  }',
+    '  DropDown',
+    '  {',
+    '    name: "correction"',
+    '    values: [',
+    '      { label: qsTr("None"), value: "none", info: qsTr("No adjustment, the default.") },',
+    '      { label: "Bonferroni", value: "bonferroni", info: qsTr("Bonferroni correction.") }',
+    '    ]',
+    '  }',
+    '  ImportedOptions {}',
+    '}'
+  ), file.path(modulePath, "inst", "qml", "FakeAnalysis.qml"))
+  writeLines(c(
+    'import QtQuick',
+    'import JASP.Controls',
+    'Group',
+    '{',
+    '  CheckBox { name: "importedCheck"; checked: true }',
+    '  IntegerField { name: "importedCount"; defaultValue: 7 }',
+    '}'
+  ), file.path(modulePath, "inst", "qml", "ImportedOptions.qml"))
+
+  local_mocked_bindings(getModulePathFromRFunction = function(funName) modulePath)
+
+  opts <- analysisOptions("FakeAnalysis")
+
+  expect_identical(attr(opts, "analysisName"), "FakeAnalysis")
+  expect_identical(opts$correction, "none")
+  expect_identical(opts$importedCheck, TRUE)
+  expect_equal(opts$importedCount, 7)
+  expect_false(".meta" %in% names(opts))
+  expect_false(any(endsWith(names(opts), ".types")))
+  # an empty list is left out, so the bridge fills it like JASP does
+  expect_false("variables" %in% names(opts))
+})

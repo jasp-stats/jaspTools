@@ -5,15 +5,14 @@
 #' @param source One of three: (1) R function name, (2) path to .jasp file or (3) json string. See the details section for more information.
 #'
 #' @details
-#' There are three types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools will attempt to read the .qml file for that analysis and create a set of default options.
+#' There are three types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools loads the QML form of that analysis through jaspSyntax, as JASP does, and returns its default options.
 #' 2) the path to .jasp file that has one or more analyses. Or (3) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
 #' The logs can be found by clicking 'Show logs" in the "Logging options". Click on the file "*Engine*.log" that has "Engine::receiveAnalysisMessage:" (usually Engine 1), copy the content between the \{ and \}.
 #' Be sure to use single quotes (') when supplying this string.
 #'
 #' @return A list containing options of the analysis. If \code{source} is a .jasp file with multiple analyses, then a list of lists.
-#' If \code{source} is the name of the R function of the analysis then all default options have been
-#' filled in and booleans set to FALSE. The options that have no default are
-#' left empty.
+#' If \code{source} is the name of the R function of the analysis then it holds every option of the form,
+#' also those of the QML files it imports, with the default value JASP gives it.
 #' @examples
 #' jaspOptions <- analysisOptions("~/Documents/someFile.jasp")
 #' # if there are multiple analyses in the .jasp files you need to select one
@@ -85,54 +84,29 @@ analysisOptions <- function(source) {
   return(options)
 }
 
+# The defaults come from the real QML form, loaded through the bridge (the same path runAnalysis
+# validates options with), so every control is included, also those of QML files the form imports.
+# .meta and the *.types options are left out: tests set e.g. options$dependent <- "contNormal" and
+# a default dependent.types would no longer match it. Empty lists are left out as well: for the bridge
+# a missing option is the same as its empty default, and it then fills the lists that follow other
+# controls (e.g. one contrasts row per factor in options$fixedFactors) instead of keeping them empty.
 analysisOptionsFromQMLFile <- function(analysis) {
-  file <- getQMLFile(analysis)
-  options <- readQML(file)
+  info <- analysisRunInfo(analysis)
+
+  options <- jaspSyntax::parseQmlOptions(
+    qmlFile            = info$qmlFile,
+    moduleName         = info$moduleName,
+    analysisName       = info$analysisName,
+    version            = info$version,
+    preloadData        = info$preloadData,
+    includeMeta        = FALSE,
+    includeTypeOptions = FALSE,
+    isolated           = FALSE
+  )
+  options <- options[!vapply(options, function(x) is.list(x) && length(x) == 0L, logical(1L))]
   attr(options, "analysisName") <- analysis
 
   return(options)
-}
-
-getQMLFile <- function(name) {
-  modulePath <- getModulePathFromRFunction(name)
-  if (is.null(modulePath))
-    stop("Could not locate the module location for ", name)
-
-  if (isBinaryPackage(modulePath)) {
-    qmlDir  <- file.path(modulePath, "qml")
-    instDir <- modulePath
-  } else { # source pkg
-    qmlDir  <- file.path(modulePath, "inst", "qml")
-    instDir <- file.path(modulePath, "inst")
-
-  }
-
-  possibleQmlFile <- file.path(qmlDir, paste0(name, ".qml")) # it's optional to specify the qml file in Description.qml, you can also just name it RFunc.qml
-  if (file.exists(possibleQmlFile))
-    return(possibleQmlFile)
-
-  descrFile <- file.path(instDir, "Description.qml")
-  if (!file.exists(descrFile))
-    stop("Could not locate Description.qml in ", modulePath)
-
-  fileSize <- file.info(descrFile)$size
-  fileContents <- readChar(descrFile, nchars = fileSize)
-  fileContents <- gsub("[\"']", "", fileContents)
-  rFuncLocExpr <- paste0("\\{[^\\{\\}]*func:\\s*", name, "[^\\{\\}]*\\}")
-  if (!grepl(rFuncLocExpr, fileContents))
-    stop("Could not locate qml file for R function ", name, " in inst/qml directory and did not find the R function in inst/Description.qml to look for an alternative name for the qml file")
-
-  rLocMatch <- stringr::str_match(fileContents, rFuncLocExpr)[1]
-  qmlLocExpr <- "[a-zA-Z0-9_]+\\.qml"
-  if (!grepl(qmlLocExpr, rLocMatch))
-    stop("Could not locate qml file for R function ", name, " in inst/qml directory and did not find a qml entry in inst/Description.qml that describes an alternative for the qml filename")
-
-  qmlFileName <- stringr::str_match(rLocMatch, qmlLocExpr)
-  qmlFilePath <- file.path(qmlDir, qmlFileName)
-  if (!file.exists(qmlFilePath))
-    stop("Found a qml filename for the R function ", name, " but this qml file does not appear to exist in inst/qml/")
-
-  return(qmlFilePath)
 }
 
 analysisOptionsFromJSONString <- function(x) {
