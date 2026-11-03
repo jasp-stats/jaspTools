@@ -279,7 +279,8 @@ extractData.DropDown <- function(element, ...) {
     values <- unlist(strsplit(unnamedArray, ","))
   } else {
     namedArray <- matchTable[[3]][2]
-    regMatchValue <- "value:(.*?)[;\\}]"
+    # the keys of an entry are separated by commas, e.g. {label:qsTr(None),value:none,info:qsTr(...)}
+    regMatchValue <- "[\\{,]value:([^,;\\}]*)"
     matchTableValues <- stringr::str_match_all(namedArray, regMatchValue)
     values <- matchTableValues[[1]][, 2]
   }

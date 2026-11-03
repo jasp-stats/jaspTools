@@ -98,3 +98,33 @@ test_that("analysisOptions extracts options from no-data JASP file", {
   # Should have an analysisName attribute
   expect_true(!is.null(attr(opts, "analysisName")))
 })
+
+test_that("readQML takes the DropDown default from the value key, whatever keys follow it", {
+
+  qmlFile <- tempfile(fileext = ".qml")
+  on.exit(unlink(qmlFile))
+  writeLines(c(
+    'Form',
+    '{',
+    '  DropDown',
+    '  {',
+    '    name: "correction"',
+    '    values: [',
+    '      { label: qsTr("None"), value: "none", info: qsTr("No adjustment, the default.") },',
+    '      { label: "Bonferroni", value: "bonferroni", info: qsTr("Bonferroni correction.") }',
+    '    ]',
+    '  }',
+    '  DropDown',
+    '  {',
+    '    name: "type"',
+    '    indexDefaultValue: 1',
+    '    values: [{ value: "raw", label: qsTr("Raw") }, { value: "cohensD", label: qsTr("Cohen\'s d") }]',
+    '  }',
+    '}'
+  ), qmlFile)
+
+  opts <- jaspTools:::readQML(qmlFile)
+
+  expect_identical(opts$correction, "none")
+  expect_identical(opts$type, "cohensD")
+})
