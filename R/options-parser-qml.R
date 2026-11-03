@@ -1,3 +1,6 @@
+# Deprecated: analysisOptions() reads the defaults through jaspSyntax now. This regex parser stays only
+# for the module test helpers that call jaspTools:::readQML() on the QML files a form imports, which
+# analysisOptions() now includes; remove it once those helpers are gone.
 readQML <- function(file) {
   regularFields <- c(
     "IntegerField",
