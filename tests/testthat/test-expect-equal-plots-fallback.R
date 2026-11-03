@@ -326,6 +326,7 @@ test_that("materialized ggplot is used for vdiffr and structural fallback", {
 
   testthat::local_mocked_bindings(
     materialize_plot_for_vdiffr = function(test) rendered,
+    decode_plot_for_snapshot = function(test) test,
     expect_plot_with_fallback = function(name, test, fallback_test, ...) {
       seen$vdiffr <- test
       seen$fallback <- fallback_test
@@ -357,4 +358,66 @@ test_that("non-ggplot recipe rendering keeps the recipe as fallback", {
   jaspTools::expect_equal_plots(recipe, "recipe-function-plot")
   expect_identical(seen$vdiffr, rendered)
   expect_identical(seen$fallback, recipe)
+})
+
+test_that("plots are decoded like JASP does before they are compared with a snapshot", {
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("jaspBase")
+
+  # the analysis only sees encoded column names; jaspBase finds the engine's decoder in the global environment
+  decoded <- c(JASPColumn_D1_F1_1_Encoded = "contBinom", JASPColumn_D1_F1_2_Encoded = "contNormal")
+  decoder <- function(x) { hit <- x %in% names(decoded); x[hit] <- decoded[x[hit]]; x }
+  decoderNames <- c(".decodeColNamesLax", ".decodeColNamesStrict")
+  oldDecoders <- mget(decoderNames, envir = .GlobalEnv, ifnotfound = list(NULL))
+  for (nm in decoderNames)
+    assign(nm, decoder, envir = .GlobalEnv)
+  on.exit({
+    for (nm in decoderNames)
+      if (is.null(oldDecoders[[nm]])) rm(list = nm, envir = .GlobalEnv) else assign(nm, oldDecoders[[nm]], envir = .GlobalEnv)
+  }, add = TRUE)
+
+  # jaspGraphs plots set their axis titles explicitly, which is what plot$labels holds with ggplot2 >= 4
+  df <- data.frame(JASPColumn_D1_F1_1_Encoded = factor(c("a", "b")), JASPColumn_D1_F1_2_Encoded = c(1, 2))
+  p <- ggplot2::ggplot(df, ggplot2::aes(JASPColumn_D1_F1_1_Encoded, JASPColumn_D1_F1_2_Encoded)) +
+    ggplot2::geom_point() +
+    ggplot2::labs(x = "JASPColumn_D1_F1_1_Encoded", y = "JASPColumn_D1_F1_2_Encoded")
+
+  grDevices::pdf(NULL)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  axisTitles <- function(plot) {
+    grob <- ggplot2::ggplotGrob(plot)
+    unlist(lapply(grob$grobs[grepl("^(xlab|ylab)", grob$layout$name)], function(g) rapply(g, identity, classes = "character", how = "unlist")))
+  }
+
+  expect_true(all(c("contBinom", "contNormal") %in% axisTitles(jaspTools:::decode_plot_for_snapshot(p))))
+  expect_false(any(grepl("JASPColumn_", axisTitles(jaspTools:::decode_plot_for_snapshot(p)))))
+
+  structureLabels <- unlist(jaspTools:::extract_ggplot_structure(p)$labels)
+  expect_true(all(c("contBinom", "contNormal") %in% structureLabels))
+  expect_false(any(grepl("JASPColumn_", structureLabels)))
+
+  # column names can also be data, e.g. the variables on the x-axis of a paired samples plot, in the plot or a layer
+  variables <- factor(c("JASPColumn_D1_F1_1_Encoded", "JASPColumn_D1_F1_2_Encoded"))
+  q <- ggplot2::ggplot(data.frame(variable = variables, value = 1:2), ggplot2::aes(variable, value)) +
+    ggplot2::geom_point() +
+    ggplot2::geom_text(data = data.frame(variable = variables, value = 1:2, label = as.character(variables)), ggplot2::aes(label = label))
+
+  tickLabels <- function(plot) {
+    grob <- ggplot2::ggplotGrob(plot)
+    unlist(lapply(grob$grobs[grepl("^axis-b", grob$layout$name)], function(g) rapply(g, identity, classes = "character", how = "unlist")))
+  }
+  decodedQ <- jaspTools:::decode_plot_for_snapshot(q)
+  expect_true(all(c("contBinom", "contNormal") %in% tickLabels(decodedQ)))
+  expect_identical(levels(decodedQ$layers[[2]]$data$variable), c("contBinom", "contNormal"))
+  expect_identical(decodedQ$layers[[2]]$data$label, c("contBinom", "contNormal"))
+  # the plot in the results is left as it was
+  expect_identical(levels(q$data$variable), levels(variables))
+  expect_identical(q$layers[[2]]$data$label, as.character(variables))
+
+  # or explicit scale labels, as in the paired samples plots
+  s <- ggplot2::ggplot(data.frame(variable = factor(c("a", "b")), value = 1:2), ggplot2::aes(variable, value)) +
+    ggplot2::geom_point() +
+    ggplot2::scale_x_discrete(labels = levels(variables))
+  expect_true(all(c("contBinom", "contNormal") %in% tickLabels(jaspTools:::decode_plot_for_snapshot(s))))
+  expect_identical(s$scales$scales[[1]]$labels, levels(variables))
 })

@@ -48,6 +48,7 @@ expect_equal_plots <- function(test, name, dir = lifecycle::deprecated(), tolera
 
   originalTest <- test
   test <- materialize_plot_for_vdiffr(test)
+  test <- decode_plot_for_snapshot(test)
 
   skip_if_grob(test)
   skip_if_recordedPlot(test)
@@ -78,6 +79,71 @@ materialize_plot_for_vdiffr <- function(test) {
 
   materialize <- getExportedValue("jaspGraphs", "materializeJaspPlotRecipe")
   materialize(test)
+}
+
+# The analysis only sees encoded column names, so the plots it stores in the state carry them too. JASP decodes a
+# plot when it draws it (jaspBase's writeImage), so decode it the same way before comparing it with a snapshot.
+# With ggplot2 >= 4 decodeplot() decodes the guide titles while drawing, which needs the bridge to still hold the
+# dataset of the run, as it does right after runAnalysis(). Only these classes stay plottable: for the others
+# decodeplot() returns a grob.
+decode_plot_for_snapshot <- function(test) {
+  if (!inherits(test, c("gg", "jaspGraphsPlot", "qgraph")) || !requireNamespace("jaspBase", quietly = TRUE))
+    return(test)
+
+  if (inherits(test, "jaspGraphsPlot"))
+    test$subplots <- lapply(test$subplots, decode_ggplot_data)
+  else
+    test <- decode_ggplot_data(test)
+
+  decodeplot <- utils::getFromNamespace("decodeplot", "jaspBase")
+  decodeplot(test, returnGrob = FALSE)
+}
+
+# JASP decodes the drawn plot as a whole (decodeplot() with returnGrob = TRUE), so also column names that are data or
+# scale labels, e.g. the variables on the x-axis of a paired samples plot. Drawing a grob would change how vdiffr
+# renders every plot, so decode those values in the plot instead. Layers and scales are cloned, as they are mutable
+# ggproto objects that the plot in the results shares.
+decode_ggplot_data <- function(plot) {
+  if (!is_ggplot(plot) || inherits(plot, "patchwork"))
+    return(plot)
+
+  decodeValues <- function(df) {
+    if (!is.data.frame(df))
+      return(df)
+    for (nm in names(df))
+      if (is.character(df[[nm]]) || is.factor(df[[nm]]))
+        df[[nm]] <- jaspBase::decodeColNames(df[[nm]])
+    df
+  }
+
+  plot$data <- decodeValues(plot$data)
+  plot$layers <- lapply(plot$layers, function(layer) {
+    if (!is.data.frame(layer$data))
+      return(layer)
+    clone <- ggplot2::ggproto(NULL, layer)
+    clone$data <- decodeValues(layer$data)
+    clone
+  })
+
+  scales <- plot$scales$clone()
+  for (i in seq_along(scales$scales)) {
+    scale <- scales$scales[[i]]$clone()
+    for (field in c("breaks", "labels", "limits"))
+      if (is.character(scale[[field]]))
+        scale[[field]] <- jaspBase::decodeColNames(scale[[field]])
+    scales$scales[[i]] <- scale
+  }
+  plot$scales <- scales
+
+  plot
+}
+
+# decodeplot() leaves plot$labels encoded with ggplot2 >= 4, so the structural snapshot decodes them itself
+decode_plot_labels <- function(labels) {
+  if (!is.list(labels) || !requireNamespace("jaspBase", quietly = TRUE))
+    return(labels)
+
+  rapply(labels, jaspBase::decodeColNames, classes = "character", how = "replace")
 }
 
 expect_plot_with_fallback <- function(name, test, fallback_test = test, tolerance = NULL) {
@@ -688,7 +754,7 @@ extract_ggplot_structure <- function(plot) {
   built <- ggplot2::ggplot_build(plot)
 
   list(
-    labels = normalize_named_list(plot$labels),
+    labels = normalize_named_list(decode_plot_labels(plot$labels)),
     layer_data = lapply(built$data, normalize_data_frame_for_snapshot),
     layer_spec = lapply(plot$layers, extract_layer_spec),
     layout = extract_layout_spec(plot, built),
