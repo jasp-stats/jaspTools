@@ -128,8 +128,10 @@ decode_ggplot_data <- function(plot) {
   scales <- plot$scales$clone()
   for (i in seq_along(scales$scales)) {
     scale <- scales$scales[[i]]$clone()
+    # limits can also be a factor, e.g. scale_x_discrete(limits = <the factor on the x-axis>): left encoded,
+    # none of the decoded data values would fall within them
     for (field in c("breaks", "labels", "limits"))
-      if (is.character(scale[[field]]))
+      if (is.character(scale[[field]]) || is.factor(scale[[field]]))
         scale[[field]] <- jaspBase::decodeColNames(scale[[field]])
     scales$scales[[i]] <- scale
   }
