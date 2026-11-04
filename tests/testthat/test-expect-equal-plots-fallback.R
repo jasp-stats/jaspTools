@@ -420,4 +420,14 @@ test_that("plots are decoded like JASP does before they are compared with a snap
     ggplot2::scale_x_discrete(labels = levels(variables))
   expect_true(all(c("contBinom", "contNormal") %in% tickLabels(jaspTools:::decode_plot_for_snapshot(s))))
   expect_identical(s$scales$scales[[1]]$labels, levels(variables))
+
+  # or scale limits given as the factor on the x-axis, as in the bar plots: these must be decoded along with the
+  # data, or no bar falls within them and positioning the bars fails
+  b <- ggplot2::ggplot(data.frame(variable = variables, value = 1:2), ggplot2::aes(variable, value)) +
+    ggplot2::geom_bar(stat = "identity", position = ggplot2::position_dodge2(preserve = "single")) +
+    ggplot2::scale_x_discrete(limits = variables)
+  decodedB <- jaspTools:::decode_plot_for_snapshot(b)
+  expect_no_error(ggplot2::ggplot_build(decodedB))
+  expect_true(all(c("contBinom", "contNormal") %in% tickLabels(decodedB)))
+  expect_identical(b$scales$scales[[1]]$limits, variables)
 })
