@@ -307,9 +307,26 @@ processJsonResults <- function(jsonResults) {
 
   figures <- results$state$figures
   if (length(figures) > 1 && !is.null(names(figures)))
-    results$state$figures <- figures[order(as.numeric(tools::file_path_sans_ext(basename(names(figures)))))]
+    results$state$figures <- figures[orderFiguresByCreation(names(figures))]
 
   return(results)
+}
+
+# jaspBase collects the plots for the state from a std::set of pointers, so their order there
+# depends on memory addresses and differs between platforms. Their file names carry a counter
+# that only goes up, so sorting on it gives back the order the plots were made in, which is
+# what tests indexing `state$figures[[i]]` rely on:
+#   - old jaspResults names:          "1.png", "2.png", ...
+#   - JASP/jaspSyntax (TempFiles):    "resources/_<counter>_t<millis>.png", optionally with
+#                                     "resources/<id>/" in front
+orderFiguresByCreation <- function(figureNames) {
+  base    <- tools::file_path_sans_ext(basename(figureNames))
+  counter <- suppressWarnings(as.numeric(ifelse(
+    grepl("^_[0-9]+_t[0-9]+$", base),
+    sub("^_([0-9]+)_t[0-9]+$", "\\1", base),
+    base
+  )))
+  order(counter)
 }
 
 transferPlotsFromjaspResults <- function() {
