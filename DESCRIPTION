@@ -12,11 +12,10 @@ License: GNU General Public License
 Encoding: UTF-8
 LazyData: true
 Imports:
-  archive (>= 1.1.6),
   cli,
   data.table,
   httr,
-  jaspSyntax,
+  jaspSyntax (>= 1.4.1),
   jsonlite,
   lifecycle,
   pkgload,
