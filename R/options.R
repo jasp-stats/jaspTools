@@ -106,7 +106,8 @@ analysisOptionsFromQMLFile <- function(analysis) {
   options <- dropEmptyListOptions(options)
   attr(options, "analysisName") <- analysis
 
-  return(options)
+  # runAnalysis gives the form only the options a test sets: see formOptions.R
+  return(formDefaultOptions(options))
 }
 
 dropEmptyListOptions <- function(options) {

@@ -104,6 +104,7 @@ test_that("analysisOptions takes the defaults of an analysis from its QML form, 
   # a minimal source module: Description.qml declares the analysis, its form uses a sibling QML file
   modulePath <- file.path(tempfile("jaspToolsModule"), "jaspFakeModule")
   dir.create(file.path(modulePath, "inst", "qml"), recursive = TRUE)
+  dir.create(file.path(modulePath, "inst", "icons")) # jaspSyntax reads Description.qml like JASP, which requires it
   on.exit(unlink(dirname(modulePath), recursive = TRUE))
 
   writeLines(c("Package: jaspFakeModule", "Version: 0.1.0", "Title: Fake module", "License: GPL (>= 2)"),
