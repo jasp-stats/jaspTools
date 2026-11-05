@@ -21,6 +21,9 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
+      # jaspTools is not a CRAN package: it imports jaspSyntax from GitHub (Remotes), which the
+      # CRAN incoming feasibility check reports as a WARNING
+      _R_CHECK_CRAN_INCOMING_: false
 
     steps:
       - uses: actions/checkout@v2

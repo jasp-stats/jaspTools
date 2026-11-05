@@ -299,7 +299,9 @@ test_that("vdiffr and fallback can use different plot objects", {
   testthat::local_mocked_bindings(
     capture_vdiffr_expectation = function(name, test) {
       seen$vdiffr <- test
-      list(passed = FALSE, exception = simpleError("forced mismatch"))
+      # a mismatch against an existing reference, so not a fresh snapshot
+      list(passed = FALSE, exception = simpleError("forced mismatch"),
+           svg_path = tempfile(fileext = ".svg"), reference_existed = TRUE, new_svg_current = FALSE)
     },
     save_failed_plot_svg = function(...) invisible(NULL),
     expect_doppelganger_fallback = function(test, ...) {
