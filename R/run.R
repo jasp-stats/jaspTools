@@ -177,6 +177,9 @@ parseOptionsThroughBridge <- function(name, options) {
   # Same serialization jaspBase uses for the syntax wrapper (common.R toJSON): auto_unbox so
   # scalar options ("Score", TRUE, filter ids, dataset names in selection options) arrive as
   # scalars - boxed one-element arrays are rejected by the bridge.
+  # Of the defaults analysisOptions() gave, only the options the test set: the form gives the others
+  # their default, which can depend on the options that are set (see formOptions.R).
+  options <- formOptionsAsList(options)
   optionsJson <- as.character(jsonlite::toJSON(options, auto_unbox = TRUE, digits = NA, null = "null"))
 
   status <- jaspSyntax::loadQmlAndParseOptionsStatus(
