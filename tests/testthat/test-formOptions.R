@@ -42,3 +42,32 @@ test_that("a plain list (a .jasp file, a json string, built by hand) is given as
   options <- list(a = 1, b = TRUE)
   expect_identical(jaspTools:::formOptionsAsList(options), options)
 })
+
+test_that("the types of variables are given to the form inside their option", {
+  options <- list(variables = c("ord", "con"), variables.types = c("ordinal", "scale"),
+                  dependent = "y", dependent.types = "scale", check = TRUE)
+  expect_identical(jaspTools:::typesIntoOptionValues(options), list(
+    variables = list(value = c("ord", "con"), types = c("ordinal", "scale")),
+    dependent = list(value = "y", types = "scale"),
+    check     = TRUE
+  ))
+  expect_identical(
+    as.character(jsonlite::toJSON(jaspTools:::typesIntoOptionValues(options["dependent"]), auto_unbox = TRUE)),
+    '{"dependent":"y"}'
+  )
+
+  # an interaction term has a type per component
+  terms <- list(modelTerms = list(list(components = c("a", "b"))), modelTerms.types = list(c("nominal", "scale")))
+  expect_identical(jaspTools:::typesIntoOptionValues(terms),
+                   list(modelTerms = list(value = list(list(components = c("a", "b"))), types = list(c("nominal", "scale")))))
+
+  # left as they are: types of rows, empty types, types without their option, an option that has its types already
+  rows <- list(effectSizeModelTerms = list(list(components = "ablat")), effectSizeModelTerms.types = list(list(components = "scale")))
+  expect_identical(jaspTools:::typesIntoOptionValues(rows), rows)
+  empty <- list(split = "", split.types = list())
+  expect_identical(jaspTools:::typesIntoOptionValues(empty), empty)
+  alone <- list(fixedFactors.types = "nominal")
+  expect_identical(jaspTools:::typesIntoOptionValues(alone), alone)
+  nested <- list(x = list(value = "a", types = "scale"), x.types = "nominal")
+  expect_identical(jaspTools:::typesIntoOptionValues(nested), nested)
+})

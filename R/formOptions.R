@@ -64,3 +64,25 @@ formOptionsAsList <- function(options, onlySet = TRUE) {
 
   options
 }
+
+# analysisOptions() of a .jasp file gives a variables option as `x` and `x.types`, as the analysis gets it, and a test
+# sets the type of a variable the same way (options$variables.types <- "scale"). The form reads the types only inside the
+# option ({value, types}), else each variable gets the type of its column: so they are put back there. Types that follow
+# the structure of the rows (e.g. list(list(components = "scale"))) are sent as they are.
+typesIntoOptionValues <- function(options) {
+  for (typesName in grep("[.]types$", names(options), value = TRUE)) {
+    name  <- sub("[.]types$", "", typesName)
+    value <- options[[name]]
+    types <- options[[typesName]]
+
+    plainTypes <- length(types) > 0 && is.null(names(types)) &&
+      all(vapply(types, function(type) is.character(type) && is.null(names(type)), logical(1)))
+
+    if (is.null(value) || !is.null(names(value)) || !plainTypes)
+      next
+
+    options[[name]]      <- list(value = value, types = types)
+    options[[typesName]] <- NULL
+  }
+  options
+}

@@ -179,7 +179,7 @@ parseOptionsThroughBridge <- function(name, options) {
   # scalars - boxed one-element arrays are rejected by the bridge.
   # Of the defaults analysisOptions() gave, only the options the test set: the form gives the others
   # their default, which can depend on the options that are set (see formOptions.R).
-  options <- formOptionsAsList(options)
+  options <- typesIntoOptionValues(formOptionsAsList(options))
   optionsJson <- as.character(jsonlite::toJSON(options, auto_unbox = TRUE, digits = NA, null = "null"))
 
   status <- jaspSyntax::loadQmlAndParseOptionsStatus(
