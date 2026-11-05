@@ -9,34 +9,25 @@ extractDatasetFromJASPFile(jaspFile, dataSetIndex = 1L)
 \arguments{
 \item{jaspFile}{Character string specifying the path to the .jasp file.}
 
-\item{dataSetIndex}{Integer specifying which dataset to extract if the JASP
-file contains multiple datasets. Default is 1 (the first dataset).}
+\item{dataSetIndex}{Integer specifying which dataset to extract. Only the first
+dataset (1, the default) is supported.}
 }
 \value{
-A data.frame containing the extracted dataset with proper column names,
-types, and factor levels.
+A data.frame with the columns of the dataset, or \code{NULL} when the file
+holds no data.
 }
 \description{
-This function extracts the dataset from a saved JASP file (.jasp) and returns
-it as a data.frame. JASP files are zip archives containing an SQLite database
-with the data and metadata.
+Returns the dataset saved in a .jasp file as a data.frame.
 }
 \details{
-The function performs the following steps:
-\itemize{
-\item Unpacking the .jasp archive (which is a zip file)
-\item Reading the internal.sqlite database
-\item Converting Column_N_DBL and Column_N_INT columns to properly named columns
-\item Mapping factor levels from the Labels table to create proper R factors
-\item Handling both explicitly nominal columns and columns with label mappings
-}
+The file is read by \code{\link[jaspSyntax:readDatasetFromJaspFile]{jaspSyntax::readDatasetFromJaspFile()}}, which opens it the
+way JASP does: the database in the archive is upgraded from the JASP version that
+wrote it, so files from every JASP version are read alike. Scale columns are
+numeric (missing values are \code{NaN}, infinity is \code{Inf}); nominal and ordinal columns
+are character vectors of their values.
 
-Special values like NA, NaN, and Inf are handled appropriately:
-\itemize{
-\item "nan" values in DBL columns are converted to NA
-\item "inf" values in DBL columns are converted to Inf
-\item -1 values in INT columns typically indicate missing values
-}
+The data.frame keeps the attributes jaspSyntax sets to recognize it as the
+dataset of that .jasp file.
 }
 \examples{
 \dontrun{

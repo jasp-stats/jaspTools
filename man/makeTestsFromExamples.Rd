@@ -56,7 +56,6 @@ blocks within the same test file.
 \strong{Prerequisites:}
 \itemize{
 \item \code{setupJaspTools()} must be run before using this function
-\item Packages 'DBI' and 'RSQLite' are required for extracting data from JASP files
 }
 }
 \examples{
