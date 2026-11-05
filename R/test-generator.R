@@ -33,7 +33,6 @@
 #'
 #' **Prerequisites:**
 #' - \code{setupJaspTools()} must be run before using this function
-#' - Packages 'DBI' and 'RSQLite' are required for extracting data from JASP files
 #'
 #' @return Invisibly returns a character vector of created/processed test file paths.
 #'
