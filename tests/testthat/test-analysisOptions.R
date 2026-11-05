@@ -24,17 +24,15 @@ test_that("analysisOptions flattens simple types/value structures", {
   expect_true("split.types" %in% names(opts) || identical(opts$split, ""))
 })
 
-test_that("analysisOptions flattens complex types/value structures with optionKey",
-{
+test_that("analysisOptions flattens complex types/value structures with optionKey", {
   # Test case: effectSizeModelTerms with optionKey and nested lists
   # Raw structure:
   #   $effectSizeModelTerms$optionKey = "components"
-
-  #   $effectSizeModelTerms$types = c("scale", "nominal")
-  #   $effectSizeModelTerms$value = list(list(components="ablat"), list(components="alloc"))
-  # Expected:
-  #   $effectSizeModelTerms = list(list(components="ablat"), list(components="alloc"))
-  #   $effectSizeModelTerms.types = list(list(components="scale"), list(components="nominal"))
+  #   $effectSizeModelTerms$types = list("scale", "nominal")
+  #   $effectSizeModelTerms$value = list(list(components = list("ablat")), list(components = list("alloc")))
+  # Expected, as JASP gives it to an analysis (jaspSyntax::readAnalysisOptionsFromJaspFile(flattenTypes = TRUE)):
+  #   $effectSizeModelTerms = list(list(components = list("ablat")), list(components = list("alloc")))
+  #   $effectSizeModelTerms.types = list("scale", "nominal")
 
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.jasp")
   opts <- jaspTools::analysisOptions(jaspFile)[[3]]
@@ -47,14 +45,13 @@ test_that("analysisOptions flattens complex types/value structures with optionKe
   expect_false("types" %in% names(opts$effectSizeModelTerms))
   expect_false("value" %in% names(opts$effectSizeModelTerms))
 
-  # The first element should have "components" with value "ablat"
-  expect_equal(opts$effectSizeModelTerms[[1]]$components, "ablat")
-  expect_equal(opts$effectSizeModelTerms[[2]]$components, "alloc")
+  # The rows keep their components
+  expect_equal(opts$effectSizeModelTerms[[1]]$components, list("ablat"))
+  expect_equal(opts$effectSizeModelTerms[[2]]$components, list("alloc"))
 
-  # The .types should be stored separately with parallel structure
+  # The .types are stored separately, one per row
   expect_true("effectSizeModelTerms.types" %in% names(opts))
-  expect_equal(opts$`effectSizeModelTerms.types`[[1]]$components, "scale")
-  expect_equal(opts$`effectSizeModelTerms.types`[[2]]$components, "nominal")
+  expect_equal(opts$`effectSizeModelTerms.types`, list("scale", "nominal"))
 })
 
 test_that("analysisOptions flattens deeply nested types/value structures", {
@@ -62,9 +59,9 @@ test_that("analysisOptions flattens deeply nested types/value structures", {
   # Raw structure:
   #   $variables[[1]]$coefficientAlpha$types = list()
   #   $variables[[1]]$coefficientAlpha$value = ""
-  # Expected:
+  # Expected, as JASP does it, the .types next to the option in its row:
   #   $variables[[1]]$coefficientAlpha = ""
-  #   $variables.types[[1]]$coefficientAlpha = list()
+  #   $variables[[1]]$coefficientAlpha.types = list()
 
   jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.jasp")
   opts <- jaspTools::analysisOptions(jaspFile)[[1]]
@@ -76,10 +73,43 @@ test_that("analysisOptions flattens deeply nested types/value structures", {
   # It should NOT have the types/value structure anymore
   expect_false(is.list(opts$variables[[1]]$coefficientAlpha))
 
-  # The .types should be stored separately with parallel structure
-  expect_true("variables.types" %in% names(opts))
-  expect_true(is.list(opts$`variables.types`[[1]]$coefficientAlpha))
-  expect_equal(length(opts$`variables.types`[[1]]$coefficientAlpha), 0)
+  # The .types are stored next to it, in the same row
+  expect_true("coefficientAlpha.types" %in% names(opts$variables[[1]]))
+  expect_equal(opts$variables[[1]]$`coefficientAlpha.types`, list())
+  expect_false("variables.types" %in% names(opts))
+})
+
+test_that("analysisOptions keeps a saved option with an optionKey and other members whole, like JASP", {
+  # Test case: the lavaan syntax of a SEM analysis
+  # Raw structure: $syntax = list(columns, model, modelOriginal, optionKey = "value", prefixedColumns, types, value)
+
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "bainSem.jasp")
+  opts <- jaspTools::analysisOptions(jaspFile)[[3]]
+
+  expect_equal(opts$syntax$modelOriginal, "postnumb ~ prenumb + peabody")
+  expect_equal(opts$syntax$value, list("peabody", "postnumb", "prenumb"))
+  expect_equal(opts$syntax$optionKey, "value")
+  expect_equal(opts$`syntax.types`, list("scale", "scale", "scale"))
+})
+
+test_that("analysisOptions returns the options of each analysis in a .jasp file with its name", {
+  jaspFile <- file.path(testthat::test_path(), "..", "JASPFiles", "Effectiveness_of_the_BCG_Vaccine_Against_Tuberculosis.jasp")
+  opts <- jaspTools::analysisOptions(jaspFile)
+
+  expect_length(opts, 3)
+  expect_null(names(opts))
+  expect_equal(
+    vapply(opts, attr, character(1), which = "analysisName"),
+    c("EffectSizeComputation", "FunnelPlot", "ClassicalMetaAnalysis")
+  )
+  expect_named(attributes(opts[[3]]), c("names", "analysisName"))
+  expect_true(".meta" %in% names(opts[[3]]))
+
+  single <- jaspTools::analysisOptions(file.path(testthat::test_path(), "..", "JASPFiles", "Invisibility_Cloak.jasp"))
+  expect_equal(attr(single, "analysisName"), "TTestIndependentSamples")
+  expect_equal(single$dependent, list("Mischief"))
+  expect_equal(single$`dependent.types`, list("scale"))
+  expect_equal(single$group, "Cloak")
 })
 
 test_that("analysisOptions extracts options from no-data JASP file", {
