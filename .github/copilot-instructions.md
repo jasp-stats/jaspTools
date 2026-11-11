@@ -181,7 +181,7 @@ Analysis functions may have `Internal` suffixes. `findCorrectFunction()` searche
 2. **Missing `module.dirs`**: If not set and CWD isn't a module, you'll hit "jaspTools needs to know what module to obtain resources from."
 3. **QML vs. JSON vs. JASP file confusion**: `analysisOptions()` accepts all three but requires exact formats. JSON must include outer `{}`, JASP files need `.jasp` extension.
 4. **Test environment detection**: `insideTestEnvironment()` checks for `testthat` in the call stack. Tests automatically set `view = FALSE` and `quiet = TRUE`.
-5. **RNG differences**: Use `options(jaspLegacyRngKind = TRUE/FALSE)` to match JASP's RNG behavior. `fixRNGForTesting()` is deprecated.
+5. **RNG differences**: Use `options(jaspLegacyRngKind = TRUE/FALSE)` to match JASP's RNG behavior.
 
 ## External Dependencies
 

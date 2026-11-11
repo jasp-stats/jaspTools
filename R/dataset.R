@@ -76,9 +76,6 @@ setFilename <- function(x, name) {
   attr(x, "filename") <- name
   x
 }
-getFilename <- function(x) {
-  attr(x, "filename")
-}
 
 .debug.csvTypes <- list2env(list(
   V1           = "scale",
@@ -168,10 +165,3 @@ addTypedDataSet <- function(name, lst) {
 
 }
 
-devcat <- function(..., file = "", sep = " ", fill = FALSE, labels = NULL,
-                   append = FALSE) {
-
-  if (getOption("jasptools_devcat", FALSE))
-    return(cat(..., file = file, sep = sep, fill = fill, labels = labels, append = append))
-  invisible(NULL)
-}
