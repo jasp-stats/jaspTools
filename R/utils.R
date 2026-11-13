@@ -46,6 +46,12 @@ getModulePaths <- function() {
   return(validModules)
 }
 
+# Whether getModulePaths() has modules to give: those of `module.dirs`, or the working directory when it is a module.
+hasModuleDirs <- function() {
+  modulePaths <- getPkgOption("module.dirs")
+  (length(modulePaths) > 0 && any(modulePaths != "")) || !is.null(getValidModuleRoot(getwd()))
+}
+
 getModulePathFromRFunction <- function(funName) {
   modulePath <- NULL
 

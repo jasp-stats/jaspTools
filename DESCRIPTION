@@ -15,7 +15,7 @@ Imports:
   cli,
   data.table,
   httr,
-  jaspSyntax (>= 1.4.1),
+  jaspSyntax (>= 1.4.2),
   jsonlite,
   lifecycle,
   pkgload,

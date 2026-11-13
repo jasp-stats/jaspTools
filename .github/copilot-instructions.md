@@ -86,6 +86,21 @@ dataset <- extractDatasetFromJASPFile("path/to/file.jasp")
 runAnalysis("AnalysisName", dataset, options)   # plain in, plain out; engine semantics in between
 ```
 
+### Running the Analyses of a JASP File Again
+
+To run an analysis with what a .jasp file saved, use `runAnalysisFromJaspFile()`: the data is
+loaded from the file as JASP opens it (column types and labels included), the saved options go
+unchanged to `jaspBase::runWrappedAnalysis()` with the module version of the file, so its QML
+form upgrades them like JASP does. `expect_equal_jasp_file()` compares the tables of the run
+with the results JASP saved in the file.
+
+```r
+jaspFile <- "path/to/file.jasp"
+set.seed(1)
+results <- runAnalysisFromJaspFile(jaspFile, 2)   # the 2nd analysis, or its name
+expect_equal_jasp_file(results, jaspFile, 2)
+```
+
 ### Generating Tests from JASP Example Files
 
 Use `makeTestsFromExamples()` to automatically generate test files from JASP example files:
@@ -123,7 +138,8 @@ makeTestsFromExamples(sanitize = TRUE)
 
 Generated test files:
 - Named `test-{source}-{filename}.R` in `tests/testthat/` (e.g., `test-library-MyAnalysis.R`)
-- Load options and data from JASP files at runtime via `testthat::test_path("jaspfiles", "{source}", "file.jasp")`
+- Run each analysis again with `runAnalysisFromJaspFile(testthat::test_path("jaspfiles", "{source}", "file.jasp"), <index>)`
+- Are generated from that run; the generator warns when its tables differ from the results saved in the file
 - Include table expectations via `expect_equal_tables()`
 - Include plot expectations via `expect_equal_plots()` with unique names: `analysis-1_figure-1_plot-title`
 
