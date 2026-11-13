@@ -31,6 +31,10 @@
 #' If a JASP file contains multiple analyses, they are included as separate \code{test_that()}
 #' blocks within the same test file.
 #'
+#' Each test runs its analysis again with \code{\link{runAnalysisFromJaspFile}} and expects the
+#' tables and plots that run gives now. When these tables differ from the results JASP saved
+#' in the file (see \code{\link{expect_equal_jasp_file}}), a warning says what differs.
+#'
 #' **Prerequisites:**
 #' - \code{setupJaspTools()} must be run before using this function
 #'
@@ -284,21 +288,8 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
                                         sanitize = FALSE, overwrite = FALSE,
                                         copyToJaspfiles = FALSE,
                                         pkgAnalyses = NULL) {
-  # Extract options from the JASP file
-  allOptions <- analysisOptions(jaspFile)
-
-  # Ensure it's a list of options (even if single analysis)
-  if (!is.null(attr(allOptions, "analysisName"))) {
-    # Single analysis - wrap in list
-    allOptions <- list(allOptions)
-  }
-
-  if (length(allOptions) == 0) {
-    stop("No analyses found in JASP file")
-  }
-
-  # Extract dataset from the JASP file
-  dataset <- extractDatasetFromJASPFile(jaspFile)
+  # The analyses of the file and the results JASP saved for them
+  analyses <- jaspSyntax::readAnalysisResultsFromJaspFile(jaspFile)
 
   # Get the base name for the test file
   baseName <- tools::file_path_sans_ext(basename(jaspFile))
@@ -348,9 +339,8 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
   # Run each analysis and generate test expectations
   testBlocks <- list()
 
-  for (i in seq_along(allOptions)) {
-    opts <- allOptions[[i]]
-    analysisName <- attr(opts, "analysisName")
+  for (i in seq_along(analyses)) {
+    analysisName <- analyses[[i]]$name
 
     if (is.null(analysisName)) {
       cli::cli_warn("Analysis {i} has no name, skipping.")
@@ -362,22 +352,27 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
       next
     }
 
-    cli::cli_inform("Running analysis {i}/{length(allOptions)}: {.val {analysisName}}")
+    cli::cli_inform("Running analysis {i}/{length(analyses)}: {.val {analysisName}}")
 
-    # Run the analysis to get results - jaspTools goes through the real JASP bridge, so the
-    # plain opts/dataset are validated and encoded engine-style and the results come back decoded
+    # Run the analysis again with the options and data of the file, as JASP does after opening it
     tryCatch(
       {
         set.seed(1)
-        results <- runAnalysis(analysisName, dataset, opts,
-          view = FALSE, quiet = TRUE
-        )
+        results <- runAnalysisFromJaspFile(jaspFile, i, view = FALSE, quiet = TRUE)
+
+        # The expectations below come from this run: it should give what JASP saved in the file
+        mismatches <- jaspFileMismatches(results, analyses[[i]])
+        if (length(mismatches) > 0)
+          cli::cli_warn(c(
+            "Analysis {i} ({.val {analysisName}}) does not give the results saved in {.file {basename(jaspFile)}}; the test expects the new results:",
+            stats::setNames(mismatches, rep("*", length(mismatches)))
+          ))
 
         # Generate test block with expectations from results
         testBlock <- generateExampleTestBlock(
           analysisName = analysisName,
           analysisIndex = i,
-          totalAnalyses = length(allOptions),
+          totalAnalyses = length(analyses),
           jaspFileName = basename(jaspFile),
           sourceFolder = sourceFolder,
           results = results
@@ -391,7 +386,7 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
         testBlock <- generateExampleTestBlockBasic(
           analysisName = analysisName,
           analysisIndex = i,
-          totalAnalyses = length(allOptions),
+          totalAnalyses = length(analyses),
           jaspFileName = basename(jaspFile),
           sourceFolder = sourceFolder
         )
@@ -487,28 +482,7 @@ generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses,
   lines <- c(lines, paste0('test_that("', testDesc, '", {'))
   lines <- c(lines, "")
 
-  # Extract from JASP file in module's jaspfiles folder
-  lines <- c(lines, "  # Load from JASP example file")
-  lines <- c(lines, paste0('  jaspFile <- testthat::test_path("jaspfiles", "', sourceFolder, '", "', jaspFileName, '")'))
-
-  # Generate appropriate options extraction based on number of analyses
-  if (totalAnalyses == 1) {
-    # Single analysis: analysisOptions returns options directly (not in a list)
-    lines <- c(lines, "  opts <- jaspTools::analysisOptions(jaspFile)")
-  } else {
-    # Multiple analyses: analysisOptions returns a list
-    lines <- c(lines, paste0("  opts <- jaspTools::analysisOptions(jaspFile)[[", analysisIndex, "]]"))
-  }
-
-  lines <- c(lines, "  dataset <- jaspTools::extractDatasetFromJASPFile(jaspFile)")
-  lines <- c(lines, "")
-
-  # Run analysis - the bridge validates + encodes like the engine and decodes the results
-  # again, so opts and dataset stay in plain user names throughout
-  lines <- c(lines, "  # Run analysis")
-  lines <- c(lines, "  set.seed(1)")
-  lines <- c(lines, paste0('  results <- jaspTools::runAnalysis("', analysisName, '", dataset, opts)'))
-  lines <- c(lines, "")
+  lines <- c(lines, runFromJaspFileLines(sourceFolder, jaspFileName, analysisIndex))
 
   # Add expectations
   if (length(tests) > 0) {
@@ -571,28 +545,7 @@ generateExampleTestBlockBasic <- function(analysisName, analysisIndex, totalAnal
   lines <- c(lines, paste0('test_that("', testDesc, '", {'))
   lines <- c(lines, "")
 
-  # Extract from JASP file in module's jaspfiles folder
-  lines <- c(lines, "  # Load from JASP example file")
-  lines <- c(lines, paste0('  jaspFile <- testthat::test_path("jaspfiles", "', sourceFolder, '", "', jaspFileName, '")'))
-
-  # Generate appropriate options extraction based on number of analyses
-  if (totalAnalyses == 1) {
-    # Single analysis: analysisOptions returns options directly (not in a list)
-    lines <- c(lines, "  opts <- jaspTools::analysisOptions(jaspFile)")
-  } else {
-    # Multiple analyses: analysisOptions returns a list
-    lines <- c(lines, paste0("  opts <- jaspTools::analysisOptions(jaspFile)[[", analysisIndex, "]]"))
-  }
-
-  lines <- c(lines, "  dataset <- jaspTools::extractDatasetFromJASPFile(jaspFile)")
-  lines <- c(lines, "")
-
-  # Run analysis - the bridge validates + encodes like the engine and decodes the results
-  # again, so opts and dataset stay in plain user names throughout
-  lines <- c(lines, "  # Run analysis")
-  lines <- c(lines, "  set.seed(1)")
-  lines <- c(lines, paste0('  results <- jaspTools::runAnalysis("', analysisName, '", dataset, opts)'))
-  lines <- c(lines, "")
+  lines <- c(lines, runFromJaspFileLines(sourceFolder, jaspFileName, analysisIndex))
 
   # Basic expectation
   lines <- c(lines, "  # Check analysis runs without error")
@@ -602,6 +555,18 @@ generateExampleTestBlockBasic <- function(analysisName, analysisIndex, totalAnal
   lines <- c(lines, "})")
 
   return(paste(lines, collapse = "\n"))
+}
+
+
+# The lines of a generated test that run analysis `analysisIndex` of a JASP file of the module again.
+runFromJaspFileLines <- function(sourceFolder, jaspFileName, analysisIndex) {
+  c(
+    "  # Run the analysis again with the options and data of the JASP example file",
+    paste0('  jaspFile <- testthat::test_path("jaspfiles", "', sourceFolder, '", "', jaspFileName, '")'),
+    "  set.seed(1)",
+    paste0("  results <- jaspTools::runAnalysisFromJaspFile(jaspFile, ", analysisIndex, ")"),
+    ""
+  )
 }
 
 

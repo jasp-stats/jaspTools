@@ -106,15 +106,26 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
 
   args <- fetchRunArgs(name, parsed)
 
-  if (quiet) {
-    sink(tempfile())
-    on.exit({suppressWarnings(sink(NULL))}, add = TRUE)
-    returnVal <- suppressWarnings(do.call(jaspBase::runJaspResults, args))
-    sink(NULL)
-  } else {
-    returnVal <- do.call(jaspBase::runJaspResults, args)
-  }
+  returnVal <- runQuietly(jaspBase::runJaspResults, args, quiet)
+  results   <- collectRunResults(returnVal, view)
 
+  if (makeTests)
+    makeUnitTestsFromResults(results, name, dataset, options)
+
+  return(invisible(results))
+}
+
+runQuietly <- function(fun, args, quiet) {
+  if (!quiet)
+    return(do.call(fun, args))
+
+  sink(tempfile())
+  on.exit(suppressWarnings(sink(NULL)), add = TRUE)
+  suppressWarnings(do.call(fun, args))
+}
+
+# The results of a run as runAnalysis gives them, from what jaspBase::runJaspResults returned.
+collectRunResults <- function(returnVal, view) {
   # always TRUE after jaspResults is merged into jaspBase
   jsonResults <- if (inherits(returnVal, c("jaspResultsR", "R6"))) {
     getJsonResultsFromJaspResults(returnVal)
@@ -137,10 +148,7 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
   if (view)
     view(jsonResults)
 
-  if (makeTests)
-    makeUnitTestsFromResults(results, name, dataset, options)
-
-  return(invisible(results))
+  results
 }
 
 # Analysis metadata straight from the module's Description.qml, through the bridge's own
@@ -216,15 +224,22 @@ fetchRunArgs <- function(name, parsed) {
   return(possibleArgs[argNames])
 }
 
-initAnalysisRuntime <- function(dataset, options, makeTests, datasets = NULL, ...) {
-  # first we reinstall any changed modules in the personal library
-  reinstallChangedModules()
+initAnalysisRuntime <- function(dataset, options, makeTests, datasets = NULL, jaspFile = NULL, ...) {
+  # first we reinstall any changed modules in the personal library; the analysis of a .jasp file names its
+  # module itself, so without module directories the installed module runs it
+  if (is.null(jaspFile) || hasModuleDirs())
+    reinstallChangedModules()
 
   # data goes into the bridge workspace as real DataSets (id + column encoder + default
   # filter), before the options are parsed: the QML forms need them to bind columns and to
   # resolve the dataset selection options. Both loaders clear previous state themselves,
   # repeated runs never inherit datasets; without data the workspace is cleared explicitly.
-  if (!is.null(datasets)) {
+  # The data of a .jasp file is loaded as JASP opens it: with the types, labels and order of
+  # the levels the file has, which a data.frame cannot all carry.
+  if (!is.null(jaspFile)) {
+    jaspSyntax::clearDatasetState()
+    invisible(jaspSyntax::loadDataSetFromJaspFile(jaspFile))
+  } else if (!is.null(datasets)) {
     if (!is.list(datasets) || is.null(names(datasets)) || any(!nzchar(names(datasets))))
       stop("`datasets` must be a named list of dataframes - the names become the dataset titles")
     datasets <- lapply(datasets, loadCorrectDataset)

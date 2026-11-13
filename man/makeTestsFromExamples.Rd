@@ -53,6 +53,10 @@ is the original JASP filename without the .jasp extension.
 If a JASP file contains multiple analyses, they are included as separate \code{test_that()}
 blocks within the same test file.
 
+Each test runs its analysis again with \code{\link{runAnalysisFromJaspFile}} and expects the
+tables and plots that run gives now. When these tables differ from the results JASP saved
+in the file (see \code{\link{expect_equal_jasp_file}}), a warning says what differs.
+
 \strong{Prerequisites:}
 \itemize{
 \item \code{setupJaspTools()} must be run before using this function
