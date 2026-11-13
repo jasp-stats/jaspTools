@@ -43,17 +43,25 @@ expect_equal_tables <- function(test, ref, label=NULL) {
     return()
   }
 
+  if (is.null(label))
+    label <- "New table"
+
+  mismatch <- tableMismatch(test, ref, label)
+  expect(mismatch == "", mismatch)
+}
+
+# "" when the rows of table `test` hold the cells of `ref` (a list as makeTestTable() prints it), else what differs.
+tableMismatch <- function(test, ref, label) {
   nRows <- length(test)
   nCols <- length(test[[1]])
   cellNames <- names(unlist(test))
   test <- collapseTestTable(test)
 
-  if (is.null(label))
-    label <- "New table"
-
   if (length(test) == length(ref)) {
     mismatches <- getMismatchesEqualSizeTables(test, ref, nRows, nCols, cellNames)
-    expect(mismatches == "", paste0(label, " is not equal to old table:\n", mismatches))
+    if (mismatches == "")
+      return("")
+    return(paste0(label, " is not equal to old table:\n", mismatches))
   } else {
     missingValues <- getMissingValuesDiffSizeTables(test, ref, cellNames)
 
@@ -69,7 +77,7 @@ expect_equal_tables <- function(test, ref, label=NULL) {
       reason <- paste0("likely reason: one or more ", type, " are no longer in the new table that were in the old table.\n",
                        "Old table values that are not matched: ", missingValues)
 
-    testthat::expect(FALSE, paste0(label, " (# cells: ", length(test), ") and old table (# cells: ", length(ref), ") are not of equal length, ", reason))
+    return(paste0(label, " (# cells: ", length(test), ") and old table (# cells: ", length(ref), ") are not of equal length, ", reason))
   }
 }
 
