@@ -6,7 +6,9 @@
 #'
 #' @details
 #' There are three types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools loads the QML form of that analysis through jaspSyntax, as JASP does, and returns its default options.
-#' 2) the path to .jasp file that has one or more analyses. Or (3) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
+#' 2) the path to .jasp file that has one or more analyses: the options as JASP saved them (see [jaspSyntax::readAnalysisOptionsFromJaspFile()]),
+#' which [runAnalysis()] gives the QML form as they are. To run an analysis of a .jasp file with its own data, and with its options
+#' upgraded from the version of the module that saved it, use [runAnalysisFromJaspFile()]. Or (3) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
 #' The logs can be found by clicking 'Show logs" in the "Logging options". Click on the file "*Engine*.log" that has "Engine::receiveAnalysisMessage:" (usually Engine 1), copy the content between the \{ and \}.
 #' Be sure to use single quotes (') when supplying this string.
 #'
@@ -150,11 +152,10 @@ analysisOptionsFromJSONString <- function(x) {
   return(options)
 }
 
-# Read through jaspSyntax, like the dataset (extractDatasetFromJASPFile): the variables options are
-# split into `x` and `x.types` the way JASP does it before it calls an analysis that does not preload
-# its data, with the plain column names (see ?jaspSyntax::readAnalysisOptionsFromJaspFile).
+# Read through jaspSyntax, like the dataset (extractDatasetFromJASPFile): the options as JASP saved them, which is what
+# the QML form of the analysis reads (a variables option is `list(value = ..., types = ...)`), with the plain column names.
 analysisOptionsFromJASPFile <- function(file) {
-  records <- jaspSyntax::readAnalysisOptionsFromJaspFile(file, flattenTypes = TRUE)
+  records <- jaspSyntax::readAnalysisOptionsFromJaspFile(file)
 
   options <- lapply(unname(records), function(record) {
     options <- record[["options"]]

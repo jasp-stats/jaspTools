@@ -6,7 +6,7 @@
 #' you by running the real JASP bridge (the SyntaxInterface library that powers
 #' jaspSyntax): the dataset is loaded as a genuine JASP DataSet, the options are
 #' validated, encoded and stamped with provenance by the analysis' own QML form,
-#' and the results are decoded on the way out - exactly like the engine does.
+#' and jaspBase gives the results with the plain column names again - exactly like the engine does.
 #' This means a jaspTools run behaves like a JASP run: plain column names go in,
 #' plain column names come out, and invalid options are rejected the same way.
 #' Note that \code{runAnalysis} sources JASP analyses every time it runs, so any
@@ -133,10 +133,7 @@ collectRunResults <- function(returnVal, view) {
     getJsonResultsFromJaspResultsLegacy()
   }
 
-  # The analysis only ever saw encoded names (the engine's contract too); decode the whole
-  # results payload against every dataset the bridge workspace holds - jaspTools' equivalent
-  # of Engine's sendString - so test authors keep matching on the plain names they typed.
-  jsonResults <- jaspSyntax::decodeJsonText(jsonResults)
+  # jaspBase gives the results with the plain column names (the analysis only saw encoded ones)
 
   transferPlotsFromjaspResults()
 
@@ -307,12 +304,22 @@ reinstallChangedModules <- function() {
 
 initializeCoreJaspPackages <- function() {
   require(jaspBase)
+  checkJaspBaseVersion()
   if (jaspBaseIsLegacyVersion()) {
     warning("jaspBase should be at least version 0.16.4! Continuing now but if something crashes update jaspBase.", domain = NA)
     require(jaspResults)
     jaspResults::initJaspResults()
     assign("jaspResultsModule", list(create_cpp_jaspResults = function(name, state) get("jaspResults", envir = .GlobalEnv)$.__enclos_env__$private$jaspObject), envir = .GlobalEnv)
   }
+}
+
+# jaspBase 0.20.6 gives the results of a run in R with the plain column names, and runs the analysis of a module without
+# R wrappers in runWrappedAnalysis.
+checkJaspBaseVersion <- function(minimum = "0.20.6") {
+  if (utils::packageVersion("jaspBase") < minimum)
+    stop("jaspTools needs jaspBase ", minimum, " or later (installed: ", utils::packageVersion("jaspBase"), ")", call. = FALSE)
+
+  invisible(TRUE)
 }
 
 processJsonResults <- function(jsonResults) {

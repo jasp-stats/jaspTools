@@ -19,7 +19,9 @@ also those of the QML files it imports, with the default value JASP gives it.
 }
 \details{
 There are three types of allowed input. 1) The name of the R function of the analysis (case-sensitive); jaspTools loads the QML form of that analysis through jaspSyntax, as JASP does, and returns its default options.
-2) the path to .jasp file that has one or more analyses. Or (3) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
+2) the path to .jasp file that has one or more analyses: the options as JASP saved them (see \code{\link[jaspSyntax:readAnalysisOptionsFromJaspFile]{jaspSyntax::readAnalysisOptionsFromJaspFile()}}),
+which \code{\link[=runAnalysis]{runAnalysis()}} gives the QML form as they are. To run an analysis of a .jasp file with its own data, and with its options
+upgraded from the version of the module that saved it, use \code{\link[=runAnalysisFromJaspFile]{runAnalysisFromJaspFile()}}. Or (3) a json string that was sent by the JASP application. This json can be obtained by having JASP log to file (JASP>Preferences>Advanced>Log to file).
 The logs can be found by clicking 'Show logs" in the "Logging options". Click on the file "\emph{Engine}.log" that has "Engine::receiveAnalysisMessage:" (usually Engine 1), copy the content between the \{ and \}.
 Be sure to use single quotes (') when supplying this string.
 }

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-jaspTools is an R package that enables JASP developers to preview, debug, and test JASP analyses locally without rebuilding the entire JASP application. It runs the real JASP runtime in R through the SyntaxInterface bridge (the same native library jaspSyntax uses): datasets become genuine JASP DataSets, options are validated and encoded by the analysis' own QML form, and results are decoded on the way out.
+jaspTools is an R package that enables JASP developers to preview, debug, and test JASP analyses locally without rebuilding the entire JASP application. It runs the real JASP runtime in R through the SyntaxInterface bridge (the same native library jaspSyntax uses): datasets become genuine JASP DataSets, options are validated and encoded by the analysis' own QML form, and jaspBase gives the results with the plain column names again.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ jaspTools uses specialized environments for variable scoping:
 3. **Runtime Init**: `initAnalysisRuntime()` in `R/run.R` loads the data into the bridge workspace as real DataSets (`jaspSyntax::loadDataSet(s)`; a named `datasets` list for multiDataSetAware runs)
 4. **Options**: `parseOptionsThroughBridge()` resolves the analysis through `jaspSyntax::resolveAnalysisQml()` (Description.qml is authoritative for func -> qml/preloadData) and validates + encodes the options via `jaspSyntax::loadQmlAndParseOptionsStatus()` - the same preparation the engine performs (junk options are rejected, `.meta` is stamped, multi-dataset slices are queued keyed by filter id)
 5. **Execution**: `runAnalysis()` calls `jaspBase::runJaspResults()` with the parsed options (and the bridge `multiDataSetJson` for aware runs); the analyses read their (encoded) data through the bridge hooks in `.GlobalEnv`
-6. **Output**: the results JSON is decoded against every workspace encoder (`jaspSyntax::decodeJsonText()`, jaspTools' equivalent of Engine::sendString) so callers keep seeing plain column names, and optionally displayed via `view()` using JASP's HTML/JS/CSS
+6. **Output**: jaspBase (0.20.6 or later) gives the results JSON with the plain column names, as the engine sends them in JASP, and they are optionally displayed via `view()` using JASP's HTML/JS/CSS
 
 **Critical**: S3 methods from `common.R` are temporarily exported to `.GlobalEnv` during analysis execution (see `Developers-note.md` "Handling of S3 methods").
 
@@ -75,8 +75,8 @@ options <- analysisOptions("path/to/analysis.jasp")  # Returns list if multiple 
 
 Options and datasets are passed in PLAIN user names; the bridge encodes them exactly like the
 engine does (real `JASPColumn_<dataSetId>_<n>_Encoded` names from the DataSet's ColumnEncoder)
-and `runAnalysis()` decodes the results again before returning. There is no R-side encoding
-helper anymore - if you find yourself renaming columns to `jaspColumn*` by hand, stop: that was
+and jaspBase gives the results with the plain names again. There is no encoding or decoding in
+jaspTools - if you find yourself renaming columns to `jaspColumn*` by hand, stop: that was
 the pre-parity mirror and it cannot survive a real bridge run (the bridge re-encodes whatever
 it loads).
 
