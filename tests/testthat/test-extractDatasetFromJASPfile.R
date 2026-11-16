@@ -1,7 +1,13 @@
 context("extractDatasetFromJASPFile")
 
 # The dataset is read by jaspSyntax::readDatasetFromJaspFile: scale columns are numeric, nominal
-# and ordinal columns are character vectors of their values (also when these are numbers).
+# and ordinal columns are factors with the levels in the order of the file (character vectors before
+# jaspSyntax 1.4.3), also when their values are numbers. Compare them by their values.
+categoricalValues <- function(x) {
+  expect_true(is.factor(x) || is.character(x), info = "A categorical column should be a factor")
+  as.character(x)
+}
+
 expectColumnsMatchCsv <- function(df, csv) {
   expect_equal(nrow(df), nrow(csv), info = "Row count should match")
   expect_equal(names(df), names(csv), info = "Column names should match")
@@ -10,8 +16,7 @@ expectColumnsMatchCsv <- function(df, csv) {
     if (is.numeric(df[[col]])) {
       expect_equal(df[[col]], csv[[col]], tolerance = 1e-6, info = paste("Column", col, "should match"))
     } else {
-      expect_type(df[[col]], "character")
-      expect_equal(df[[col]], as.character(csv[[col]]), info = paste("Column", col, "should match"))
+      expect_equal(categoricalValues(df[[col]]), as.character(csv[[col]]), info = paste("Column", col, "should match"))
     }
   }
 }
@@ -75,7 +80,7 @@ test_that("extractDatasetFromJASPFile handles categorical columns correctly", {
   categoricalCols <- c("facGender", "facExperim", "facOutlier", "debString", "unicode")
 
   for (col in categoricalCols) {
-    expect_equal(df[[col]], csv[[col]], info = paste("Categorical column", col, "should match"))
+    expect_equal(categoricalValues(df[[col]]), csv[[col]], info = paste("Categorical column", col, "should match"))
   }
 })
 
@@ -89,15 +94,17 @@ test_that("extractDatasetFromJASPFile handles binary columns correctly", {
   df <- extractDatasetFromJASPFile(jaspFile)
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
-  # Binary columns like contBinom are nominal: their values 0 and 1 come as character
-  expect_equal(sort(unique(na.omit(df[["contBinom"]]))), c("0", "1"),
+  # Binary columns like contBinom are nominal: their values 0 and 1 are levels, not numbers
+  contBinom <- categoricalValues(df[["contBinom"]])
+  expect_equal(sort(unique(na.omit(contBinom))), c("0", "1"),
                info = "contBinom should have values 0 and 1")
-  expect_equal(df[["contBinom"]], as.character(csv[["contBinom"]]),
+  expect_equal(contBinom, as.character(csv[["contBinom"]]),
                info = "contBinom values should match CSV")
 
-  expect_equal(sort(unique(na.omit(df[["debBinMiss20"]]))), c("0", "1"),
+  debBinMiss20 <- categoricalValues(df[["debBinMiss20"]])
+  expect_equal(sort(unique(na.omit(debBinMiss20))), c("0", "1"),
                info = "debBinMiss20 should have values 0 and 1 (with NAs)")
-  expect_equal(df[["debBinMiss20"]], as.character(csv[["debBinMiss20"]]),
+  expect_equal(debBinMiss20, as.character(csv[["debBinMiss20"]]),
                info = "debBinMiss20 values should match CSV")
 })
 
@@ -150,7 +157,7 @@ test_that("extractDatasetFromJASPFile handles Unicode correctly", {
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
   # Unicode column should match CSV exactly
-  expect_equal(df[["unicode"]], csv[["unicode"]], info = "Unicode column should match CSV")
+  expect_equal(categoricalValues(df[["unicode"]]), csv[["unicode"]], info = "Unicode column should match CSV")
 })
 
 test_that("extractDatasetFromJASPFile validates input", {
@@ -175,10 +182,11 @@ test_that("extractDatasetFromJASPFile handles ordinal columns correctly", {
   df <- extractDatasetFromJASPFile(jaspFile)
   csv <- read.csv(csvFile, stringsAsFactors = FALSE, check.names = FALSE)
 
-  # facFive is ordinal with values 1-5, which come as character
-  expect_equal(sort(unique(df[["facFive"]])), as.character(1:5),
+  # facFive is ordinal with values 1-5, which are levels, not numbers
+  facFive <- categoricalValues(df[["facFive"]])
+  expect_equal(sort(unique(facFive)), as.character(1:5),
                info = "facFive should have values 1-5")
-  expect_equal(df[["facFive"]], as.character(csv[["facFive"]]),
+  expect_equal(facFive, as.character(csv[["facFive"]]),
                info = "facFive values should match CSV")
 })
 

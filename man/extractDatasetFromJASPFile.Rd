@@ -23,8 +23,10 @@ Returns the dataset saved in a .jasp file as a data.frame.
 The file is read by \code{\link[jaspSyntax:readDatasetFromJaspFile]{jaspSyntax::readDatasetFromJaspFile()}}, which opens it the
 way JASP does: the database in the archive is upgraded from the JASP version that
 wrote it, so files from every JASP version are read alike. Scale columns are
-numeric (missing values are \code{NaN}, infinity is \code{Inf}); nominal and ordinal columns
-are character vectors of their values.
+numeric (missing values are \code{NaN}, infinity is \code{Inf}); nominal columns are factors
+and ordinal columns ordered factors, with their levels in the order of the file (the
+order JASP shows), which e.g. sets the reference level of a contrast. jaspSyntax
+versions before 1.4.3 give them as character vectors instead.
 
 The data.frame keeps the attributes jaspSyntax sets to recognize it as the
 dataset of that .jasp file.
