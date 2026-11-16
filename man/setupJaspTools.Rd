@@ -17,11 +17,11 @@ setupJaspTools(
 
 \item{installJaspModules}{(optional) Boolean. Should jaspTools install all the JASP analysis modules as R packages (e.g., jaspAnova, jaspFrequencies)?}
 
-\item{installJaspCorePkgs}{(optional) Boolean. Should jaspTools install jaspBase, jaspResults and jaspGraphs?}
+\item{installJaspCorePkgs}{(optional) Boolean. Should jaspTools install jaspBase and jaspGraphs?}
 
 \item{quiet}{(optional) Boolean. Should the installation of R packages produce output?}
 
-\item{force}{(optional) Boolean. Should a fresh installation of jaspResults, jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.}
+\item{force}{(optional) Boolean. Should a fresh installation of jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.}
 }
 \description{
 Ensures that analyses can be run, tested and debugged locally by fetching all of the basic dependencies.

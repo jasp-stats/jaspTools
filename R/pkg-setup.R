@@ -6,9 +6,9 @@
 #'
 #' @param pathJaspDesktop (optional) Character path to the root of jasp-desktop if present on the system.
 #' @param installJaspModules (optional) Boolean. Should jaspTools install all the JASP analysis modules as R packages (e.g., jaspAnova, jaspFrequencies)?
-#' @param installJaspCorePkgs (optional) Boolean. Should jaspTools install jaspBase, jaspResults and jaspGraphs?
+#' @param installJaspCorePkgs (optional) Boolean. Should jaspTools install jaspBase and jaspGraphs?
 #' @param quiet (optional) Boolean. Should the installation of R packages produce output?
-#' @param force (optional) Boolean. Should a fresh installation of jaspResults, jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.
+#' @param force (optional) Boolean. Should a fresh installation of jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.
 #'
 #' @export setupJaspTools
 setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, installJaspCorePkgs = TRUE, quiet = FALSE, force = TRUE) {
@@ -43,12 +43,7 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
     }
 
     if (missing(installJaspCorePkgs)) {
-      title <- if (jaspBaseIsLegacyVersion()) {
-        "- Would you like jaspTools to install jaspResults, jaspBase and jaspGraphs? If you opt no, you must install them yourself."
-      } else {
-        "- Would you like jaspTools to install jaspBase and jaspGraphs? If you opt no, you must install them yourself."
-      }
-      wantsInstallJaspCorePkgs <- menu(c("Yes", "No"), title = title)
+      wantsInstallJaspCorePkgs <- menu(c("Yes", "No"), title = "- Would you like jaspTools to install jaspBase and jaspGraphs? If you opt no, you must install them yourself.")
       if (wantsInstallJaspCorePkgs == 0) return(message("Setup aborted."))
 
       installJaspCorePkgs <- wantsInstallJaspCorePkgs == 1
@@ -79,11 +74,7 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
   } else {
 
     if (isTRUE(installJaspCorePkgs)) {
-      jaspCorePkgs <- if (jaspBaseIsLegacyVersion())
-        c("jaspBase", "jaspGraphs", "jaspResults")
-      else
-        c("jaspBase", "jaspGraphs")
-      installJaspPkg(jaspCorePkgs, quiet = quiet, force = force)
+      installJaspPkg(c("jaspBase", "jaspGraphs"), quiet = quiet, force = force)
 
     }
 
@@ -361,20 +352,4 @@ isRepoJaspModule <- function(repo, branch) {
   }
 
   return(FALSE)
-}
-
-jaspBaseIsLegacyVersion <- function() {
-  jaspBaseInstalled <- find.package("jaspBase", .libPaths(), quiet = TRUE, verbose = FALSE)
-  if (length(jaspBaseInstalled) == 0L) {
-    # This check can be deleted once jaspResults is merged into jaspBase
-    upstreamDescr <- readChar("https://raw.githubusercontent.com/jasp-stats/jaspBase/master/DESCRIPTION", 1e5)
-    if (grepl("Version: [0-9\\.]+\\n", upstreamDescr)) {
-      upstreamVer <- package_version(stringr::str_match(upstreamDescr, "Version: ([0-9\\.]+)\\n")[2])
-      return(upstreamVer < "0.16.4")
-    } else {
-      return(TRUE)
-    }
-  } else {
-    return(packageVersion("jaspBase") < "0.16.4")
-  }
 }
