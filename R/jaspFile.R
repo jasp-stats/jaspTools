@@ -56,7 +56,6 @@ runAnalysisFromJaspFile <- function(jaspFile, analysis = 1L, view = TRUE, quiet 
   moduleName <- record$moduleName
   if (is.null(moduleName))
     stop("The .jasp file does not say which module analysis `", record$name, "` comes from", call. = FALSE)
-  checkJaspBaseRunsModuleAnalysis(moduleName, record$name)
 
   info    <- jaspSyntax::resolveAnalysisQml(find.package(moduleName), record$name)
   version <- if (is.null(record$moduleVersion)) info$version else record$moduleVersion
@@ -73,19 +72,6 @@ runAnalysisFromJaspFile <- function(jaspFile, analysis = 1L, view = TRUE, quiet 
   returnVal <- runQuietly(jaspBase::runWrappedAnalysis, args, quiet)
 
   return(invisible(collectRunResults(returnVal, view)))
-}
-
-# jaspBase::runWrappedAnalysis runs <analysis>Internal, which only a module with R wrappers has. jaspBase 0.20.6
-# runs the analysis itself when there is none.
-checkJaspBaseRunsModuleAnalysis <- function(moduleName, analysisName) {
-  if (paste0(analysisName, "Internal") %in% getNamespaceExports(moduleName))
-    return(invisible(TRUE))
-
-  if (utils::packageVersion("jaspBase") < "0.20.6")
-    stop("Module ", moduleName, " has no R wrapper for analysis ", analysisName, ": running it from a .jasp file ",
-         "needs jaspBase 0.20.6 or later (installed: ", utils::packageVersion("jaspBase"), ")", call. = FALSE)
-
-  invisible(TRUE)
 }
 
 # The record of `analysis` (position or name) in the records jaspSyntax read from a .jasp file.
