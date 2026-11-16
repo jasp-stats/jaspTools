@@ -133,6 +133,48 @@ test_that("analysisOptions takes the defaults of an analysis from its QML form, 
   expect_false("variables" %in% names(opts))
 })
 
+test_that("analysisOptions gives the defaults of a multi-dataset analysis without a loaded dataset", {
+  # jaspSyntax 1.4.5 parses the defaults without preparing a run, so a dataset selection may stay empty
+  skip_if(utils::packageVersion("jaspSyntax") < "1.4.5", "needs jaspSyntax 1.4.5 or later")
+
+  modulePath <- file.path(tempfile("jaspToolsModule"), "jaspFakeModule")
+  dir.create(file.path(modulePath, "inst", "qml"), recursive = TRUE)
+  dir.create(file.path(modulePath, "inst", "icons"))
+  on.exit(unlink(dirname(modulePath), recursive = TRUE))
+
+  writeLines(c("Package: jaspFakeModule", "Version: 0.1.0", "Title: Fake module", "License: GPL (>= 2)"),
+             file.path(modulePath, "DESCRIPTION"))
+  writeLines("export(FakeMultiAnalysis)", file.path(modulePath, "NAMESPACE"))
+  writeLines(c(
+    'import QtQuick',
+    'import JASP.Module',
+    'Description',
+    '{',
+    '  title: "Fake module"',
+    '  Analysis { title: "Fake multi-dataset analysis"; func: "FakeMultiAnalysis"; qml: "FakeMultiAnalysis.qml" }',
+    '}'
+  ), file.path(modulePath, "inst", "Description.qml"))
+  writeLines(c(
+    'import QtQuick',
+    'import JASP.Controls',
+    'Form',
+    '{',
+    '  VariablesForm',
+    '  {',
+    '    AvailableVariablesList { name: "allVariablesA"; dataSetSelectionOption: "dataSetA" }',
+    '    AssignedVariablesList  { name: "dependentA"; depends: "dataSetA" }',
+    '  }',
+    '}'
+  ), file.path(modulePath, "inst", "qml", "FakeMultiAnalysis.qml"))
+
+  local_mocked_bindings(getModulePathFromRFunction = function(funName) modulePath)
+
+  opts <- analysisOptions("FakeMultiAnalysis")
+
+  expect_identical(attr(opts, "analysisName"), "FakeMultiAnalysis")
+  expect_identical(opts$dataSetA, "")
+})
+
 test_that("the deprecated readQML loads a form through the bridge and gives nothing for an imported QML file", {
 
   qmlDir <- tempfile("jaspToolsQml")
