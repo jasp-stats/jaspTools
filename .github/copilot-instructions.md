@@ -18,10 +18,9 @@ jaspTools uses specialized environments for variable scoping:
 
 1. **Setup**: `setupJaspTools()` fetches dependencies (jaspBase, jaspGraphs, datasets, HTML resources) and validates paths
 2. **Options**: `analysisOptions()` parses QML files, JASP files, or JSON to generate option lists
-3. **Runtime Init**: `initAnalysisRuntime()` in `R/run.R` loads the data into the bridge workspace as real DataSets (`jaspSyntax::loadDataSet(s)`; a named `datasets` list for multiDataSetAware runs)
-4. **Options**: `parseOptionsThroughBridge()` resolves the analysis through `jaspSyntax::resolveAnalysisQml()` (Description.qml is authoritative for func -> qml/preloadData) and validates + encodes the options via `jaspSyntax::loadQmlAndParseOptionsStatus()` - the same preparation the engine performs (junk options are rejected, `.meta` is stamped, multi-dataset slices are queued keyed by filter id)
-5. **Execution**: `runAnalysis()` calls `jaspBase::runJaspResults()` with the parsed options (and the bridge `multiDataSetJson` for aware runs); the analyses read their (encoded) data through the bridge hooks in `.GlobalEnv`
-6. **Output**: jaspBase (0.20.6 or later) gives the results JSON with the plain column names, as the engine sends them in JASP, and they are optionally displayed via `view()` using JASP's HTML/JS/CSS
+3. **Runtime Init**: `initAnalysisRuntime()` in `R/run.R` loads the data into the bridge workspace as a real DataSet (`jaspSyntax::loadDataSet()`); a named `datasets` list for multiDataSetAware runs is loaded by jaspBase in the next step
+4. **Execution**: `runAnalysis()` resolves the analysis through `jaspSyntax::resolveAnalysisQml()` (Description.qml is authoritative for func -> qml/preloadData) and calls `jaspBase::runWrappedAnalysis()`, the function every R wrapper of an analysis calls: the QML form validates and encodes the options like the engine does (junk options are rejected, `.meta` is stamped, multi-dataset slices are queued keyed by filter id), and the analysis (`<name>Internal` when the module has R wrappers, else `<name>`) reads its encoded data through the bridge hooks in `.GlobalEnv`
+5. **Output**: jaspBase (0.20.6 or later) gives the results JSON with the plain column names, as the engine sends them in JASP, and they are optionally displayed via `view()` using JASP's HTML/JS/CSS
 
 **Critical**: S3 methods from `common.R` are temporarily exported to `.GlobalEnv` during analysis execution (see `Developers-note.md` "Handling of S3 methods").
 
@@ -181,7 +180,7 @@ When `reinstall.modules = TRUE` (default), jaspTools tracks MD5 checksums of `R/
 
 ### Function Name Resolution
 
-Analysis functions may have `Internal` suffixes. `findCorrectFunction()` searches for `FunctionNameInternal` first, falling back to `FunctionName`. Always reference by the user-facing name.
+Analysis functions may have `Internal` suffixes. `jaspBase::runWrappedAnalysis()` runs `FunctionNameInternal` when the module exports it, else `FunctionName`. Always reference by the user-facing name.
 
 ### QML Parsing
 
@@ -201,7 +200,7 @@ Analysis functions may have `Internal` suffixes. `findCorrectFunction()` searche
 
 ## External Dependencies
 
-- **jaspBase**: Core JASP R infrastructure, provides `runJaspResults()` and utility functions
+- **jaspBase**: Core JASP R infrastructure, provides `runWrappedAnalysis()` and utility functions
 - **jaspGraphs**: Plotting system for JASP-compatible graphics
 - **jaspResults**: Legacy state container (now merged into jaspBase)
 - **vdiffr**: Visual regression testing for plots
