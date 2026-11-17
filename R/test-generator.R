@@ -363,10 +363,7 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
         # The expectations below come from this run: it should give what JASP saved in the file
         mismatches <- jaspFileMismatches(results, analyses[[i]])
         if (length(mismatches) > 0)
-          cli::cli_warn(c(
-            "Analysis {i} ({.val {analysisName}}) does not give the results saved in {.file {basename(jaspFile)}}; the test expects the new results:",
-            stats::setNames(mismatches, rep("*", length(mismatches)))
-          ))
+          warnJaspFileMismatches(i, analysisName, jaspFile, mismatches)
 
         # Generate test block with expectations from results
         testBlock <- generateExampleTestBlock(
@@ -444,6 +441,14 @@ generateExampleTestFileContent <- function(baseName, sanitizedName, sourceFolder
   return(paste(lines, collapse = "\n"))
 }
 
+
+# The messages are not cli format strings: their braces (R code in an error, a table cell) are doubled so cli shows them.
+warnJaspFileMismatches <- function(index, analysisName, jaspFile, mismatches) {
+  cli::cli_warn(c(
+    "Analysis {index} ({.val {analysisName}}) does not give the results saved in {.file {basename(jaspFile)}}; the test expects the new results:",
+    stats::setNames(gsub("([{}])", "\\1\\1", mismatches), rep("*", length(mismatches)))
+  ))
+}
 
 #' Generate a test block with expectations from analysis results
 #'
@@ -593,7 +598,7 @@ getTests <- function(results) {
     }
 
     unitTestType <- NULL
-    if (all(c("data", "schema") %in% names(x))) {
+    if (isResultsTable(x)) {
       unitTestType <- "table"
     } else if (all(c("data", "width", "height") %in% names(x))) {
       unitTestType <- "plot"

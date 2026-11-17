@@ -29,6 +29,8 @@
 #' per entry is loaded into the bridge workspace, and the slices arrive at the analysis keyed by
 #' filter id - the same id the selection option holds, so \code{datasets[[key]]} is the whole
 #' API (see the datasets contract in \code{jaspBase}). \code{dataset} must then be NULL.
+#' A multiDataSetAware analysis gets its datasets only through \code{datasets}, as with its R
+#' wrapper: run with \code{dataset}, it gets no \code{datasets} argument.
 #' @examples
 #'
 #' options <- analysisOptions("BinomialTest")
@@ -78,20 +80,11 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
   if (!is.null(datasets) && !is.null(dataset))
     stop("`datasets` (multiDataSetAware run) and `dataset` (single dataset run) are mutually exclusive")
 
-  if (insideTestEnvironment()) {
-    view  <- FALSE
-    quiet <- TRUE
-  }
+  checkJaspBaseVersion()
 
-  oldWd       <- getwd()
-  oldLang     <- Sys.getenv("LANG")
-  oldLanguage <- Sys.getenv("LANGUAGE")
-  on.exit({
-    .resetRunTimeInternals()
-    setwd(oldWd)
-    Sys.setenv(LANG = oldLang)
-    Sys.setenv(LANGUAGE = oldLanguage)
-  }, add = TRUE)
+  display <- runDisplay(view, quiet)
+  restoreRunState <- saveRunState()
+  on.exit(restoreRunState(), add = TRUE)
 
   datasets <- initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests, datasets = datasets)
 
@@ -110,8 +103,8 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
     datasets     = datasets
   )
 
-  returnVal <- runQuietly(jaspBase::runWrappedAnalysis, args, quiet)
-  results   <- collectRunResults(returnVal, view)
+  returnVal <- runQuietly(jaspBase::runWrappedAnalysis, args, display$quiet)
+  results   <- collectRunResults(returnVal, display$view)
 
   if (makeTests)
     makeUnitTestsFromResults(results, name, dataset, options)
@@ -119,13 +112,53 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
   return(invisible(results))
 }
 
+# Quiet hides the output and the warnings of the analysis, but not the warnings of the QML form while it parses the
+# options (an unknown option, the upgrade of options of an older module version): a test should not miss those.
 runQuietly <- function(fun, args, quiet) {
   if (!quiet)
     return(do.call(fun, args))
 
   sink(tempfile())
   on.exit(suppressWarnings(sink(NULL)), add = TRUE)
-  suppressWarnings(do.call(fun, args))
+  withCallingHandlers(
+    do.call(fun, args),
+    warning = function(w) {
+      if (!whileParsingOptions(sys.calls()))
+        invokeRestart("muffleWarning")
+    }
+  )
+}
+
+# Whether `calls` (the calls being evaluated when a condition was signalled) include the option parse of jaspSyntax.
+whileParsingOptions <- function(calls) {
+  parseFunctions <- c("loadQmlAndParseOptions", "loadQmlAndParseOptionsStatus")
+  any(vapply(calls, function(call) {
+    fun <- call[[1L]]
+    if (is.call(fun) && identical(fun[[1L]], as.name("::")))
+      fun <- fun[[3L]]
+    is.name(fun) && as.character(fun) %in% parseFunctions
+  }, logical(1L)))
+}
+
+# What an analysis run changes, to restore afterwards: the working directory, the language and the state jaspTools kept.
+saveRunState <- function() {
+  oldWd       <- getwd()
+  oldLang     <- Sys.getenv("LANG")
+  oldLanguage <- Sys.getenv("LANGUAGE")
+
+  function() {
+    .resetRunTimeInternals()
+    setwd(oldWd)
+    Sys.setenv(LANG = oldLang, LANGUAGE = oldLanguage)
+  }
+}
+
+# Inside a test nothing is viewed and the analysis runs quietly.
+runDisplay <- function(view, quiet) {
+  if (insideTestEnvironment())
+    return(list(view = FALSE, quiet = TRUE))
+
+  list(view = view, quiet = quiet)
 }
 
 # The results of a run as runAnalysis gives them, from what jaspBase::runWrappedAnalysis returned.
@@ -226,11 +259,7 @@ reinstallChangedModules <- function() {
     if (isBinaryPackage(modulePath))
       next
 
-    srcFiles <- c(
-      list.files(modulePath,                   full.names = TRUE, pattern = "(NAMESPACE|DESCRIPTION)$"),
-      list.files(file.path(modulePath, "src"), full.names = TRUE, pattern = "(\\.(cpp|c|hpp|h)|(Makevars|Makevars\\.win))$"),
-      list.files(file.path(modulePath, "R"),   full.names = TRUE, pattern = "\\.R$")
-    )
+    srcFiles <- moduleSourceFiles(modulePath)
     if (length(srcFiles) == 0)
       next
 
@@ -258,9 +287,19 @@ reinstallChangedModules <- function() {
   .setInternal("modulesMd5Sums", md5Sums)
 }
 
+# The files of a source module whose changes need a reinstall. The QML files count too: jaspBase::runWrappedAnalysis
+# reads the form of the installed module.
+moduleSourceFiles <- function(modulePath) {
+  c(
+    list.files(modulePath,                    full.names = TRUE, pattern = "(NAMESPACE|DESCRIPTION)$"),
+    list.files(file.path(modulePath, "src"),  full.names = TRUE, pattern = "(\\.(cpp|c|hpp|h)|(Makevars|Makevars\\.win))$"),
+    list.files(file.path(modulePath, "R"),    full.names = TRUE, pattern = "\\.R$"),
+    list.files(file.path(modulePath, "inst"), full.names = TRUE, pattern = "\\.qml$", recursive = TRUE)
+  )
+}
+
 initializeCoreJaspPackages <- function() {
   require(jaspBase)
-  checkJaspBaseVersion()
 }
 
 # jaspBase 0.20.6 gives the results of a run in R with the plain column names, and runs the analysis of a module without

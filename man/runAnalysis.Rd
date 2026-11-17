@@ -37,7 +37,9 @@ analysis.}
 the dataset titles and may be referenced by the form's dataset selection options, one DataSet
 per entry is loaded into the bridge workspace, and the slices arrive at the analysis keyed by
 filter id - the same id the selection option holds, so \code{datasets[[key]]} is the whole
-API (see the datasets contract in \code{jaspBase}). \code{dataset} must then be NULL.}
+API (see the datasets contract in \code{jaspBase}). \code{dataset} must then be NULL.
+A multiDataSetAware analysis gets its datasets only through \code{datasets}, as with its R
+wrapper: run with \code{dataset}, it gets no \code{datasets} argument.}
 }
 \description{
 \code{runAnalysis} makes it possible to execute a JASP analysis in R. jaspTools

@@ -4,8 +4,8 @@
 getModulePaths <- function() {
   validModules <- NULL
 
-  modulePaths <- getPkgOption("module.dirs")
-  if (length(modulePaths) > 0 && any(modulePaths != "")) {
+  modulePaths <- moduleDirsOption()
+  if (length(modulePaths) > 0) {
 
     for (modulePath in modulePaths) {
       validModuleRoot <- getValidModuleRoot(modulePath)
@@ -32,10 +32,15 @@ getModulePaths <- function() {
   return(validModules)
 }
 
+# The directories of the `module.dirs` option that are set.
+moduleDirsOption <- function() {
+  modulePaths <- getPkgOption("module.dirs")
+  modulePaths[nzchar(modulePaths)]
+}
+
 # Whether getModulePaths() has modules to give: those of `module.dirs`, or the working directory when it is a module.
 hasModuleDirs <- function() {
-  modulePaths <- getPkgOption("module.dirs")
-  (length(modulePaths) > 0 && any(modulePaths != "")) || !is.null(getValidModuleRoot(getwd()))
+  length(moduleDirsOption()) > 0 || !is.null(getValidModuleRoot(getwd()))
 }
 
 getModulePathFromRFunction <- function(funName) {
