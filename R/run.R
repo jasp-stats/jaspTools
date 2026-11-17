@@ -2,7 +2,7 @@
 #'
 #' \code{runAnalysis} makes it possible to execute a JASP analysis in R. jaspTools
 #' loads the dataset into jaspSyntax as a genuine JASP DataSet and runs the analysis
-#' with [jaspBase::runWrappedAnalysis()], the function every R wrapper of an analysis
+#' with `jaspBase::runWrappedAnalysis()`, the function every R wrapper of an analysis
 #' calls: the QML form of the analysis validates and encodes the options, and the
 #' results come back with the plain column names, as in JASP. Plain column names go in,
 #' plain column names come out, and invalid options are rejected the same way.

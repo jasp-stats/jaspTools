@@ -13,7 +13,7 @@
 #' - the data is loaded from the file as JASP opens it, with the types and labels of its columns
 #'   ([jaspSyntax::loadDataSetFromJaspFile()]);
 #' - the options are read from the file as they were saved ([jaspSyntax::readAnalysisOptionsFromJaspFile()]);
-#' - the analysis is run by [jaspBase::runWrappedAnalysis()], the function every R wrapper of an
+#' - the analysis is run by `jaspBase::runWrappedAnalysis()`, the function every R wrapper of an
 #'   analysis calls: its QML form checks the options and upgrades those of an older version of the
 #'   module (the version that saved the file) before the analysis gets them.
 #'
