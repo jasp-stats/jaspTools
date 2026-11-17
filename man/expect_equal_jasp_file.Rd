@@ -22,7 +22,8 @@ tables JASP saved in the .jasp file for that analysis, with the same values.
 Every table JASP saved must be in the results, at the same place, and have the same
 cells; numbers are compared as in \code{\link[=expect_equal_tables]{expect_equal_tables()}}. A table of the results that the
 file does not have is not an error. An analysis JASP ran without error must run without error
-again. Plots are not compared: the file only has an image of them.
+again. Plots are not compared: the file only has an image of them. The expectation fails when
+the file saved no table for the analysis, as there is then nothing to compare.
 
 The results saved in the file are the reference, so a test passes only as long as the analysis
 gives what the version of the module that saved the file gave.

@@ -1,7 +1,7 @@
 Package: jaspTools
 Type: Package
 Title: Helps Preview and Debug JASP Analyses
-Version: 0.20.1
+Version: 0.21.0
 Authors@R: c(
     person("Tim", "de Jong", role = "aut"),
     person("Don", "van den Bergh", role = c("ctb", "cre"), email = "d.vandenbergh@uva.nl"),
@@ -15,6 +15,7 @@ Imports:
   cli,
   data.table,
   httr,
+  jaspBase (>= 0.20.6),
   jaspSyntax (>= 1.4.2),
   jsonlite,
   lifecycle,
@@ -28,6 +29,7 @@ Imports:
 Suggests:
   ggplot2
 Remotes:
+  jasp-stats/jaspBase,
   jasp-stats/jaspSyntax
 Roxygen: list(markdown = TRUE)
 Config/roxygen2/version: 8.0.0

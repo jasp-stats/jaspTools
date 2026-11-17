@@ -33,32 +33,28 @@
 #' }
 #' @export
 runAnalysisFromJaspFile <- function(jaspFile, analysis = 1L, view = TRUE, quiet = FALSE) {
+  checkJaspBaseVersion()
+
   jaspFile <- normalizePath(jaspFile, winslash = "/", mustWork = TRUE)
-  record   <- selectJaspFileAnalysis(jaspSyntax::readAnalysisOptionsFromJaspFile(jaspFile, includeMeta = FALSE), analysis)
+  # No data is loaded yet, so the file can be read in this process (isolated = TRUE would start another R for it)
+  record   <- selectJaspFileAnalysis(jaspSyntax::readAnalysisOptionsFromJaspFile(jaspFile, includeMeta = FALSE, isolated = FALSE), analysis)
 
-  if (insideTestEnvironment()) {
-    view  <- FALSE
-    quiet <- TRUE
-  }
+  moduleName <- record$moduleName
+  if (is.null(moduleName) || !nzchar(moduleName))
+    stop("The .jasp file does not say which module analysis `", record$name, "` comes from", call. = FALSE)
 
-  oldWd       <- getwd()
-  oldLang     <- Sys.getenv("LANG")
-  oldLanguage <- Sys.getenv("LANGUAGE")
-  on.exit({
-    .resetRunTimeInternals()
-    setwd(oldWd)
-    Sys.setenv(LANG = oldLang)
-    Sys.setenv(LANGUAGE = oldLanguage)
-  }, add = TRUE)
+  display <- runDisplay(view, quiet)
+  restoreRunState <- saveRunState()
+  on.exit(restoreRunState(), add = TRUE)
 
   initAnalysisRuntime(dataset = NULL, options = record$options, makeTests = FALSE, jaspFile = jaspFile)
 
-  moduleName <- record$moduleName
-  if (is.null(moduleName))
-    stop("The .jasp file does not say which module analysis `", record$name, "` comes from", call. = FALSE)
+  # after initAnalysisRuntime: it installs the modules of `module.dirs` that changed
+  if (!nzchar(system.file(package = moduleName)))
+    stop("Analysis `", record$name, "` of the .jasp file comes from module ", moduleName, ", which is not installed", call. = FALSE)
 
   info    <- jaspSyntax::resolveAnalysisQml(find.package(moduleName), record$name)
-  version <- if (is.null(record$moduleVersion)) info$version else record$moduleVersion
+  version <- if (is.null(record$moduleVersion) || !nzchar(record$moduleVersion)) info$version else record$moduleVersion
 
   args <- list(
     moduleName   = moduleName,
@@ -69,14 +65,17 @@ runAnalysisFromJaspFile <- function(jaspFile, analysis = 1L, view = TRUE, quiet 
     preloadData  = info$preloadData
   )
 
-  returnVal <- runQuietly(jaspBase::runWrappedAnalysis, args, quiet)
+  returnVal <- runQuietly(jaspBase::runWrappedAnalysis, args, display$quiet)
 
-  return(invisible(collectRunResults(returnVal, view)))
+  return(invisible(collectRunResults(returnVal, display$view)))
 }
 
 # The record of `analysis` (position or name) in the records jaspSyntax read from a .jasp file.
 selectJaspFileAnalysis <- function(records, analysis) {
-  if (is.character(analysis) && length(analysis) == 1L) {
+  if (length(analysis) != 1L || is.na(analysis))
+    stop("`analysis` must be the name of an analysis of the .jasp file or a position from 1 to ", length(records), call. = FALSE)
+
+  if (is.character(analysis)) {
     names <- vapply(records, function(record) if (is.null(record$name)) NA_character_ else record$name, character(1L))
     index <- match(analysis, names)
     if (is.na(index))
@@ -103,7 +102,8 @@ selectJaspFileAnalysis <- function(records, analysis) {
 #' @details Every table JASP saved must be in the results, at the same place, and have the same
 #' cells; numbers are compared as in [expect_equal_tables()]. A table of the results that the
 #' file does not have is not an error. An analysis JASP ran without error must run without error
-#' again. Plots are not compared: the file only has an image of them.
+#' again. Plots are not compared: the file only has an image of them. The expectation fails when
+#' the file saved no table for the analysis, as there is then nothing to compare.
 #'
 #' The results saved in the file are the reference, so a test passes only as long as the analysis
 #' gives what the version of the module that saved the file gave.
@@ -117,6 +117,10 @@ selectJaspFileAnalysis <- function(records, analysis) {
 #' @export
 expect_equal_jasp_file <- function(results, jaspFile, analysis = 1L) {
   stored     <- selectJaspFileAnalysis(jaspSyntax::readAnalysisResultsFromJaspFile(jaspFile), analysis)
+
+  if (length(resultsTables(stored$results)) == 0L)
+    return(expect(FALSE, paste0(basename(jaspFile), " saved no table for analysis ", stored$name, ": there is nothing to compare")))
+
   mismatches <- jaspFileMismatches(results, stored)
 
   expect(length(mismatches) == 0L,
@@ -167,7 +171,7 @@ resultsTables <- function(results, path = character(0)) {
   if (!is.list(results))
     return(list())
 
-  if (all(c("data", "schema") %in% names(results)))
+  if (isResultsTable(results))
     return(stats::setNames(list(results), paste(path, collapse = "/")))
 
   tables <- list()
@@ -175,4 +179,9 @@ resultsTables <- function(results, path = character(0)) {
     tables <- c(tables, resultsTables(results[[name]], c(path, name)))
 
   tables
+}
+
+# Whether `x`, a node of a results tree, is a table: what expect_equal_jasp_file() compares and the generated tests check.
+isResultsTable <- function(x) {
+  is.list(x) && all(c("data", "schema") %in% names(x))
 }

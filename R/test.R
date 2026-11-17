@@ -241,12 +241,15 @@ getTestFilesMatchingName <- function(name, modulePath, includeAll = TRUE) {
   matches <- which(tolower(basename(analysisNames)) == tolower(name))
   matchedFiles <- testFiles[matches]
 
-  # Pass 2: scan test-{library,verified,other}-* files for runAnalysis("name", ...) calls
+  # Pass 2: scan test-{library,verified,other}-* files for runAnalysis("name", ...) calls, or for the test_that()
+  # titles of the generated tests, which run the analysis with runAnalysisFromJaspFile() ("name results match",
+  # "name (analysis 2) runs without error")
   if (includeAll) {
     sourceFiles <- testFiles[grepl("^test-(library|verified|other)-.*\\.[rR]$", testFiles)]
     sourceFiles <- setdiff(sourceFiles, matchedFiles)
     escapedName <- gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", name)
-    pattern <- paste0('runAnalysis\\(\\s*["\']', escapedName, '["\']')
+    pattern <- paste0('runAnalysis\\(\\s*["\']', escapedName, '["\']|',
+                      'test_that\\(\\s*["\']', escapedName, '( \\(analysis [0-9]+\\))? (results match|runs without error)["\']')
     for (ef in sourceFiles) {
       content <- readLines(file.path(testsDir, ef), warn = FALSE)
       if (any(grepl(pattern, content)))
