@@ -13,8 +13,10 @@
 #' The file is read by [jaspSyntax::readDatasetFromJaspFile()], which opens it the
 #' way JASP does: the database in the archive is upgraded from the JASP version that
 #' wrote it, so files from every JASP version are read alike. Scale columns are
-#' numeric (missing values are `NaN`, infinity is `Inf`); nominal and ordinal columns
-#' are character vectors of their values.
+#' numeric (missing values are `NaN`, infinity is `Inf`); nominal columns are factors
+#' and ordinal columns ordered factors, with their levels in the order of the file (the
+#' order JASP shows), which e.g. sets the reference level of a contrast. jaspSyntax
+#' versions before 1.4.3 give them as character vectors instead.
 #'
 #' The data.frame keeps the attributes jaspSyntax sets to recognize it as the
 #' dataset of that .jasp file.
@@ -75,9 +77,6 @@ loadCorrectDataset <- function(x) {
 setFilename <- function(x, name) {
   attr(x, "filename") <- name
   x
-}
-getFilename <- function(x) {
-  attr(x, "filename")
 }
 
 .debug.csvTypes <- list2env(list(
@@ -168,10 +167,3 @@ addTypedDataSet <- function(name, lst) {
 
 }
 
-devcat <- function(..., file = "", sep = " ", fill = FALSE, labels = NULL,
-                   append = FALSE) {
-
-  if (getOption("jasptools_devcat", FALSE))
-    return(cat(..., file = file, sep = sep, fill = fill, labels = labels, append = append))
-  invisible(NULL)
-}

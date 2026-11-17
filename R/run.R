@@ -1,13 +1,10 @@
 #' Run a JASP analysis in R.
 #'
-#' \code{runAnalysis} makes it possible to execute a JASP analysis in R. Usually this
-#' process is a bit cumbersome as there are a number of objects unique to the
-#' JASP environment. Think .ppi, data-reading, etc. jaspTools sets those up for
-#' you by running the real JASP bridge (the SyntaxInterface library that powers
-#' jaspSyntax): the dataset is loaded as a genuine JASP DataSet, the options are
-#' validated, encoded and stamped with provenance by the analysis' own QML form,
-#' and the results are decoded on the way out - exactly like the engine does.
-#' This means a jaspTools run behaves like a JASP run: plain column names go in,
+#' \code{runAnalysis} makes it possible to execute a JASP analysis in R. jaspTools
+#' loads the dataset into jaspSyntax as a genuine JASP DataSet and runs the analysis
+#' with `jaspBase::runWrappedAnalysis()`, the function every R wrapper of an analysis
+#' calls: the QML form of the analysis validates and encodes the options, and the
+#' results come back with the plain column names, as in JASP. Plain column names go in,
 #' plain column names come out, and invalid options are rejected the same way.
 #' Note that \code{runAnalysis} sources JASP analyses every time it runs, so any
 #' change in analysis code between calls is incorporated. The output of the
@@ -32,6 +29,8 @@
 #' per entry is loaded into the bridge workspace, and the slices arrive at the analysis keyed by
 #' filter id - the same id the selection option holds, so \code{datasets[[key]]} is the whole
 #' API (see the datasets contract in \code{jaspBase}). \code{dataset} must then be NULL.
+#' A multiDataSetAware analysis gets its datasets only through \code{datasets}, as with its R
+#' wrapper: run with \code{dataset}, it gets no \code{datasets} argument.
 #' @examples
 #'
 #' options <- analysisOptions("BinomialTest")
@@ -81,51 +80,92 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
   if (!is.null(datasets) && !is.null(dataset))
     stop("`datasets` (multiDataSetAware run) and `dataset` (single dataset run) are mutually exclusive")
 
-  if (insideTestEnvironment()) {
-    view  <- FALSE
-    quiet <- TRUE
-  }
+  checkJaspBaseVersion()
 
+  display <- runDisplay(view, quiet)
+  restoreRunState <- saveRunState()
+  on.exit(restoreRunState(), add = TRUE)
+
+  datasets <- initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests, datasets = datasets)
+
+  # The module, analysis and QML form of the R function, from the Description.qml of its module
+  info <- analysisRunInfo(name)
+
+  # Of the defaults analysisOptions() gave, only the options the test set: the form gives the others their default,
+  # which can depend on the options that are set (see formOptions.R).
+  args <- list(
+    moduleName   = info$moduleName,
+    analysisName = info$analysisName,
+    qmlFileName  = info$qmlFileName,
+    options      = typesIntoOptionValues(formOptionsAsList(options)),
+    version      = info$version,
+    preloadData  = info$preloadData,
+    datasets     = datasets
+  )
+
+  returnVal <- runQuietly(jaspBase::runWrappedAnalysis, args, display$quiet)
+  results   <- collectRunResults(returnVal, display$view)
+
+  if (makeTests)
+    makeUnitTestsFromResults(results, name, dataset, options)
+
+  return(invisible(results))
+}
+
+# Quiet hides the output and the warnings of the analysis, but not the warnings of the QML form while it parses the
+# options (an unknown option, the upgrade of options of an older module version): a test should not miss those.
+runQuietly <- function(fun, args, quiet) {
+  if (!quiet)
+    return(do.call(fun, args))
+
+  sink(tempfile())
+  on.exit(suppressWarnings(sink(NULL)), add = TRUE)
+  withCallingHandlers(
+    do.call(fun, args),
+    warning = function(w) {
+      if (!whileParsingOptions(sys.calls()))
+        invokeRestart("muffleWarning")
+    }
+  )
+}
+
+# Whether `calls` (the calls being evaluated when a condition was signalled) include the option parse of jaspSyntax.
+whileParsingOptions <- function(calls) {
+  parseFunctions <- c("loadQmlAndParseOptions", "loadQmlAndParseOptionsStatus")
+  any(vapply(calls, function(call) {
+    fun <- call[[1L]]
+    if (is.call(fun) && identical(fun[[1L]], as.name("::")))
+      fun <- fun[[3L]]
+    is.name(fun) && as.character(fun) %in% parseFunctions
+  }, logical(1L)))
+}
+
+# What an analysis run changes, to restore afterwards: the working directory, the language and the state jaspTools kept.
+saveRunState <- function() {
   oldWd       <- getwd()
   oldLang     <- Sys.getenv("LANG")
   oldLanguage <- Sys.getenv("LANGUAGE")
-  on.exit({
+
+  function() {
     .resetRunTimeInternals()
     setwd(oldWd)
-    Sys.setenv(LANG = oldLang)
-    Sys.setenv(LANGUAGE = oldLanguage)
-  }, add = TRUE)
-
-  initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests, datasets = datasets)
-
-  # Validate + encode the options exactly like the engine does: through the analysis' own QML
-  # form via the SyntaxInterface bridge. This fills defaults, rejects junk, binds each form to
-  # the dataset its selection option names (multiDataSetAware runs), stamps the .meta
-  # provenance, encodes column values per dataset and queues the per-(dataset,filter) slices.
-  parsed <- parseOptionsThroughBridge(name, options)
-
-  args <- fetchRunArgs(name, parsed)
-
-  if (quiet) {
-    sink(tempfile())
-    on.exit({suppressWarnings(sink(NULL))}, add = TRUE)
-    returnVal <- suppressWarnings(do.call(jaspBase::runJaspResults, args))
-    sink(NULL)
-  } else {
-    returnVal <- do.call(jaspBase::runJaspResults, args)
+    Sys.setenv(LANG = oldLang, LANGUAGE = oldLanguage)
   }
+}
 
-  # always TRUE after jaspResults is merged into jaspBase
-  jsonResults <- if (inherits(returnVal, c("jaspResultsR", "R6"))) {
-    getJsonResultsFromJaspResults(returnVal)
-  } else {
-    getJsonResultsFromJaspResultsLegacy()
-  }
+# Inside a test nothing is viewed and the analysis runs quietly.
+runDisplay <- function(view, quiet) {
+  if (insideTestEnvironment())
+    return(list(view = FALSE, quiet = TRUE))
 
-  # The analysis only ever saw encoded names (the engine's contract too); decode the whole
-  # results payload against every dataset the bridge workspace holds - jaspTools' equivalent
-  # of Engine's sendString - so test authors keep matching on the plain names they typed.
-  jsonResults <- jaspSyntax::decodeJsonText(jsonResults)
+  list(view = view, quiet = quiet)
+}
+
+# The results of a run as runAnalysis gives them, from what jaspBase::runWrappedAnalysis returned.
+collectRunResults <- function(returnVal, view) {
+  jsonResults <- getJsonResultsFromJaspResults(returnVal)
+
+  # jaspBase gives the results with the plain column names (the analysis only saw encoded ones)
 
   transferPlotsFromjaspResults()
 
@@ -137,10 +177,7 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
   if (view)
     view(jsonResults)
 
-  if (makeTests)
-    makeUnitTestsFromResults(results, name, dataset, options)
-
-  return(invisible(results))
+  results
 }
 
 # Analysis metadata straight from the module's Description.qml, through the bridge's own
@@ -171,64 +208,27 @@ analysisRunInfo <- function(name) {
   resolved
 }
 
-parseOptionsThroughBridge <- function(name, options) {
-  info <- analysisRunInfo(name)
-
-  # Same serialization jaspBase uses for the syntax wrapper (common.R toJSON): auto_unbox so
-  # scalar options ("Score", TRUE, filter ids, dataset names in selection options) arrive as
-  # scalars - boxed one-element arrays are rejected by the bridge.
-  # Of the defaults analysisOptions() gave, only the options the test set: the form gives the others
-  # their default, which can depend on the options that are set (see formOptions.R).
-  options <- typesIntoOptionValues(formOptionsAsList(options))
-  optionsJson <- as.character(jsonlite::toJSON(options, auto_unbox = TRUE, digits = NA, null = "null"))
-
-  status <- jaspSyntax::loadQmlAndParseOptionsStatus(
-    info$moduleName, info$analysisName, info$qmlFile, optionsJson, info$version, info$preloadData)
-
-  list(
-    options          = status$options,
-    multiDataSetJson = if (nzchar(status$multiDataSetJson)) status$multiDataSetJson else NULL,
-    preloadData      = info$preloadData
-  )
-}
-
-fetchRunArgs <- function(name, parsed) {
-  possibleArgs <- list(
-    name = name,
-    functionCall = findCorrectFunction(name),
-    title = "",
-    requiresInit = TRUE,
-    options = parsed$options,
-    dataKey = "null",
-    resultsMeta = "null",
-    stateKey = "null",
-    preloadData = parsed$preloadData
-  )
-
-  # For multiDataSetAware runs: the blob the bridge built while parsing ({ids = filter keys,
-  # names, dataSetIds, primary}) - jaspBase::runJaspResults then pulls the queued slices from
-  # the bridge, one read at a time, and hands the analysis `datasets` keyed by filter id.
-  if (!is.null(parsed$multiDataSetJson))
-    possibleArgs$multiDataSetJson <- parsed$multiDataSetJson
-
-  runArgs <- formals(jaspBase::runJaspResults)
-  argNames <- intersect(names(possibleArgs), names(runArgs))
-  return(possibleArgs[argNames])
-}
-
-initAnalysisRuntime <- function(dataset, options, makeTests, datasets = NULL, ...) {
-  # first we reinstall any changed modules in the personal library
-  reinstallChangedModules()
+initAnalysisRuntime <- function(dataset, options, makeTests, datasets = NULL, jaspFile = NULL, ...) {
+  # first we reinstall any changed modules in the personal library; the analysis of a .jasp file names its
+  # module itself, so without module directories the installed module runs it
+  if (is.null(jaspFile) || hasModuleDirs())
+    reinstallChangedModules()
 
   # data goes into the bridge workspace as real DataSets (id + column encoder + default
   # filter), before the options are parsed: the QML forms need them to bind columns and to
   # resolve the dataset selection options. Both loaders clear previous state themselves,
   # repeated runs never inherit datasets; without data the workspace is cleared explicitly.
-  if (!is.null(datasets)) {
+  # The data of a .jasp file is loaded as JASP opens it: with the types, labels and order of
+  # the levels the file has, which a data.frame cannot all carry.
+  # Several datasets (multiDataSetAware run) are loaded by jaspBase::runWrappedAnalysis itself: they are only
+  # checked and read here.
+  if (!is.null(jaspFile)) {
+    jaspSyntax::clearDatasetState()
+    invisible(jaspSyntax::loadDataSetFromJaspFile(jaspFile))
+  } else if (!is.null(datasets)) {
     if (!is.list(datasets) || is.null(names(datasets)) || any(!nzchar(names(datasets))))
       stop("`datasets` must be a named list of dataframes - the names become the dataset titles")
     datasets <- lapply(datasets, loadCorrectDataset)
-    invisible(jaspSyntax::loadDataSets(datasets))
   } else if (!is.null(dataset)) {
     invisible(jaspSyntax::loadDataSet(loadCorrectDataset(dataset)))
   } else {
@@ -239,12 +239,13 @@ initAnalysisRuntime <- function(dataset, options, makeTests, datasets = NULL, ..
   Sys.setenv(LANG = getPkgOption("language"))
   Sys.setenv(LANGUAGE = getPkgOption("language"))
 
-  # jaspBase and jaspResults needs to be loaded until they are merged and the packages handle dependencies correctly
   initializeCoreJaspPackages()
 
   # ensure that unit tests results are consistent
   if (makeTests)
     set.seed(1)
+
+  invisible(datasets)
 }
 
 reinstallChangedModules <- function() {
@@ -258,11 +259,7 @@ reinstallChangedModules <- function() {
     if (isBinaryPackage(modulePath))
       next
 
-    srcFiles <- c(
-      list.files(modulePath,                   full.names = TRUE, pattern = "(NAMESPACE|DESCRIPTION)$"),
-      list.files(file.path(modulePath, "src"), full.names = TRUE, pattern = "(\\.(cpp|c|hpp|h)|(Makevars|Makevars\\.win))$"),
-      list.files(file.path(modulePath, "R"),   full.names = TRUE, pattern = "\\.R$")
-    )
+    srcFiles <- moduleSourceFiles(modulePath)
     if (length(srcFiles) == 0)
       next
 
@@ -290,14 +287,28 @@ reinstallChangedModules <- function() {
   .setInternal("modulesMd5Sums", md5Sums)
 }
 
+# The files of a source module whose changes need a reinstall. The QML files count too: jaspBase::runWrappedAnalysis
+# reads the form of the installed module.
+moduleSourceFiles <- function(modulePath) {
+  c(
+    list.files(modulePath,                    full.names = TRUE, pattern = "(NAMESPACE|DESCRIPTION)$"),
+    list.files(file.path(modulePath, "src"),  full.names = TRUE, pattern = "(\\.(cpp|c|hpp|h)|(Makevars|Makevars\\.win))$"),
+    list.files(file.path(modulePath, "R"),    full.names = TRUE, pattern = "\\.R$"),
+    list.files(file.path(modulePath, "inst"), full.names = TRUE, pattern = "\\.qml$", recursive = TRUE)
+  )
+}
+
 initializeCoreJaspPackages <- function() {
   require(jaspBase)
-  if (jaspBaseIsLegacyVersion()) {
-    warning("jaspBase should be at least version 0.16.4! Continuing now but if something crashes update jaspBase.", domain = NA)
-    require(jaspResults)
-    jaspResults::initJaspResults()
-    assign("jaspResultsModule", list(create_cpp_jaspResults = function(name, state) get("jaspResults", envir = .GlobalEnv)$.__enclos_env__$private$jaspObject), envir = .GlobalEnv)
-  }
+}
+
+# jaspBase 0.20.6 gives the results of a run in R with the plain column names, and runs the analysis of a module without
+# R wrappers in runWrappedAnalysis.
+checkJaspBaseVersion <- function(minimum = "0.20.6") {
+  if (utils::packageVersion("jaspBase") < minimum)
+    stop("jaspTools needs jaspBase ", minimum, " or later (installed: ", utils::packageVersion("jaspBase"), ")", call. = FALSE)
+
+  invisible(TRUE)
 }
 
 processJsonResults <- function(jsonResults) {
@@ -344,10 +355,6 @@ transferPlotsFromjaspResults <- function() {
 }
 
 getJsonResultsFromJaspResults <- function(jaspResults) {
-  return(jaspResults$.__enclos_env__$private$getResults())
-}
-
-getJsonResultsFromJaspResultsLegacy <- function() {
   return(jaspResults$.__enclos_env__$private$getResults())
 }
 

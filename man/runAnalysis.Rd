@@ -37,17 +37,16 @@ analysis.}
 the dataset titles and may be referenced by the form's dataset selection options, one DataSet
 per entry is loaded into the bridge workspace, and the slices arrive at the analysis keyed by
 filter id - the same id the selection option holds, so \code{datasets[[key]]} is the whole
-API (see the datasets contract in \code{jaspBase}). \code{dataset} must then be NULL.}
+API (see the datasets contract in \code{jaspBase}). \code{dataset} must then be NULL.
+A multiDataSetAware analysis gets its datasets only through \code{datasets}, as with its R
+wrapper: run with \code{dataset}, it gets no \code{datasets} argument.}
 }
 \description{
-\code{runAnalysis} makes it possible to execute a JASP analysis in R. Usually this
-process is a bit cumbersome as there are a number of objects unique to the
-JASP environment. Think .ppi, data-reading, etc. jaspTools sets those up for
-you by running the real JASP bridge (the SyntaxInterface library that powers
-jaspSyntax): the dataset is loaded as a genuine JASP DataSet, the options are
-validated, encoded and stamped with provenance by the analysis' own QML form,
-and the results are decoded on the way out - exactly like the engine does.
-This means a jaspTools run behaves like a JASP run: plain column names go in,
+\code{runAnalysis} makes it possible to execute a JASP analysis in R. jaspTools
+loads the dataset into jaspSyntax as a genuine JASP DataSet and runs the analysis
+with \code{jaspBase::runWrappedAnalysis()}, the function every R wrapper of an analysis
+calls: the QML form of the analysis validates and encodes the options, and the
+results come back with the plain column names, as in JASP. Plain column names go in,
 plain column names come out, and invalid options are rejected the same way.
 Note that \code{runAnalysis} sources JASP analyses every time it runs, so any
 change in analysis code between calls is incorporated. The output of the

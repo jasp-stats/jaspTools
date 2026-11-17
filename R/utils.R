@@ -1,25 +1,11 @@
 #' @importFrom utils install.packages menu download.file unzip capture.output installed.packages packageVersion
 #' @importFrom testthat expect skip
 
-findCorrectFunction <- function(funName) {
-  modulePath <- getModulePathFromRFunction(funName)
-  if (is.null(modulePath))
-    stop("Could not locate the module location for `", funName, "`")
-
-  if (!endsWith(funName, "Internal")) {
-    funNameInternal <- paste0(funName, "Internal")
-    if (rFunctionExistsInModule(funNameInternal, modulePath))
-      funName <- funNameInternal
-  }
-
-  return(paste(getModuleName(modulePath), funName, sep = "::"))
-}
-
 getModulePaths <- function() {
   validModules <- NULL
 
-  modulePaths <- getPkgOption("module.dirs")
-  if (length(modulePaths) > 0 && any(modulePaths != "")) {
+  modulePaths <- moduleDirsOption()
+  if (length(modulePaths) > 0) {
 
     for (modulePath in modulePaths) {
       validModuleRoot <- getValidModuleRoot(modulePath)
@@ -44,6 +30,17 @@ getModulePaths <- function() {
     stop("None of the modules specified through `setPkgOption(\"module.dirs\", ...)` are valid JASP modules. All JASP modules should be valid R packages and have these files: DESCRIPTION, NAMESPACE and inst/Description.qml.")
 
   return(validModules)
+}
+
+# The directories of the `module.dirs` option that are set.
+moduleDirsOption <- function() {
+  modulePaths <- getPkgOption("module.dirs")
+  modulePaths[nzchar(modulePaths)]
+}
+
+# Whether getModulePaths() has modules to give: those of `module.dirs`, or the working directory when it is a module.
+hasModuleDirs <- function() {
+  length(moduleDirsOption()) > 0 || !is.null(getValidModuleRoot(getwd()))
 }
 
 getModulePathFromRFunction <- function(funName) {

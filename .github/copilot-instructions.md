@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-jaspTools is an R package that enables JASP developers to preview, debug, and test JASP analyses locally without rebuilding the entire JASP application. It runs the real JASP runtime in R through the SyntaxInterface bridge (the same native library jaspSyntax uses): datasets become genuine JASP DataSets, options are validated and encoded by the analysis' own QML form, and results are decoded on the way out.
+jaspTools is an R package that enables JASP developers to preview, debug, and test JASP analyses locally without rebuilding the entire JASP application. It runs the real JASP runtime in R through the SyntaxInterface bridge (the same native library jaspSyntax uses): datasets become genuine JASP DataSets, options are validated and encoded by the analysis' own QML form, and jaspBase gives the results with the plain column names again.
 
 ## Architecture
 
@@ -18,10 +18,9 @@ jaspTools uses specialized environments for variable scoping:
 
 1. **Setup**: `setupJaspTools()` fetches dependencies (jaspBase, jaspGraphs, datasets, HTML resources) and validates paths
 2. **Options**: `analysisOptions()` parses QML files, JASP files, or JSON to generate option lists
-3. **Runtime Init**: `initAnalysisRuntime()` in `R/run.R` loads the data into the bridge workspace as real DataSets (`jaspSyntax::loadDataSet(s)`; a named `datasets` list for multiDataSetAware runs)
-4. **Options**: `parseOptionsThroughBridge()` resolves the analysis through `jaspSyntax::resolveAnalysisQml()` (Description.qml is authoritative for func -> qml/preloadData) and validates + encodes the options via `jaspSyntax::loadQmlAndParseOptionsStatus()` - the same preparation the engine performs (junk options are rejected, `.meta` is stamped, multi-dataset slices are queued keyed by filter id)
-5. **Execution**: `runAnalysis()` calls `jaspBase::runJaspResults()` with the parsed options (and the bridge `multiDataSetJson` for aware runs); the analyses read their (encoded) data through the bridge hooks in `.GlobalEnv`
-6. **Output**: the results JSON is decoded against every workspace encoder (`jaspSyntax::decodeJsonText()`, jaspTools' equivalent of Engine::sendString) so callers keep seeing plain column names, and optionally displayed via `view()` using JASP's HTML/JS/CSS
+3. **Runtime Init**: `initAnalysisRuntime()` in `R/run.R` loads the data into the bridge workspace as a real DataSet (`jaspSyntax::loadDataSet()`); a named `datasets` list for multiDataSetAware runs is loaded by jaspBase in the next step
+4. **Execution**: `runAnalysis()` resolves the analysis through `jaspSyntax::resolveAnalysisQml()` (Description.qml is authoritative for func -> qml/preloadData) and calls `jaspBase::runWrappedAnalysis()`, the function every R wrapper of an analysis calls: the QML form validates and encodes the options like the engine does (junk options are rejected, `.meta` is stamped, multi-dataset slices are queued keyed by filter id), and the analysis (`<name>Internal` when the module has R wrappers, else `<name>`) reads its encoded data through the bridge hooks in `.GlobalEnv`
+5. **Output**: jaspBase (0.20.6 or later) gives the results JSON with the plain column names, as the engine sends them in JASP, and they are optionally displayed via `view()` using JASP's HTML/JS/CSS
 
 **Critical**: S3 methods from `common.R` are temporarily exported to `.GlobalEnv` during analysis execution (see `Developers-note.md` "Handling of S3 methods").
 
@@ -75,8 +74,8 @@ options <- analysisOptions("path/to/analysis.jasp")  # Returns list if multiple 
 
 Options and datasets are passed in PLAIN user names; the bridge encodes them exactly like the
 engine does (real `JASPColumn_<dataSetId>_<n>_Encoded` names from the DataSet's ColumnEncoder)
-and `runAnalysis()` decodes the results again before returning. There is no R-side encoding
-helper anymore - if you find yourself renaming columns to `jaspColumn*` by hand, stop: that was
+and jaspBase gives the results with the plain names again. There is no encoding or decoding in
+jaspTools - if you find yourself renaming columns to `jaspColumn*` by hand, stop: that was
 the pre-parity mirror and it cannot survive a real bridge run (the bridge re-encodes whatever
 it loads).
 
@@ -84,6 +83,21 @@ it loads).
 options <- analysisOptions("path/to/file.jasp")
 dataset <- extractDatasetFromJASPFile("path/to/file.jasp")
 runAnalysis("AnalysisName", dataset, options)   # plain in, plain out; engine semantics in between
+```
+
+### Running the Analyses of a JASP File Again
+
+To run an analysis with what a .jasp file saved, use `runAnalysisFromJaspFile()`: the data is
+loaded from the file as JASP opens it (column types and labels included), the saved options go
+unchanged to `jaspBase::runWrappedAnalysis()` with the module version of the file, so its QML
+form upgrades them like JASP does. `expect_equal_jasp_file()` compares the tables of the run
+with the results JASP saved in the file.
+
+```r
+jaspFile <- "path/to/file.jasp"
+set.seed(1)
+results <- runAnalysisFromJaspFile(jaspFile, 2)   # the 2nd analysis, or its name
+expect_equal_jasp_file(results, jaspFile, 2)
 ```
 
 ### Generating Tests from JASP Example Files
@@ -123,7 +137,8 @@ makeTestsFromExamples(sanitize = TRUE)
 
 Generated test files:
 - Named `test-{source}-{filename}.R` in `tests/testthat/` (e.g., `test-library-MyAnalysis.R`)
-- Load options and data from JASP files at runtime via `testthat::test_path("jaspfiles", "{source}", "file.jasp")`
+- Run each analysis again with `runAnalysisFromJaspFile(testthat::test_path("jaspfiles", "{source}", "file.jasp"), <index>)`
+- Are generated from that run; the generator warns when its tables differ from the results saved in the file
 - Include table expectations via `expect_equal_tables()`
 - Include plot expectations via `expect_equal_plots()` with unique names: `analysis-1_figure-1_plot-title`
 
@@ -165,7 +180,7 @@ When `reinstall.modules = TRUE` (default), jaspTools tracks MD5 checksums of `R/
 
 ### Function Name Resolution
 
-Analysis functions may have `Internal` suffixes. `findCorrectFunction()` searches for `FunctionNameInternal` first, falling back to `FunctionName`. Always reference by the user-facing name.
+Analysis functions may have `Internal` suffixes. `jaspBase::runWrappedAnalysis()` runs `FunctionNameInternal` when the module exports it, else `FunctionName`. Always reference by the user-facing name.
 
 ### QML Parsing
 
@@ -181,11 +196,11 @@ Analysis functions may have `Internal` suffixes. `findCorrectFunction()` searche
 2. **Missing `module.dirs`**: If not set and CWD isn't a module, you'll hit "jaspTools needs to know what module to obtain resources from."
 3. **QML vs. JSON vs. JASP file confusion**: `analysisOptions()` accepts all three but requires exact formats. JSON must include outer `{}`, JASP files need `.jasp` extension.
 4. **Test environment detection**: `insideTestEnvironment()` checks for `testthat` in the call stack. Tests automatically set `view = FALSE` and `quiet = TRUE`.
-5. **RNG differences**: Use `options(jaspLegacyRngKind = TRUE/FALSE)` to match JASP's RNG behavior. `fixRNGForTesting()` is deprecated.
+5. **RNG differences**: Use `options(jaspLegacyRngKind = TRUE/FALSE)` to match JASP's RNG behavior.
 
 ## External Dependencies
 
-- **jaspBase**: Core JASP R infrastructure, provides `runJaspResults()` and utility functions
+- **jaspBase**: Core JASP R infrastructure, provides `runWrappedAnalysis()` and utility functions
 - **jaspGraphs**: Plotting system for JASP-compatible graphics
 - **jaspResults**: Legacy state container (now merged into jaspBase)
 - **vdiffr**: Visual regression testing for plots

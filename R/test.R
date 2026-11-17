@@ -72,14 +72,6 @@ testAnalysis <- function(name, onlyPlots = FALSE, includeAll = TRUE) {
   return(invisible())
 }
 
- fixRNGForTesting <- function() {
-  lifecycle::deprecate_stop(
-    when = "1.5.2",
-    what = "jaspTools::fixRNGForTesting()",
-    details = "Set options(jaspLegacyRngKind = TRUE) or options(jaspLegacyRngKind = FALSE) to use the correct method."
-  )
- }
-
 #' Test all analyses in the currently monitored modules.
 #'
 #' Tests all R analyses found under modules/tests/testthat. Useful to perform before making
@@ -234,63 +226,6 @@ makeTestTable <- function(rows, print=TRUE) {
   invisible(result)
 }
 
-approxMatch <- function(new, old, tol = 1e-5) {
-
-  idxNumNew <- sapply(new, is.numeric)
-  idxNumOld <- sapply(old, is.numeric)
-  idxCharNew <- sapply(new, is.character)
-  idxCharOld <- sapply(old, is.character)
-
-  numNew <- unlist(new[idxNumNew])
-  numOld <- unlist(old[idxNumOld])
-  charNew <- unlist(new[idxCharNew])
-  charOld <- unlist(old[idxCharOld])
-
-  idxCharMis <- !charOld %in% charNew
-  idxMissingChars <- which(idxCharOld)[idxCharMis]
-
-  idxFoundNums <- NULL
-  idxMissNums <- NULL
-  for (i in seq_along(numOld)) {
-    v <- abs(numOld[i] - numNew)
-    idx <- which.min(v)
-    if (isTRUE(v[idx] < tol)) {
-      idxFoundNums <- rbind(idxFoundNums, c(i, idx))
-    } else {
-      idxMissNums <- rbind(idxMissNums, c(i, idx))
-    }
-  }
-  idxNumNewMiss <- which(idxNumNew)[idxMissNums[, 2]]
-  idxNumOldMiss <- which(idxNumOld)[idxMissNums[, 1]]
-
-  if (length(idxMissingChars) > 0) {
-    cat("Missing character(s) in old\n")
-    print(old[idxMissingChars])
-  }
-  if (length(idxMissNums) > 0) {
-    cat("Could not match the following value(s) from old in new.\n")
-    for (i in 1:nrow(idxMissNums)) {
-      cat(sprintf("value: %.6f at index %d\n",
-                  old[[idxNumOldMiss[i]]], idxNumOldMiss[i]))
-      cat("Closest match:\n")
-      cat(sprintf("value: %.6f at index %d\n",
-                  new[[idxNumNewMiss[i]]], idxNumNewMiss[i]))
-    }
-  }
-  if (length(idxMissingChars) > 0 || length(idxMissNums) > 0) {
-    cat("Some elements of old were not found in.\nPlease compare the results carefully!")
-  } else {
-    cat("All elements of old appear in new.")
-  }
-
-  return(invisible(list(
-    idxMissingChars = idxMissingChars,
-    idxNumNewMiss = idxNumNewMiss,
-    idxNumOldMiss = idxNumOldMiss
-  )))
-
-}
-
 getTestFilesMatchingName <- function(name, modulePath, includeAll = TRUE) {
   testsDir <- file.path(modulePath, "tests", "testthat")
   if (!dir.exists(testsDir))
@@ -306,12 +241,15 @@ getTestFilesMatchingName <- function(name, modulePath, includeAll = TRUE) {
   matches <- which(tolower(basename(analysisNames)) == tolower(name))
   matchedFiles <- testFiles[matches]
 
-  # Pass 2: scan test-{library,verified,other}-* files for runAnalysis("name", ...) calls
+  # Pass 2: scan test-{library,verified,other}-* files for runAnalysis("name", ...) calls, or for the test_that()
+  # titles of the generated tests, which run the analysis with runAnalysisFromJaspFile() ("name results match",
+  # "name (analysis 2) runs without error")
   if (includeAll) {
     sourceFiles <- testFiles[grepl("^test-(library|verified|other)-.*\\.[rR]$", testFiles)]
     sourceFiles <- setdiff(sourceFiles, matchedFiles)
     escapedName <- gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", name)
-    pattern <- paste0('runAnalysis\\(\\s*["\']', escapedName, '["\']')
+    pattern <- paste0('runAnalysis\\(\\s*["\']', escapedName, '["\']|',
+                      'test_that\\(\\s*["\']', escapedName, '( \\(analysis [0-9]+\\))? (results match|runs without error)["\']')
     for (ef in sourceFiles) {
       content <- readLines(file.path(testsDir, ef), warn = FALSE)
       if (any(grepl(pattern, content)))
