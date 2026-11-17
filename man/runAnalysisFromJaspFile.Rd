@@ -29,7 +29,7 @@ Every step is done by jaspSyntax and jaspBase, as in JASP and in R syntax:
 \item the data is loaded from the file as JASP opens it, with the types and labels of its columns
 (\code{\link[jaspSyntax:loadDataSetFromJaspFile]{jaspSyntax::loadDataSetFromJaspFile()}});
 \item the options are read from the file as they were saved (\code{\link[jaspSyntax:readAnalysisOptionsFromJaspFile]{jaspSyntax::readAnalysisOptionsFromJaspFile()}});
-\item the analysis is run by \code{\link[jaspBase:runWrappedAnalysis]{jaspBase::runWrappedAnalysis()}}, the function every R wrapper of an
+\item the analysis is run by \code{jaspBase::runWrappedAnalysis()}, the function every R wrapper of an
 analysis calls: its QML form checks the options and upgrades those of an older version of the
 module (the version that saved the file) before the analysis gets them.
 }
