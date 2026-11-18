@@ -1,3 +1,9 @@
+# jaspTools 0.21.1
+
+* `expect_equal_plots()` no longer decodes the column names in a plot itself: jaspBase 0.20.7 gives the plots of the
+  state (`results[["state"]][["figures"]]`) decoded, the way JASP draws them, so jaspTools needs jaspBase 0.20.7 or
+  later. A plot a test builds itself, outside `runAnalysis()`, is compared as it is.
+
 # jaspTools 0.21.0
 
 ## Running analyses

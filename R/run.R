@@ -303,8 +303,8 @@ initializeCoreJaspPackages <- function() {
 }
 
 # jaspBase 0.20.6 gives the results of a run in R with the plain column names, and runs the analysis of a module without
-# R wrappers in runWrappedAnalysis.
-checkJaspBaseVersion <- function(minimum = "0.20.6") {
+# R wrappers in runWrappedAnalysis; 0.20.7 also gives the plots of the state decoded, as JASP draws them.
+checkJaspBaseVersion <- function(minimum = "0.20.7") {
   if (utils::packageVersion("jaspBase") < minimum)
     stop("jaspTools needs jaspBase ", minimum, " or later (installed: ", utils::packageVersion("jaspBase"), ")", call. = FALSE)
 
