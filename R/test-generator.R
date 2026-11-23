@@ -31,9 +31,12 @@
 #' If a JASP file contains multiple analyses, they are included as separate \code{test_that()}
 #' blocks within the same test file.
 #'
-#' Each test runs its analysis again with \code{\link{runAnalysisFromJaspFile}} and expects the
-#' tables and plots that run gives now. When these tables differ from the results JASP saved
-#' in the file (see \code{\link{expect_equal_jasp_file}}), a warning says what differs.
+#' Each test runs the R syntax of its analysis: the call of the R wrapper of the analysis, as JASP
+#' shows it, with the options saved in the file upgraded to the version of the module. It runs
+#' with \code{\link{runAnalysisSyntax}} on the data of the file, and the test expects the tables
+#' and plots that run gives now. When these tables differ from the results JASP saved in the file
+#' (see \code{\link{expect_equal_jasp_file}}), a warning says what differs. An analysis without
+#' R wrapper is run with \code{\link{runAnalysisFromJaspFile}} instead.
 #'
 #' **Prerequisites:**
 #' - \code{setupJaspTools()} must be run before using this function
@@ -339,6 +342,10 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
   # Run each analysis and generate test expectations
   testBlocks <- list()
 
+  # The R syntax of an analysis is made with the QML form of the installed module
+  if (hasModuleDirs())
+    reinstallChangedModules()
+
   for (i in seq_along(analyses)) {
     analysisName <- analyses[[i]]$name
 
@@ -354,11 +361,21 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
 
     cli::cli_inform("Running analysis {i}/{length(analyses)}: {.val {analysisName}}")
 
-    # Run the analysis again with the options and data of the file, as JASP does after opening it
+    # The R syntax of the analysis, with the options of the file: the test runs it
+    syntax <- tryCatch(
+      jaspFileAnalysisSyntax(jaspFile, i),
+      error = function(e) {
+        cli::cli_warn("No R syntax for analysis {.val {analysisName}}, the test runs it with runAnalysisFromJaspFile(): {e$message}")
+        NULL
+      }
+    )
+
+    # Run the analysis again with the options and data of the file, as the test does
     tryCatch(
       {
         set.seed(1)
-        results <- runAnalysisFromJaspFile(jaspFile, i, view = FALSE, quiet = TRUE)
+        results <- if (is.null(syntax)) runAnalysisFromJaspFile(jaspFile, i, view = FALSE, quiet = TRUE)
+                   else                 runJaspFileAnalysisSyntax(syntax, jaspFile)
 
         # The expectations below come from this run: it should give what JASP saved in the file
         mismatches <- jaspFileMismatches(results, analyses[[i]])
@@ -372,7 +389,8 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
           totalAnalyses = length(analyses),
           jaspFileName = basename(jaspFile),
           sourceFolder = sourceFolder,
-          results = results
+          results = results,
+          syntax = syntax
         )
 
         testBlocks <- c(testBlocks, list(testBlock))
@@ -385,7 +403,8 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
           analysisIndex = i,
           totalAnalyses = length(analyses),
           jaspFileName = basename(jaspFile),
-          sourceFolder = sourceFolder
+          sourceFolder = sourceFolder,
+          syntax = syntax
         )
         testBlocks <<- c(testBlocks, list(testBlock))
       }
@@ -459,11 +478,13 @@ warnJaspFileMismatches <- function(index, analysisName, jaspFile, mismatches) {
 #' @param sourceFolder String indicating the source folder: \code{"library"},
 #'   \code{"verified"}, or \code{"other"}.
 #' @param results The analysis results.
+#' @param syntax The R syntax the test runs, or NULL to run the analysis with
+#'   \code{runAnalysisFromJaspFile()}.
 #'
 #' @return Character string with the test_that block.
 #' @keywords internal
 generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses, jaspFileName,
-                                     sourceFolder, results) {
+                                     sourceFolder, results, syntax = NULL) {
   # Extract tests from results
   tests <- tryCatch(
     {
@@ -487,7 +508,7 @@ generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses,
   lines <- c(lines, paste0('test_that("', testDesc, '", {'))
   lines <- c(lines, "")
 
-  lines <- c(lines, runFromJaspFileLines(sourceFolder, jaspFileName, analysisIndex))
+  lines <- c(lines, runFromJaspFileLines(sourceFolder, jaspFileName, analysisIndex, syntax))
 
   # Add expectations
   if (length(tests) > 0) {
@@ -534,10 +555,13 @@ generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses,
 #' @param sourceFolder String indicating the source folder: \code{"library"},
 #'   \code{"verified"}, or \code{"other"}.
 #'
+#' @param syntax The R syntax the test runs, or NULL to run the analysis with
+#'   \code{runAnalysisFromJaspFile()}.
+#'
 #' @return Character string with the test_that block.
 #' @keywords internal
 generateExampleTestBlockBasic <- function(analysisName, analysisIndex, totalAnalyses, jaspFileName,
-                                          sourceFolder) {
+                                          sourceFolder, syntax = NULL) {
   lines <- character(0)
 
   # Test description
@@ -550,7 +574,7 @@ generateExampleTestBlockBasic <- function(analysisName, analysisIndex, totalAnal
   lines <- c(lines, paste0('test_that("', testDesc, '", {'))
   lines <- c(lines, "")
 
-  lines <- c(lines, runFromJaspFileLines(sourceFolder, jaspFileName, analysisIndex))
+  lines <- c(lines, runFromJaspFileLines(sourceFolder, jaspFileName, analysisIndex, syntax))
 
   # Basic expectation
   lines <- c(lines, "  # Check analysis runs without error")
@@ -563,13 +587,25 @@ generateExampleTestBlockBasic <- function(analysisName, analysisIndex, totalAnal
 }
 
 
-# The lines of a generated test that run analysis `analysisIndex` of a JASP file of the module again.
-runFromJaspFileLines <- function(sourceFolder, jaspFileName, analysisIndex) {
+# The lines of a generated test that run analysis `analysisIndex` of a JASP file of the module again: its R syntax
+# (the call of its R wrapper) on the data of the file, or without `syntax` the analysis as the file saved it.
+runFromJaspFileLines <- function(sourceFolder, jaspFileName, analysisIndex, syntax = NULL) {
+  jaspFileLine <- paste0('  jaspFile <- testthat::test_path("jaspfiles", "', sourceFolder, '", "', jaspFileName, '")')
+
+  if (is.null(syntax))
+    return(c(
+      "  # Run the analysis again with the options and data of the JASP example file",
+      jaspFileLine,
+      "  set.seed(1)",
+      paste0("  results <- jaspTools::runAnalysisFromJaspFile(jaspFile, ", analysisIndex, ")"),
+      ""
+    ))
+
   c(
-    "  # Run the analysis again with the options and data of the JASP example file",
-    paste0('  jaspFile <- testthat::test_path("jaspfiles", "', sourceFolder, '", "', jaspFileName, '")'),
+    paste0("  # Run the R syntax of analysis ", analysisIndex, " of the JASP example file on the data of the file"),
+    jaspFileLine,
     "  set.seed(1)",
-    paste0("  results <- jaspTools::runAnalysisFromJaspFile(jaspFile, ", analysisIndex, ")"),
+    paste0("  results <- jaspTools::runAnalysisSyntax(jaspFile = jaspFile, ", syntax, ")"),
     ""
   )
 }

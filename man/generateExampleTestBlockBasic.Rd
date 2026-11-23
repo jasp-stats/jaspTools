@@ -9,7 +9,8 @@ generateExampleTestBlockBasic(
   analysisIndex,
   totalAnalyses,
   jaspFileName,
-  sourceFolder
+  sourceFolder,
+  syntax = NULL
 )
 }
 \arguments{
@@ -24,6 +25,8 @@ generateExampleTestBlockBasic(
 \item{sourceFolder}{String indicating the source folder: \code{"library"},
 \code{"verified"}, or \code{"other"}.}
 
+\item{syntax}{The R syntax the test runs, or NULL to run the analysis with
+\code{runAnalysisFromJaspFile()}.}
 }
 \value{
 Character string with the test_that block.

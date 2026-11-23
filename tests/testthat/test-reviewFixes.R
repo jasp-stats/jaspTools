@@ -42,6 +42,24 @@ test_that("runAnalysis runs through runWrappedAnalysis from jaspBase 0.20.6 on, 
                "runAnalysisFromJaspFile\\(\\) needs jaspBase 0.20.6 or later \\(installed: 0.20.4\\)")
 })
 
+test_that("a generated test runs the R syntax of the analysis, or the analysis of the file without R wrapper", {
+  syntax <- 'jaspTTests::TTestOneSample(\n          data = NULL,\n          version = "0.96.5",\n          dependent = ~ Weight)'
+
+  lines <- runFromJaspFileLines("library", "Weight Gain.jasp", 2, syntax)
+  expect_identical(lines[[2]], '  jaspFile <- testthat::test_path("jaspfiles", "library", "Weight Gain.jasp")')
+  expect_identical(lines[[4]], paste0("  results <- jaspTools::runAnalysisSyntax(jaspFile = jaspFile, ", syntax, ")"))
+  expect_length(parse(text = lines), 3L)
+
+  lines <- runFromJaspFileLines("library", "Weight Gain.jasp", 2)
+  expect_identical(lines[[4]], "  results <- jaspTools::runAnalysisFromJaspFile(jaspFile, 2)")
+})
+
+test_that("runAnalysisSyntax refuses what is not a call of an R wrapper", {
+  skip_if_not_installed("jaspBase")
+  skip_if_not(jaspTools:::.isSetupComplete(), "jaspTools is not configured")
+  expect_error(runAnalysisSyntax(1 + 1, view = FALSE, quiet = TRUE), "must be a call of the R wrapper of an analysis")
+})
+
 test_that("the QML files of a source module count for its reinstall", {
   modulePath <- tempfile("jaspToolsModule")
   dir.create(file.path(modulePath, "inst", "qml", "common"), recursive = TRUE)

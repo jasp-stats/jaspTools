@@ -8,11 +8,16 @@
 * New `runAnalysisFromJaspFile()` runs an analysis of a .jasp file again with the data and options saved in it, its
   options upgraded from the module version that saved the file. New `expect_equal_jasp_file()` compares the tables of
   such a run with the results saved in the file.
-* `makeTestsFromExamples()` generates tests that call `runAnalysisFromJaspFile()`, and warns when an analysis no longer
-  gives the results saved in its file.
+* New `runAnalysisSyntax()` runs a call of the R wrapper of an analysis (its R syntax, as JASP shows it), optionally on
+  the data of a .jasp file, and gives the results as `runAnalysis()` does.
+* `makeTestsFromExamples()` generates tests that run the R syntax of each analysis with `runAnalysisSyntax()` on the
+  data of its .jasp file: the call of its R wrapper, with the options of the file upgraded to the version of the module
+  (`jaspSyntax::analysisSyntax()`). An analysis without R wrapper is run with `runAnalysisFromJaspFile()` instead. The
+  generator warns when an analysis no longer gives the results saved in its file.
 * With a jaspBase before 0.20.6 (which the `renv.lock` of a module may still pin), `runAnalysis()` runs the analysis as
   before: jaspTools parses the options through the QML form, calls `jaspBase::runJaspResults()` and decodes the
-  results. `runAnalysisFromJaspFile()` needs jaspBase 0.20.6 or later. jaspBase is in `Suggests`, so installing
+  results. `runAnalysisSyntax()` decodes the results of the R wrapper itself then. `runAnalysisFromJaspFile()` needs
+  jaspBase 0.20.6 or later. jaspBase is in `Suggests`, so installing
   jaspTools never replaces the jaspBase a module pins. The code for jaspBase before 0.16.4 (the separate jaspResults
   package) is removed.
 * A module of `module.dirs` is also reinstalled when one of its QML files changes, as the analysis reads the form of
@@ -25,8 +30,8 @@
 * `analysisOptions(<file>.jasp)` gives the options as JASP saved them: a variables option is
   `list(value = ..., types = ...)` (with `optionKey` for the rows of a list), and there are no `x.types` options next to
   it any more. Tests that load options from a .jasp file and then set `options[["x.types"]]`, read `x.types`, or append
-  to a variables option need updating; regenerating them with `makeTestsFromExamples()` gives tests that use
-  `runAnalysisFromJaspFile()` instead. Options from `analysisOptions("<analysis>")` are not affected, and a test may
+  to a variables option need updating; regenerating them with `makeTestsFromExamples()` gives tests that run
+  the R syntax of the analysis instead. Options from `analysisOptions("<analysis>")` are not affected, and a test may
   still set `x.types` on those.
 * `extractDatasetFromJASPFile()` gives nominal columns as factors and ordinal columns as ordered factors, with their
   levels in the order of the file (from jaspSyntax 1.4.3; character vectors before).
