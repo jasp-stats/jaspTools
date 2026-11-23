@@ -242,7 +242,7 @@ getTestFilesMatchingName <- function(name, modulePath, includeAll = TRUE) {
   matchedFiles <- testFiles[matches]
 
   # Pass 2: scan test-{library,verified,other}-* files for runAnalysis("name", ...) calls, or for the test_that()
-  # titles of the generated tests, which run the analysis with runAnalysisFromJaspFile() ("name results match",
+  # titles of the generated tests, which run the R syntax of the analysis ("name results match",
   # "name (analysis 2) runs without error")
   if (includeAll) {
     sourceFiles <- testFiles[grepl("^test-(library|verified|other)-.*\\.[rR]$", testFiles)]

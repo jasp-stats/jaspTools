@@ -217,10 +217,11 @@ analysisRunInfo <- function(name) {
   resolved
 }
 
-initAnalysisRuntime <- function(dataset, options, makeTests, datasets = NULL, jaspFile = NULL, ...) {
-  # first we reinstall any changed modules in the personal library; the analysis of a .jasp file names its
-  # module itself, so without module directories the installed module runs it
-  if (is.null(jaspFile) || hasModuleDirs())
+initAnalysisRuntime <- function(dataset, options, makeTests, datasets = NULL, jaspFile = NULL,
+                                reinstall = is.null(jaspFile) || hasModuleDirs(), ...) {
+  # first we reinstall any changed modules in the personal library; the analysis of a .jasp file (or an R syntax call)
+  # names its module itself, so without module directories the installed module runs it
+  if (reinstall)
     reinstallChangedModules()
 
   # data goes into the bridge workspace as real DataSets (id + column encoder + default

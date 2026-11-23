@@ -100,6 +100,20 @@ results <- runAnalysisFromJaspFile(jaspFile, 2)   # the 2nd analysis, or its nam
 expect_equal_jasp_file(results, jaspFile, 2)
 ```
 
+### Running the R Syntax of an Analysis
+
+`runAnalysisSyntax()` runs a call of the R wrapper of an analysis (the R syntax JASP shows) and gives
+the results as `runAnalysis()` does. With `jaspFile`, the data of that file is loaded first, for a
+call with `data = NULL`; otherwise the call gives its own data.
+
+```r
+set.seed(1)
+results <- runAnalysisSyntax(jaspFile = jaspFile, jaspTTests::TTestOneSample(
+          data = NULL,
+          version = "0.96.5",
+          dependent = ~ Weight))
+```
+
 ### Generating Tests from JASP Example Files
 
 Use `makeTestsFromExamples()` to automatically generate test files from JASP example files:
@@ -137,7 +151,7 @@ makeTestsFromExamples(sanitize = TRUE)
 
 Generated test files:
 - Named `test-{source}-{filename}.R` in `tests/testthat/` (e.g., `test-library-MyAnalysis.R`)
-- Run each analysis again with `runAnalysisFromJaspFile(testthat::test_path("jaspfiles", "{source}", "file.jasp"), <index>)`
+- Run the R syntax of each analysis (the call of its R wrapper, made by `jaspSyntax::analysisSyntax()` with the options of the file upgraded to the module version) with `runAnalysisSyntax(jaspFile = testthat::test_path("jaspfiles", "{source}", "file.jasp"), <module>::<Analysis>(data = NULL, version = ..., ...))`; an analysis without R wrapper runs with `runAnalysisFromJaspFile(jaspFile, <index>)`
 - Are generated from that run; the generator warns when its tables differ from the results saved in the file
 - Include table expectations via `expect_equal_tables()`
 - Include plot expectations via `expect_equal_plots()` with unique names: `analysis-1_figure-1_plot-title`

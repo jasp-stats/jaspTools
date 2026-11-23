@@ -34,7 +34,6 @@ with hyphens. If FALSE (default), preserves original spacing and characters in f
 
 \item{overwrite}{Logical. If TRUE, overwrites existing test files. If FALSE (default),
 skips files that already exist.}
-
 }
 \value{
 Invisibly returns a character vector of created/processed test file paths.
@@ -53,9 +52,12 @@ is the original JASP filename without the .jasp extension.
 If a JASP file contains multiple analyses, they are included as separate \code{test_that()}
 blocks within the same test file.
 
-Each test runs its analysis again with \code{\link{runAnalysisFromJaspFile}} and expects the
-tables and plots that run gives now. When these tables differ from the results JASP saved
-in the file (see \code{\link{expect_equal_jasp_file}}), a warning says what differs.
+Each test runs the R syntax of its analysis: the call of the R wrapper of the analysis, as JASP
+shows it, with the options saved in the file upgraded to the version of the module. It runs
+with \code{\link{runAnalysisSyntax}} on the data of the file, and the test expects the tables
+and plots that run gives now. When these tables differ from the results JASP saved in the file
+(see \code{\link{expect_equal_jasp_file}}), a warning says what differs. An analysis without
+R wrapper is run with \code{\link{runAnalysisFromJaspFile}} instead.
 
 \strong{Prerequisites:}
 \itemize{

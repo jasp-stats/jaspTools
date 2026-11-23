@@ -98,3 +98,20 @@ test_that("runAnalysisFromJaspFile gives the results JASP saved in the file", {
   results$results$stats$data[[1]][[2]] <- -1
   expect_failure(expect_equal_jasp_file(results, jaspFile, 1), "Table `stats` is not equal to old table")
 })
+
+test_that("the R syntax of an analysis of a JASP file gives the results JASP saved in the file", {
+  skip_on_cran()
+  skip_if_not(jaspTools:::.isSetupComplete(), "jaspTools is not configured")
+  skip_if_not_installed("jaspDescriptives")
+
+  jaspFile <- jaspFixture("debug-descriptives.jasp")
+  syntax   <- jaspTools:::jaspFileAnalysisSyntax(jaspFile, "Descriptives")
+  expect_match(syntax, "^jaspDescriptives::Descriptives\\(")
+  expect_match(syntax, "data = NULL", fixed = TRUE)
+
+  set.seed(1)
+  results <- jaspTools:::runJaspFileAnalysisSyntax(syntax, jaspFile)
+
+  expect_identical(results$status, "complete")
+  expect_equal_jasp_file(results, jaspFile, 1)
+})
