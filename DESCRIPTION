@@ -15,7 +15,6 @@ Imports:
   cli,
   data.table,
   httr,
-  jaspBase (>= 0.20.6),
   jaspSyntax (>= 1.4.2),
   jsonlite,
   lifecycle,
@@ -27,7 +26,8 @@ Imports:
   testthat (>= 3.2.2),
   vdiffr (>= 1.0.7)
 Suggests:
-  ggplot2
+  ggplot2,
+  jaspBase
 Remotes:
   jasp-stats/jaspBase,
   jasp-stats/jaspSyntax

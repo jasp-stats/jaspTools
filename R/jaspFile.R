@@ -33,7 +33,7 @@
 #' }
 #' @export
 runAnalysisFromJaspFile <- function(jaspFile, analysis = 1L, view = TRUE, quiet = FALSE) {
-  checkJaspBaseVersion()
+  checkJaspBaseVersion("runAnalysisFromJaspFile()")
 
   jaspFile <- normalizePath(jaspFile, winslash = "/", mustWork = TRUE)
   # No data is loaded yet, so the file can be read in this process (isolated = TRUE would start another R for it)

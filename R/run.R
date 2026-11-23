@@ -80,8 +80,6 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
   if (!is.null(datasets) && !is.null(dataset))
     stop("`datasets` (multiDataSetAware run) and `dataset` (single dataset run) are mutually exclusive")
 
-  checkJaspBaseVersion()
-
   display <- runDisplay(view, quiet)
   restoreRunState <- saveRunState()
   on.exit(restoreRunState(), add = TRUE)
@@ -93,18 +91,26 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
 
   # Of the defaults analysisOptions() gave, only the options the test set: the form gives the others their default,
   # which can depend on the options that are set (see formOptions.R).
-  args <- list(
-    moduleName   = info$moduleName,
-    analysisName = info$analysisName,
-    qmlFileName  = info$qmlFileName,
-    options      = typesIntoOptionValues(formOptionsAsList(options)),
-    version      = info$version,
-    preloadData  = info$preloadData,
-    datasets     = datasets
-  )
+  options <- typesIntoOptionValues(formOptionsAsList(options))
 
-  returnVal <- runQuietly(jaspBase::runWrappedAnalysis, args, display$quiet)
-  results   <- collectRunResults(returnVal, display$view)
+  wrapped <- jaspBaseRunsWrappedAnalyses()
+
+  returnVal <- if (wrapped) {
+    args <- list(
+      moduleName   = info$moduleName,
+      analysisName = info$analysisName,
+      qmlFileName  = info$qmlFileName,
+      options      = options,
+      version      = info$version,
+      preloadData  = info$preloadData,
+      datasets     = datasets
+    )
+    runQuietly(jaspBase::runWrappedAnalysis, args, display$quiet)
+  } else {
+    runAnalysisWithOlderJaspBase(name, info, options, datasets, display$quiet)
+  }
+
+  results <- collectRunResults(returnVal, display$view, decode = !wrapped)
 
   if (makeTests)
     makeUnitTestsFromResults(results, name, dataset, options)
@@ -161,11 +167,14 @@ runDisplay <- function(view, quiet) {
   list(view = view, quiet = quiet)
 }
 
-# The results of a run as runAnalysis gives them, from what jaspBase::runWrappedAnalysis returned.
-collectRunResults <- function(returnVal, view) {
+# The results of a run as runAnalysis gives them, from what jaspBase returned. jaspBase::runWrappedAnalysis gives the
+# results with the plain column names (the analysis only saw encoded ones); after jaspBase::runJaspResults (older
+# jaspBase) they are decoded here (`decode`), against every dataset the bridge workspace holds.
+collectRunResults <- function(returnVal, view, decode = FALSE) {
   jsonResults <- getJsonResultsFromJaspResults(returnVal)
 
-  # jaspBase gives the results with the plain column names (the analysis only saw encoded ones)
+  if (decode)
+    jsonResults <- jaspSyntax::decodeJsonText(jsonResults)
 
   transferPlotsFromjaspResults()
 
@@ -303,12 +312,56 @@ initializeCoreJaspPackages <- function() {
 }
 
 # jaspBase 0.20.6 gives the results of a run in R with the plain column names, and runs the analysis of a module without
-# R wrappers in runWrappedAnalysis.
-checkJaspBaseVersion <- function(minimum = "0.20.6") {
-  if (utils::packageVersion("jaspBase") < minimum)
-    stop("jaspTools needs jaspBase ", minimum, " or later (installed: ", utils::packageVersion("jaspBase"), ")", call. = FALSE)
+# R wrappers in runWrappedAnalysis. The module tests may still pin an older jaspBase in their renv.lock: runAnalysis()
+# then runs the analysis as jaspTools did before (runAnalysisWithOlderJaspBase).
+minimumJaspBaseForWrappedRuns <- "0.20.6"
+
+jaspBaseRunsWrappedAnalyses <- function(version = utils::packageVersion("jaspBase")) {
+  version >= minimumJaspBaseForWrappedRuns
+}
+
+# runAnalysisFromJaspFile() has no other way to run an analysis than jaspBase::runWrappedAnalysis.
+checkJaspBaseVersion <- function(what = "runAnalysisFromJaspFile()", version = utils::packageVersion("jaspBase")) {
+  if (!jaspBaseRunsWrappedAnalyses(version))
+    stop(what, " needs jaspBase ", minimumJaspBaseForWrappedRuns, " or later (installed: ", version, ")", call. = FALSE)
 
   invisible(TRUE)
+}
+
+# runAnalysis() with a jaspBase before 0.20.6, as jaspTools 0.20 ran an analysis: the options go through the QML form
+# (jaspSyntax::loadQmlAndParseOptionsStatus), the analysis is run by jaspBase::runJaspResults, and collectRunResults()
+# decodes the results. The datasets of a multiDataSetAware run are loaded here, runWrappedAnalysis loads them itself.
+runAnalysisWithOlderJaspBase <- function(name, info, options, datasets, quiet) {
+  if (!is.null(datasets))
+    invisible(jaspSyntax::loadDataSets(datasets))
+
+  # Same serialization jaspBase uses for the syntax wrapper (common.R toJSON): auto_unbox so scalar options arrive as
+  # scalars - boxed one-element arrays are rejected by the bridge.
+  optionsJson <- as.character(jsonlite::toJSON(options, auto_unbox = TRUE, digits = NA, null = "null"))
+
+  status <- jaspSyntax::loadQmlAndParseOptionsStatus(
+    info$moduleName, info$analysisName, info$qmlFile, optionsJson, info$version, info$preloadData)
+
+  possibleArgs <- list(
+    name         = name,
+    functionCall = findCorrectFunction(name),
+    title        = "",
+    requiresInit = TRUE,
+    options      = status$options,
+    dataKey      = "null",
+    resultsMeta  = "null",
+    stateKey     = "null",
+    preloadData  = info$preloadData
+  )
+
+  # For multiDataSetAware runs: the blob the bridge built while parsing ({ids = filter keys, names, dataSetIds,
+  # primary}) - jaspBase::runJaspResults then pulls the queued slices from the bridge.
+  if (nzchar(status$multiDataSetJson))
+    possibleArgs$multiDataSetJson <- status$multiDataSetJson
+
+  args <- possibleArgs[intersect(names(possibleArgs), names(formals(jaspBase::runJaspResults)))]
+
+  runQuietly(jaspBase::runJaspResults, args, quiet)
 }
 
 processJsonResults <- function(jsonResults) {

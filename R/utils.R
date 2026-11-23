@@ -1,6 +1,22 @@
 #' @importFrom utils install.packages menu download.file unzip capture.output installed.packages packageVersion
 #' @importFrom testthat expect skip
 
+# The R function jaspBase::runJaspResults runs (runAnalysisWithOlderJaspBase): `<name>Internal` when the module has R
+# wrappers, else `<name>`, as "<module>::<function>". jaspBase::runWrappedAnalysis makes the same choice itself.
+findCorrectFunction <- function(funName) {
+  modulePath <- getModulePathFromRFunction(funName)
+  if (is.null(modulePath))
+    stop("Could not locate the module location for `", funName, "`")
+
+  if (!endsWith(funName, "Internal")) {
+    funNameInternal <- paste0(funName, "Internal")
+    if (rFunctionExistsInModule(funNameInternal, modulePath))
+      funName <- funNameInternal
+  }
+
+  return(paste(getModuleName(modulePath), funName, sep = "::"))
+}
+
 getModulePaths <- function() {
   validModules <- NULL
 
