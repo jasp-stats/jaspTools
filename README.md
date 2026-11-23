@@ -23,6 +23,12 @@ Note: On some macs, it seems to be hard to build the dependency "data.table" fro
 After loading jaspTools with `library(jaspTools)`, you need to call `setupJaspTools()`. This is
 required once after every reinstall of jaspTools.
 
+By default jaspTools runs the analyses with the development version of JASP. To run them with a released
+JASP version, give its tag, e.g. `setupJaspTools(jaspVersion = "v0.99.1")` (or set the environment variable
+`JASPTOOLS_JASP_VERSION`, as CI does), in a fresh R session. jaspTools then installs the jaspSyntax and
+jaspBase of that version, as listed in the `jasp-version.json` of the
+[jaspSyntax release](https://github.com/jasp-stats/jaspSyntax/releases) with that tag.
+
 ## Functionality
 At the moment jaspTools has three classes of functions.
 Each of these functions has documentation you may view by the usual syntax, e.g., `?runAnalysis`.

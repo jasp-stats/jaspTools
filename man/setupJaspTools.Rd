@@ -9,7 +9,8 @@ setupJaspTools(
   installJaspModules = FALSE,
   installJaspCorePkgs = TRUE,
   quiet = FALSE,
-  force = TRUE
+  force = TRUE,
+  jaspVersion = defaultJaspVersion()
 )
 }
 \arguments{
@@ -22,9 +23,22 @@ setupJaspTools(
 \item{quiet}{(optional) Boolean. Should the installation of R packages produce output?}
 
 \item{force}{(optional) Boolean. Should a fresh installation of jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.}
+
+\item{jaspVersion}{(optional) Character. The JASP version to run the analyses with: \code{"development"} (the default), or
+the tag of a jaspSyntax release built from a JASP version, e.g. \code{"v0.99.1"}. Defaults to the environment variable
+\code{JASPTOOLS_JASP_VERSION} when that is set, so CI can choose it.}
 }
 \description{
 Ensures that analyses can be run, tested and debugged locally by fetching all of the basic dependencies.
 This includes fetching the data library and html files and installing jaspBase and jaspGraphs.
 If no parameters are supplied the function will interactively ask for the location of these dependencies.
+}
+\details{
+With \code{jaspVersion = "development"} jaspTools uses jasp-desktop's development branch and the jaspSyntax and jaspBase
+that are installed (on CI, those of the module's lockfile).
+
+With the tag of a JASP version, jaspTools reads the \code{jasp-version.json} of that jaspSyntax release and installs,
+also on CI, the packages of that JASP version: jaspSyntax at that tag with the SyntaxInterface library of that release,
+and the jaspBase that jasp-desktop pins. The html files and data sets are taken from that jasp-desktop commit.
+Call it in a fresh R session: an installed package that is already loaded keeps running its old code.
 }

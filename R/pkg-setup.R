@@ -9,9 +9,21 @@
 #' @param installJaspCorePkgs (optional) Boolean. Should jaspTools install jaspBase and jaspGraphs?
 #' @param quiet (optional) Boolean. Should the installation of R packages produce output?
 #' @param force (optional) Boolean. Should a fresh installation of jaspBase, jaspGraphs and the JASP analysis modules proceed if they are already installed on your system? This is ignored if installJaspCorePkgs = FALSE.
+#' @param jaspVersion (optional) Character. The JASP version to run the analyses with: \code{"development"} (the default), or
+#'   the tag of a jaspSyntax release built from a JASP version, e.g. \code{"v0.99.1"}. Defaults to the environment variable
+#'   \code{JASPTOOLS_JASP_VERSION} when that is set, so CI can choose it.
+#'
+#' @details
+#' With \code{jaspVersion = "development"} jaspTools uses jasp-desktop's development branch and the jaspSyntax and jaspBase
+#' that are installed (on CI, those of the module's lockfile).
+#'
+#' With the tag of a JASP version, jaspTools reads the \code{jasp-version.json} of that jaspSyntax release and installs,
+#' also on CI, the packages of that JASP version: jaspSyntax at that tag with the SyntaxInterface library of that release,
+#' and the jaspBase that jasp-desktop pins. The html files and data sets are taken from that jasp-desktop commit.
+#' Call it in a fresh R session: an installed package that is already loaded keeps running its old code.
 #'
 #' @export setupJaspTools
-setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, installJaspCorePkgs = TRUE, quiet = FALSE, force = TRUE) {
+setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, installJaspCorePkgs = TRUE, quiet = FALSE, force = TRUE, jaspVersion = defaultJaspVersion()) {
 
   argsMissing <- FALSE
   if (interactive()) {
@@ -50,21 +62,29 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
     }
   }
 
-  .setupJaspTools(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force)
+  .setupJaspTools(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force, jaspVersion)
 
   if (argsMissing)
-    printSetupArgs(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force)
+    printSetupArgs(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force, jaspVersion)
 }
 
-.setupJaspTools <- function(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force) {
+.setupJaspTools <- function(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force, jaspVersion = "development") {
   pathJaspDesktop <- validateJaspResourceDir(pathJaspDesktop, isJaspDesktopDir, "jasp-desktop")
+
+  # Before anything is changed, so a JASP version that does not exist leaves the setup as it was.
+  version <- readJaspVersion(jaspVersion)
 
   if (.isSetupComplete()) # in case the setup is performed multiple times
     .removeCompletedSetupFiles()
 
+  if (!isDevelopmentJaspVersion(version)) {
+    message("Installing the packages of JASP ", version[["jaspVersion"]], "...\n")
+    installJaspVersionPkgs(version, quiet = quiet, force = force)
+  }
+
   message("Fetching resources...\n")
 
-  depsOK <- fetchJaspDesktopDependencies(pathJaspDesktop, quiet = quiet, force = force)
+  depsOK <- fetchJaspDesktopDependencies(pathJaspDesktop, branch = version[["jaspDesktop"]][["ref"]], quiet = quiet, force = force)
   if (!depsOK)
     stop("jaspTools setup could not be completed. Reason: could not fetch the jasp-stats/jasp-desktop repo and as a result the required dependencies are not installed.\n
             If this problem persists clone jasp-stats/jasp-desktop manually.")
@@ -74,7 +94,9 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
   } else {
 
     if (isTRUE(installJaspCorePkgs)) {
-      installJaspPkg(c("jaspBase", "jaspGraphs"), quiet = quiet, force = force)
+      # A JASP version comes with its own jaspBase (installed above).
+      corePkgs <- if (isDevelopmentJaspVersion(version)) c("jaspBase", "jaspGraphs") else "jaspGraphs"
+      installJaspPkg(corePkgs, quiet = quiet, force = force)
 
     }
 
@@ -86,13 +108,126 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
   .finalizeSetup()
 }
 
-printSetupArgs <- function(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force) {
+printSetupArgs <- function(pathJaspDesktop, installJaspModules, installJaspCorePkgs, quiet, force, jaspVersion = "development") {
   if (is.character(pathJaspDesktop))
     showPathJasp <- paste0("\"", pathJaspDesktop, "\"")
   else
     showPathJasp <- "NULL"
 
-  message("\nIn the future you can skip the interactive part of the setup by calling `setupJaspTools(pathJaspDesktop = ", showPathJasp, ", installJaspModules = ", installJaspModules, ", installJaspCorePkgs = ", installJaspCorePkgs, ", quiet = ", quiet, ", force = ", force, ")`")
+  message("\nIn the future you can skip the interactive part of the setup by calling `setupJaspTools(pathJaspDesktop = ", showPathJasp, ", installJaspModules = ", installJaspModules, ", installJaspCorePkgs = ", installJaspCorePkgs, ", quiet = ", quiet, ", force = ", force, ", jaspVersion = \"", jaspVersion, "\")`")
+}
+
+# ---- JASP versions ----
+#
+# A JASP version is a release of jaspSyntax built from a jasp-desktop tag (its Build SyntaxInterface Libraries workflow).
+# Its jasp-version.json gives the packages of that version:
+#   { "schema": 1, "jaspVersion": "v0.99.1",
+#     "jaspSyntax":  { "repo": "jasp-stats/jaspSyntax",   "ref": "v0.99.1", "releaseTag": "v0.99.1" },
+#     "jaspDesktop": { "repo": "jasp-stats/jasp-desktop", "ref": "v0.99.1", "sha": "<sha>" },
+#     "jaspBase":    { "repo": "jasp-stats/jaspBase",     "sha": "<sha>" } }
+# "development" is no release: jasp-desktop's development branch with the jaspSyntax and jaspBase that are installed.
+
+jaspVersionSchema    <- 1L
+jaspSyntaxReleaseRepo <- "jasp-stats/jaspSyntax"
+
+defaultJaspVersion <- function() {
+  version <- Sys.getenv("JASPTOOLS_JASP_VERSION", unset = "")
+  if (nzchar(version)) version else "development"
+}
+
+isDevelopmentJaspVersion <- function(version) {
+  identical(version[["jaspVersion"]], "development")
+}
+
+readJaspVersion <- function(jaspVersion) {
+  if (!is.character(jaspVersion) || length(jaspVersion) != 1L || is.na(jaspVersion) || !nzchar(jaspVersion))
+    stop("`jaspVersion` must be \"development\" or the tag of a JASP version, e.g. \"v0.99.1\".", call. = FALSE)
+
+  if (identical(jaspVersion, "development"))
+    return(list(jaspVersion = "development", jaspDesktop = list(ref = "development")))
+
+  # The tag ends up in URLs and in an environment variable of the configure script of jaspSyntax.
+  if (!grepl("^[A-Za-z0-9._-]+$", jaspVersion))
+    stop("`jaspVersion` \"", jaspVersion, "\" is not a tag: only letters, digits, '.', '_' and '-' are allowed.", call. = FALSE)
+
+  version <- downloadJaspVersionFile(jaspVersion)
+  if (is.null(version))
+    stop("Release ", jaspVersion, " of ", jaspSyntaxReleaseRepo, " has no jasp-version.json, so jaspTools does not know which ",
+         "packages belong to JASP ", jaspVersion, ". Use \"development\" or a JASP version whose release has that file ",
+         "(see https://github.com/", jaspSyntaxReleaseRepo, "/releases).", call. = FALSE)
+
+  validateJaspVersion(version, jaspVersion)
+}
+
+# NULL when the release or the file does not exist.
+downloadJaspVersionFile <- function(jaspVersion) {
+  url  <- sprintf("https://github.com/%s/releases/download/%s/jasp-version.json", jaspSyntaxReleaseRepo, jaspVersion)
+  file <- tempfile(fileext = ".json")
+  on.exit(unlink(file))
+  res <- suppressWarnings(try(utils::download.file(url, destfile = file, quiet = TRUE, mode = "wb"), silent = TRUE))
+  if (inherits(res, "try-error") || !identical(as.integer(res), 0L) || !file.exists(file))
+    return(NULL)
+
+  jsonlite::fromJSON(file, simplifyVector = FALSE)
+}
+
+validateJaspVersion <- function(version, jaspVersion) {
+  bad <- function(what) stop("The jasp-version.json of JASP ", jaspVersion, " ", what, call. = FALSE)
+
+  if (!is.list(version))
+    bad("is not a JSON object.")
+  if (!identical(as.integer(version[["schema"]]), jaspVersionSchema))
+    bad(paste0("has schema ", format(version[["schema"]]), ", this jaspTools reads schema ", jaspVersionSchema, ": update jaspTools."))
+
+  isString <- function(x) is.character(x) && length(x) == 1L && !is.na(x) && nzchar(x)
+  for (field in list(c("jaspSyntax", "repo"), c("jaspSyntax", "ref"), c("jaspSyntax", "releaseTag"),
+                     c("jaspDesktop", "sha"), c("jaspBase", "repo"), c("jaspBase", "sha")))
+    if (!isString(version[[field[1L]]][[field[2L]]]))
+      bad(paste0("has no ", paste(field, collapse = "."), "."))
+
+  # jasp-desktop is downloaded by commit: its archive of a tag drops the "v" from the directory name.
+  version[["jaspDesktop"]][["ref"]] <- version[["jaspDesktop"]][["sha"]]
+  version[["jaspVersion"]]          <- jaspVersion
+
+  version
+}
+
+installJaspVersionPkgs <- function(version, quiet = FALSE, force = TRUE) {
+  pkgs <- c("jaspSyntax", "jaspBase")
+  loaded <- pkgs[vapply(pkgs, isPkgLoaded, logical(1L))]
+  if (length(loaded) > 0L)
+    stop(paste(loaded, collapse = " and "), if (length(loaded) == 1L) " is" else " are", " already loaded in this R session, ",
+         "which would keep running the code that is installed now. Restart R and call setupJaspTools(jaspVersion = \"",
+         version[["jaspVersion"]], "\") before anything else.", call. = FALSE)
+
+  syntax <- version[["jaspSyntax"]]
+  # configure downloads the SyntaxInterface library of this release, also when the configure at the ref names another one.
+  withEnvVars(c(JASPSYNTAX_RELEASE_TAG = syntax[["releaseTag"]]),
+    installGithubPkg(paste0(syntax[["repo"]], "@", syntax[["ref"]]), quiet = quiet, force = force)
+  )
+
+  jaspBase <- version[["jaspBase"]]
+  installGithubPkg(paste0(jaspBase[["repo"]], "@", jaspBase[["sha"]]), quiet = quiet, force = force)
+
+  invisible(TRUE)
+}
+
+isPkgLoaded <- function(pkg) isNamespaceLoaded(pkg)
+
+installGithubPkg <- function(repo, quiet = FALSE, force = TRUE) {
+  remotes::install_github(repo, upgrade = "never", force = force, quiet = quiet, auth_token = getGithubPAT(), INSTALL_opts = "--no-multiarch")
+}
+
+# Sets the environment variables while `code` runs, and restores them afterwards.
+withEnvVars <- function(vars, code) {
+  old <- Sys.getenv(names(vars), unset = NA, names = TRUE)
+  on.exit({
+    unset <- is.na(old)
+    if (any(unset))  Sys.unsetenv(names(old)[unset])
+    if (any(!unset)) do.call(Sys.setenv, as.list(old[!unset]))
+  })
+  do.call(Sys.setenv, as.list(vars))
+  force(code)
 }
 
 validateJaspResourceDir <- function(path, validationFn, title) {

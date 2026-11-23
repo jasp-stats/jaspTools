@@ -27,7 +27,8 @@ Imports:
   vdiffr (>= 1.0.7)
 Suggests:
   ggplot2,
-  jaspBase
+  jaspBase,
+  withr
 Remotes:
   jasp-stats/jaspBase,
   jasp-stats/jaspSyntax
