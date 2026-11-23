@@ -30,6 +30,18 @@ test_that("whileParsingOptions recognises the option parse of jaspSyntax, also c
   expect_false(whileParsingOptions(list(quote((function() 1)()))))
 })
 
+test_that("runAnalysis runs through runWrappedAnalysis from jaspBase 0.20.6 on, and as before with an older one", {
+  expect_true(jaspBaseRunsWrappedAnalyses(package_version("0.20.6")))
+  expect_true(jaspBaseRunsWrappedAnalyses(package_version("0.21.0")))
+  expect_false(jaspBaseRunsWrappedAnalyses(package_version("0.20.5")))
+  expect_false(jaspBaseRunsWrappedAnalyses(package_version("0.20.4")))
+
+  # runAnalysisFromJaspFile() has no other way to run
+  expect_invisible(checkJaspBaseVersion("runAnalysisFromJaspFile()", package_version("0.20.6")))
+  expect_error(checkJaspBaseVersion("runAnalysisFromJaspFile()", package_version("0.20.4")),
+               "runAnalysisFromJaspFile\\(\\) needs jaspBase 0.20.6 or later \\(installed: 0.20.4\\)")
+})
+
 test_that("the QML files of a source module count for its reinstall", {
   modulePath <- tempfile("jaspToolsModule")
   dir.create(file.path(modulePath, "inst", "qml", "common"), recursive = TRUE)

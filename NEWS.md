@@ -10,8 +10,11 @@
   such a run with the results saved in the file.
 * `makeTestsFromExamples()` generates tests that call `runAnalysisFromJaspFile()`, and warns when an analysis no longer
   gives the results saved in its file.
-* jaspTools needs jaspBase 0.20.6 or later, which it now declares in `Imports`. The code for jaspBase before 0.16.4
-  (the separate jaspResults package) is removed.
+* With a jaspBase before 0.20.6 (which the `renv.lock` of a module may still pin), `runAnalysis()` runs the analysis as
+  before: jaspTools parses the options through the QML form, calls `jaspBase::runJaspResults()` and decodes the
+  results. `runAnalysisFromJaspFile()` needs jaspBase 0.20.6 or later. jaspBase is in `Suggests`, so installing
+  jaspTools never replaces the jaspBase a module pins. The code for jaspBase before 0.16.4 (the separate jaspResults
+  package) is removed.
 * A module of `module.dirs` is also reinstalled when one of its QML files changes, as the analysis reads the form of
   the installed module.
 * With `quiet = TRUE` (always inside tests) the warnings the QML form gives while it parses the options (an unknown
