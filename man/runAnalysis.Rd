@@ -11,7 +11,8 @@ runAnalysis(
   view = TRUE,
   quiet = FALSE,
   makeTests = FALSE,
-  datasets = NULL
+  datasets = NULL,
+  encodedDataset = FALSE
 )
 }
 \arguments{
@@ -40,6 +41,9 @@ filter id - the same id the selection option holds, so \code{datasets[[key]]} is
 API (see the datasets contract in \code{jaspBase}). \code{dataset} must then be NULL.
 A multiDataSetAware analysis gets its datasets only through \code{datasets}, as with its R
 wrapper: run with \code{dataset}, it gets no \code{datasets} argument.}
+
+\item{encodedDataset}{Ignored. Kept for tests written for \code{encodeOptionsAndDataset()}:
+\code{runAnalysis} encodes the options and the dataset itself.}
 }
 \description{
 \code{runAnalysis} makes it possible to execute a JASP analysis in R. jaspTools

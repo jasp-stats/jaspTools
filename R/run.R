@@ -31,6 +31,8 @@
 #' API (see the datasets contract in \code{jaspBase}). \code{dataset} must then be NULL.
 #' A multiDataSetAware analysis gets its datasets only through \code{datasets}, as with its R
 #' wrapper: run with \code{dataset}, it gets no \code{datasets} argument.
+#' @param encodedDataset Ignored. Kept for tests written for \code{encodeOptionsAndDataset()}:
+#' \code{runAnalysis} encodes the options and the dataset itself.
 #' @examples
 #'
 #' options <- analysisOptions("BinomialTest")
@@ -64,7 +66,7 @@
 #'
 #'
 #' @export runAnalysis
-runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALSE, makeTests = FALSE, datasets = NULL) {
+runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALSE, makeTests = FALSE, datasets = NULL, encodedDataset = FALSE) {
   if (is.list(options) && is.null(names(options)) && any(names(unlist(lapply(options, attributes))) == "analysisName"))
     stop("The provided list of options is not named. Did you mean to index in the options list (e.g., options[[1]])?")
 

@@ -167,3 +167,20 @@ addTypedDataSet <- function(name, lst) {
 
 }
 
+
+#' Deprecated: give the options and the dataset back unchanged.
+#'
+#' \code{runAnalysis()} encodes the options and the dataset itself, through the QML form of the analysis, so a test
+#' no longer encodes them first. This function only keeps tests written as
+#' \preformatted{encoded <- encodeOptionsAndDataset(options, dataset)
+#' runAnalysis(name, encoded$dataset, encoded$options, encodedDataset = TRUE)}
+#' running, with the same result as \code{runAnalysis(name, dataset, options)}, which new tests should use.
+#'
+#' @param options List of options of the analysis.
+#' @param dataset Dataset of the analysis, as \code{runAnalysis()} takes it.
+#' @param forceEncode Ignored.
+#' @return A list with the \code{options} and the \code{dataset} as given.
+#' @export
+encodeOptionsAndDataset <- function(options, dataset, forceEncode = NULL) {
+  list(options = options, dataset = dataset)
+}

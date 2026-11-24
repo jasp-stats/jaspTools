@@ -35,4 +35,8 @@
   still set `x.types` on those.
 * `extractDatasetFromJASPFile()` gives nominal columns as factors and ordinal columns as ordered factors, with their
   levels in the order of the file (from jaspSyntax 1.4.3; character vectors before).
+* `encodeOptionsAndDataset()` is deprecated: it gives the options and the dataset back unchanged, and `runAnalysis()`
+  ignores its `encodedDataset` argument, so tests written as
+  `encoded <- encodeOptionsAndDataset(options, dataset); runAnalysis(name, encoded$dataset, encoded$options, encodedDataset = TRUE)`
+  still run. New tests call `runAnalysis(name, dataset, options)`.
 * The unused internals `approxMatch()`, `fixRNGForTesting()`, `getFilename()` and `devcat()` are removed.
