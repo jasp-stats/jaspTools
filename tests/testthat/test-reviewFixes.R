@@ -125,3 +125,15 @@ test_that("the generated example tests are found by the name of their analysis",
   expect_setequal(getTestFilesMatchingName("Descriptives", modulePath),
                   c("test-library-Exam Scores.R", "test-other-Big Five.R", "test-verified-Old.R"))
 })
+
+test_that("tests written for encodeOptionsAndDataset() still run", {
+  options <- list(variables = list(value = "contNormal", types = "scale"))
+  dataset <- data.frame(contNormal = c(1.5, 2.5))
+
+  encoded <- encodeOptionsAndDataset(options, dataset)
+  expect_identical(encoded$options, options)
+  expect_identical(encoded$dataset, dataset)
+  expect_identical(encodeOptionsAndDataset(options, "debug.csv", forceEncode = "variables")$dataset, "debug.csv")
+
+  expect_true("encodedDataset" %in% names(formals(runAnalysis)))
+})
