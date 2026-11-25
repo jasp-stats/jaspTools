@@ -37,8 +37,8 @@ If no parameters are supplied the function will interactively ask for the locati
 With \code{jaspVersion = "development"} jaspTools uses jasp-desktop's development branch and the jaspSyntax and jaspBase
 that are installed (on CI, those of the module's lockfile).
 
-With the tag of a JASP version, jaspTools reads the \code{jasp-version.json} of that jaspSyntax release and installs,
-also on CI, the packages of that JASP version: jaspSyntax at that tag with the SyntaxInterface library of that release,
-and the jaspBase that jasp-desktop pins. The html files and data sets are taken from that jasp-desktop commit.
+With the tag of a JASP version, jaspTools installs, also on CI, jaspSyntax at that tag with the SyntaxInterface library
+of that release. The \code{jasp-version.json} of that release gives the jasp-desktop commit of that JASP version and
+the jaspBase it pins: that jaspBase is installed, and the html files and data sets are taken from that commit.
 Call it in a fresh R session: an installed package that is already loaded keeps running its old code.
 }
