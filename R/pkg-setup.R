@@ -18,8 +18,7 @@
 #' installed (on CI, jaspSyntax master, which jaspTools brings along).
 #'
 #' With the tag of a JASP version, jaspTools installs, also on CI, jaspSyntax at that tag with the SyntaxInterface library
-#' of that release, and takes the html files and data sets from the jasp-desktop commit in the \code{jasp-version.json}
-#' of that release.
+#' of that release, and takes the html files and data sets from the jasp-desktop commit that library was built from.
 #'
 #' jaspBase is not part of a JASP version: jaspSyntax does not use it, so the module's own jaspBase (on CI, that of its
 #' lockfile) runs the analyses with any JASP version.
@@ -83,6 +82,8 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
   if (!isDevelopmentJaspVersion(version)) {
     message("Installing jaspSyntax of JASP ", version[["jaspVersion"]], "...\n")
     installJaspVersionSyntax(version, quiet = quiet, force = force)
+    # The html files and data sets of the jasp-desktop commit that this jaspSyntax library was built from.
+    version[["jaspDesktop"]] <- list(ref = installedJaspSyntaxDesktopSha(version))
   }
 
   message("Fetching resources...\n")
@@ -121,14 +122,12 @@ printSetupArgs <- function(pathJaspDesktop, installJaspModules, installJaspCoreP
 # ---- JASP versions ----
 #
 # A JASP version is a release of jaspSyntax built from a jasp-desktop tag (its Build SyntaxInterface Libraries workflow):
-# jaspSyntax is installed at that tag, with the SyntaxInterface library of that release. The jasp-version.json of the
-# release gives what the tag does not tell, the jasp-desktop commit of that version (for the html files and data sets):
-#   { "schema": 1, "jaspVersion": "v0.99.1",
-#     "jaspDesktop": { "repo": "jasp-stats/jasp-desktop", "ref": "v0.99.1", "sha": "<sha>" }, ... }
+# jaspSyntax is installed at that tag, with the SyntaxInterface library of that release. Its configure records in the
+# installed package (libs/SyntaxInterface.provenance) the jasp-desktop commit the library was built from; the html
+# files and data sets are taken from that commit.
 # "development" is no release: jasp-desktop's development branch with the jaspSyntax that is installed.
 # jaspBase is not part of it: jaspSyntax does not use it, the module's own jaspBase runs the analyses.
 
-jaspVersionSchema    <- 1L
 jaspSyntaxReleaseRepo <- "jasp-stats/jaspSyntax"
 
 defaultJaspVersion <- function() {
@@ -151,45 +150,52 @@ readJaspVersion <- function(jaspVersion) {
   if (!grepl("^[A-Za-z0-9._-]+$", jaspVersion))
     stop("`jaspVersion` \"", jaspVersion, "\" is not a tag: only letters, digits, '.', '_' and '-' are allowed.", call. = FALSE)
 
-  version <- downloadJaspVersionFile(jaspVersion)
-  if (is.null(version))
-    stop("Release ", jaspVersion, " of ", jaspSyntaxReleaseRepo, " has no jasp-version.json, so jaspTools does not know which ",
-         "jasp-desktop commit belongs to JASP ", jaspVersion, ". Use \"development\" or a JASP version whose release has that file ",
-         "(see https://github.com/", jaspSyntaxReleaseRepo, "/releases).", call. = FALSE)
+  if (!jaspSyntaxReleaseExists(jaspVersion))
+    stop(jaspSyntaxReleaseRepo, " has no release ", jaspVersion, " with SyntaxInterface libraries. Use \"development\" or ",
+         "the tag of one of its releases (see https://github.com/", jaspSyntaxReleaseRepo, "/releases).", call. = FALSE)
 
-  validateJaspVersion(version, jaspVersion)
+  list(jaspVersion = jaspVersion)
 }
 
-# NULL when the release or the file does not exist.
-downloadJaspVersionFile <- function(jaspVersion) {
-  url  <- sprintf("https://github.com/%s/releases/download/%s/jasp-version.json", jaspSyntaxReleaseRepo, jaspVersion)
-  file <- tempfile(fileext = ".json")
+# Every full build of the release workflow uploads SHA256SUMS next to the libraries.
+jaspSyntaxReleaseExists <- function(jaspVersion) {
+  url  <- sprintf("https://github.com/%s/releases/download/%s/SHA256SUMS", jaspSyntaxReleaseRepo, jaspVersion)
+  file <- tempfile()
   on.exit(unlink(file))
   res <- suppressWarnings(try(utils::download.file(url, destfile = file, quiet = TRUE, mode = "wb"), silent = TRUE))
-  if (inherits(res, "try-error") || !identical(as.integer(res), 0L) || !file.exists(file))
-    return(NULL)
-
-  jsonlite::fromJSON(file, simplifyVector = FALSE)
+  !inherits(res, "try-error") && identical(as.integer(res), 0L) && file.exists(file)
 }
 
-validateJaspVersion <- function(version, jaspVersion) {
-  bad <- function(what) stop("The jasp-version.json of JASP ", jaspVersion, " ", what, call. = FALSE)
+# The jasp-desktop commit that the SyntaxInterface library of the installed jaspSyntax was built from.
+installedJaspSyntaxDesktopSha <- function(version) {
+  tag  <- version[["jaspVersion"]]
+  prov <- installedJaspSyntaxProvenance()
+  if (!identical(unname(prov["release_tag"]), tag))
+    stop("The installed jaspSyntax has the SyntaxInterface library of release ",
+         if (is.na(prov["release_tag"])) "<unknown>" else prov["release_tag"], ", not of ", tag, ".", call. = FALSE)
 
-  if (!is.list(version))
-    bad("is not a JSON object.")
-  if (!identical(as.integer(version[["schema"]]), jaspVersionSchema))
-    bad(paste0("has schema ", format(version[["schema"]]), ", this jaspTools reads schema ", jaspVersionSchema, ": update jaspTools."))
+  sha <- unname(prov["source_bundle_jasp_desktop_sha"])
+  if (is.na(sha) || !grepl("^[0-9a-f]{40}$", sha))
+    stop("The installed jaspSyntax does not record which jasp-desktop commit release ", tag, " was built from.", call. = FALSE)
 
-  isString <- function(x) is.character(x) && length(x) == 1L && !is.na(x) && nzchar(x)
-  for (field in list(c("jaspDesktop", "sha")))
-    if (!isString(version[[field[1L]]][[field[2L]]]))
-      bad(paste0("has no ", paste(field, collapse = "."), "."))
+  sha
+}
 
-  # jasp-desktop is downloaded by commit: its archive of a tag drops the "v" from the directory name.
-  version[["jaspDesktop"]][["ref"]] <- version[["jaspDesktop"]][["sha"]]
-  version[["jaspVersion"]]          <- jaspVersion
+# The key=value lines that configure writes, read without loading jaspSyntax.
+installedJaspSyntaxProvenance <- function() {
+  pkgPath <- find.package("jaspSyntax", quiet = TRUE)
+  if (length(pkgPath) == 0L)
+    return(c(release_tag = NA_character_))
 
-  version
+  rArch <- sub("^/", "", .Platform$r_arch)
+  paths <- file.path(pkgPath[1L], "libs", c(rArch, ""), "SyntaxInterface.provenance")
+  path  <- paths[file.exists(paths)][1L]
+  if (is.na(path))
+    return(c(release_tag = NA_character_))
+
+  lines <- trimws(readLines(path, warn = FALSE))
+  lines <- lines[grepl("=", lines, fixed = TRUE) & !startsWith(lines, "#")]
+  stats::setNames(sub("^[^=]*=", "", lines), sub("=.*$", "", lines))
 }
 
 installJaspVersionSyntax <- function(version, quiet = FALSE, force = TRUE) {

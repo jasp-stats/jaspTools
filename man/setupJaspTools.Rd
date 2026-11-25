@@ -38,8 +38,7 @@ With \code{jaspVersion = "development"} jaspTools uses jasp-desktop's developmen
 installed (on CI, jaspSyntax master, which jaspTools brings along).
 
 With the tag of a JASP version, jaspTools installs, also on CI, jaspSyntax at that tag with the SyntaxInterface library
-of that release, and takes the html files and data sets from the jasp-desktop commit in the \code{jasp-version.json}
-of that release.
+of that release, and takes the html files and data sets from the jasp-desktop commit that library was built from.
 
 jaspBase is not part of a JASP version: jaspSyntax does not use it, so the module's own jaspBase (on CI, that of its
 lockfile) runs the analyses with any JASP version.
