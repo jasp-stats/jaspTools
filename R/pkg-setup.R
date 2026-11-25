@@ -14,12 +14,15 @@
 #'   \code{JASPTOOLS_JASP_VERSION} when that is set, so CI can choose it.
 #'
 #' @details
-#' With \code{jaspVersion = "development"} jaspTools uses jasp-desktop's development branch and the jaspSyntax and jaspBase
-#' that are installed (on CI, those of the module's lockfile).
+#' With \code{jaspVersion = "development"} jaspTools uses jasp-desktop's development branch and the jaspSyntax that is
+#' installed (on CI, jaspSyntax master, which jaspTools brings along).
 #'
 #' With the tag of a JASP version, jaspTools installs, also on CI, jaspSyntax at that tag with the SyntaxInterface library
-#' of that release. The \code{jasp-version.json} of that release gives the jasp-desktop commit of that JASP version and
-#' the jaspBase it pins: that jaspBase is installed, and the html files and data sets are taken from that commit.
+#' of that release, and takes the html files and data sets from the jasp-desktop commit in the \code{jasp-version.json}
+#' of that release.
+#'
+#' jaspBase is not part of a JASP version: jaspSyntax does not use it, so the module's own jaspBase (on CI, that of its
+#' lockfile) runs the analyses with any JASP version.
 #' Call it in a fresh R session: an installed package that is already loaded keeps running its old code.
 #'
 #' @export setupJaspTools
@@ -78,8 +81,8 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
     .removeCompletedSetupFiles()
 
   if (!isDevelopmentJaspVersion(version)) {
-    message("Installing the packages of JASP ", version[["jaspVersion"]], "...\n")
-    installJaspVersionPkgs(version, quiet = quiet, force = force)
+    message("Installing jaspSyntax of JASP ", version[["jaspVersion"]], "...\n")
+    installJaspVersionSyntax(version, quiet = quiet, force = force)
   }
 
   message("Fetching resources...\n")
@@ -94,9 +97,7 @@ setupJaspTools <- function(pathJaspDesktop = NULL, installJaspModules = FALSE, i
   } else {
 
     if (isTRUE(installJaspCorePkgs)) {
-      # A JASP version comes with its own jaspBase (installed above).
-      corePkgs <- if (isDevelopmentJaspVersion(version)) c("jaspBase", "jaspGraphs") else "jaspGraphs"
-      installJaspPkg(corePkgs, quiet = quiet, force = force)
+      installJaspPkg(c("jaspBase", "jaspGraphs"), quiet = quiet, force = force)
 
     }
 
@@ -121,11 +122,11 @@ printSetupArgs <- function(pathJaspDesktop, installJaspModules, installJaspCoreP
 #
 # A JASP version is a release of jaspSyntax built from a jasp-desktop tag (its Build SyntaxInterface Libraries workflow):
 # jaspSyntax is installed at that tag, with the SyntaxInterface library of that release. The jasp-version.json of the
-# release gives what the tag does not tell, the jasp-desktop and jaspBase commits of that version:
+# release gives what the tag does not tell, the jasp-desktop commit of that version (for the html files and data sets):
 #   { "schema": 1, "jaspVersion": "v0.99.1",
-#     "jaspDesktop": { "repo": "jasp-stats/jasp-desktop", "ref": "v0.99.1", "sha": "<sha>" },
-#     "jaspBase":    { "repo": "jasp-stats/jaspBase",     "sha": "<sha>" }, ... }
-# "development" is no release: jasp-desktop's development branch with the jaspSyntax and jaspBase that are installed.
+#     "jaspDesktop": { "repo": "jasp-stats/jasp-desktop", "ref": "v0.99.1", "sha": "<sha>" }, ... }
+# "development" is no release: jasp-desktop's development branch with the jaspSyntax that is installed.
+# jaspBase is not part of it: jaspSyntax does not use it, the module's own jaspBase runs the analyses.
 
 jaspVersionSchema    <- 1L
 jaspSyntaxReleaseRepo <- "jasp-stats/jaspSyntax"
@@ -153,7 +154,7 @@ readJaspVersion <- function(jaspVersion) {
   version <- downloadJaspVersionFile(jaspVersion)
   if (is.null(version))
     stop("Release ", jaspVersion, " of ", jaspSyntaxReleaseRepo, " has no jasp-version.json, so jaspTools does not know which ",
-         "packages belong to JASP ", jaspVersion, ". Use \"development\" or a JASP version whose release has that file ",
+         "jasp-desktop commit belongs to JASP ", jaspVersion, ". Use \"development\" or a JASP version whose release has that file ",
          "(see https://github.com/", jaspSyntaxReleaseRepo, "/releases).", call. = FALSE)
 
   validateJaspVersion(version, jaspVersion)
@@ -180,7 +181,7 @@ validateJaspVersion <- function(version, jaspVersion) {
     bad(paste0("has schema ", format(version[["schema"]]), ", this jaspTools reads schema ", jaspVersionSchema, ": update jaspTools."))
 
   isString <- function(x) is.character(x) && length(x) == 1L && !is.na(x) && nzchar(x)
-  for (field in list(c("jaspDesktop", "sha"), c("jaspBase", "repo"), c("jaspBase", "sha")))
+  for (field in list(c("jaspDesktop", "sha")))
     if (!isString(version[[field[1L]]][[field[2L]]]))
       bad(paste0("has no ", paste(field, collapse = "."), "."))
 
@@ -191,22 +192,16 @@ validateJaspVersion <- function(version, jaspVersion) {
   version
 }
 
-installJaspVersionPkgs <- function(version, quiet = FALSE, force = TRUE) {
-  pkgs <- c("jaspSyntax", "jaspBase")
-  loaded <- pkgs[vapply(pkgs, isPkgLoaded, logical(1L))]
-  if (length(loaded) > 0L)
-    stop(paste(loaded, collapse = " and "), if (length(loaded) == 1L) " is" else " are", " already loaded in this R session, ",
-         "which would keep running the code that is installed now. Restart R and call setupJaspTools(jaspVersion = \"",
-         version[["jaspVersion"]], "\") before anything else.", call. = FALSE)
-
+installJaspVersionSyntax <- function(version, quiet = FALSE, force = TRUE) {
   tag <- version[["jaspVersion"]]
+  if (isPkgLoaded("jaspSyntax"))
+    stop("jaspSyntax is already loaded in this R session, which would keep running the code that is installed now. ",
+         "Restart R and call setupJaspTools(jaspVersion = \"", tag, "\") before anything else.", call. = FALSE)
+
   # configure downloads the SyntaxInterface library of this release, also when the configure at the tag names another one.
   withEnvVars(c(JASPSYNTAX_RELEASE_TAG = tag),
     installGithubPkg(paste0(jaspSyntaxReleaseRepo, "@", tag), quiet = quiet, force = force)
   )
-
-  jaspBase <- version[["jaspBase"]]
-  installGithubPkg(paste0(jaspBase[["repo"]], "@", jaspBase[["sha"]]), quiet = quiet, force = force)
 
   invisible(TRUE)
 }

@@ -4,8 +4,7 @@ manifest <- function(...) {
   m <- list(
     schema      = 1L,
     jaspVersion = "v0.99.1",
-    jaspDesktop = list(repo = "jasp-stats/jasp-desktop", ref = "v0.99.1", sha = "1204d1892b1233af145bb548fe80719f331ea693"),
-    jaspBase    = list(repo = "jasp-stats/jaspBase",     sha = "71e9a4bc843d6d9e4ad5d7946b30b1cf0e6ef11b")
+    jaspDesktop = list(repo = "jasp-stats/jasp-desktop", ref = "v0.99.1", sha = "1204d1892b1233af145bb548fe80719f331ea693")
   )
   modifyList(m, list(...))
 }
@@ -45,11 +44,11 @@ test_that("a JASP version that cannot be used gives a clear error", {
   local_mocked_bindings(downloadJaspVersionFile = function(jaspVersion) manifest(schema = 2L))
   expect_error(readJaspVersion("v0.99.1"), "update jaspTools")
 
-  local_mocked_bindings(downloadJaspVersionFile = function(jaspVersion) manifest(jaspBase = list(sha = NULL)))
-  expect_error(readJaspVersion("v0.99.1"), "has no jaspBase.sha")
+  local_mocked_bindings(downloadJaspVersionFile = function(jaspVersion) manifest(jaspDesktop = list(sha = NULL)))
+  expect_error(readJaspVersion("v0.99.1"), "has no jaspDesktop.sha")
 })
 
-test_that("the packages of a JASP version are installed with the libraries of its release", {
+test_that("the jaspSyntax of a JASP version is installed with the library of its release, and nothing else", {
   # jaspSyntax is installed at the tag that was asked for, not at what jasp-version.json might say about it.
   version <- validateJaspVersion(manifest(jaspSyntax = list(ref = "elsewhere", releaseTag = "elsewhere")), "v0.99.1")
 
@@ -62,22 +61,22 @@ test_that("the packages of a JASP version are installed with the libraries of it
   )
 
   withr::local_envvar(JASPSYNTAX_RELEASE_TAG = "v-before")
-  installJaspVersionPkgs(version, quiet = TRUE)
+  installJaspVersionSyntax(version, quiet = TRUE)
 
+  # jaspBase is left alone: the module's own jaspBase runs the analyses.
   expect_identical(installs, list(
-    list(repo = "jasp-stats/jaspSyntax@v0.99.1",                                 releaseTag = "v0.99.1"),
-    list(repo = "jasp-stats/jaspBase@71e9a4bc843d6d9e4ad5d7946b30b1cf0e6ef11b", releaseTag = "v-before")
+    list(repo = "jasp-stats/jaspSyntax@v0.99.1", releaseTag = "v0.99.1")
   ))
   expect_identical(Sys.getenv("JASPSYNTAX_RELEASE_TAG"), "v-before")
 })
 
-test_that("the packages of a JASP version are not installed over loaded ones", {
+test_that("the jaspSyntax of a JASP version is not installed over a loaded one", {
   version <- validateJaspVersion(manifest(), "v0.99.1")
   local_mocked_bindings(
     isPkgLoaded = function(name) name == "jaspSyntax",
     installGithubPkg  = function(...) stop("must not install")
   )
-  expect_error(installJaspVersionPkgs(version), "jaspSyntax is already loaded.*Restart R")
+  expect_error(installJaspVersionSyntax(version), "jaspSyntax is already loaded.*Restart R")
 })
 
 test_that("withEnvVars restores unset variables", {

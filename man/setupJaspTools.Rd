@@ -34,11 +34,14 @@ This includes fetching the data library and html files and installing jaspBase a
 If no parameters are supplied the function will interactively ask for the location of these dependencies.
 }
 \details{
-With \code{jaspVersion = "development"} jaspTools uses jasp-desktop's development branch and the jaspSyntax and jaspBase
-that are installed (on CI, those of the module's lockfile).
+With \code{jaspVersion = "development"} jaspTools uses jasp-desktop's development branch and the jaspSyntax that is
+installed (on CI, jaspSyntax master, which jaspTools brings along).
 
 With the tag of a JASP version, jaspTools installs, also on CI, jaspSyntax at that tag with the SyntaxInterface library
-of that release. The \code{jasp-version.json} of that release gives the jasp-desktop commit of that JASP version and
-the jaspBase it pins: that jaspBase is installed, and the html files and data sets are taken from that commit.
+of that release, and takes the html files and data sets from the jasp-desktop commit in the \code{jasp-version.json}
+of that release.
+
+jaspBase is not part of a JASP version: jaspSyntax does not use it, so the module's own jaspBase (on CI, that of its
+lockfile) runs the analyses with any JASP version.
 Call it in a fresh R session: an installed package that is already loaded keeps running its old code.
 }
