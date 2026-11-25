@@ -17,9 +17,9 @@
 #' With \code{jaspVersion = "development"} jaspTools uses jasp-desktop's development branch and the jaspSyntax and jaspBase
 #' that are installed (on CI, those of the module's lockfile).
 #'
-#' With the tag of a JASP version, jaspTools reads the \code{jasp-version.json} of that jaspSyntax release and installs,
-#' also on CI, the packages of that JASP version: jaspSyntax at that tag with the SyntaxInterface library of that release,
-#' and the jaspBase that jasp-desktop pins. The html files and data sets are taken from that jasp-desktop commit.
+#' With the tag of a JASP version, jaspTools installs, also on CI, jaspSyntax at that tag with the SyntaxInterface library
+#' of that release. The \code{jasp-version.json} of that release gives the jasp-desktop commit of that JASP version and
+#' the jaspBase it pins: that jaspBase is installed, and the html files and data sets are taken from that commit.
 #' Call it in a fresh R session: an installed package that is already loaded keeps running its old code.
 #'
 #' @export setupJaspTools
@@ -119,12 +119,12 @@ printSetupArgs <- function(pathJaspDesktop, installJaspModules, installJaspCoreP
 
 # ---- JASP versions ----
 #
-# A JASP version is a release of jaspSyntax built from a jasp-desktop tag (its Build SyntaxInterface Libraries workflow).
-# Its jasp-version.json gives the packages of that version:
+# A JASP version is a release of jaspSyntax built from a jasp-desktop tag (its Build SyntaxInterface Libraries workflow):
+# jaspSyntax is installed at that tag, with the SyntaxInterface library of that release. The jasp-version.json of the
+# release gives what the tag does not tell, the jasp-desktop and jaspBase commits of that version:
 #   { "schema": 1, "jaspVersion": "v0.99.1",
-#     "jaspSyntax":  { "repo": "jasp-stats/jaspSyntax",   "ref": "v0.99.1", "releaseTag": "v0.99.1" },
 #     "jaspDesktop": { "repo": "jasp-stats/jasp-desktop", "ref": "v0.99.1", "sha": "<sha>" },
-#     "jaspBase":    { "repo": "jasp-stats/jaspBase",     "sha": "<sha>" } }
+#     "jaspBase":    { "repo": "jasp-stats/jaspBase",     "sha": "<sha>" }, ... }
 # "development" is no release: jasp-desktop's development branch with the jaspSyntax and jaspBase that are installed.
 
 jaspVersionSchema    <- 1L
@@ -180,8 +180,7 @@ validateJaspVersion <- function(version, jaspVersion) {
     bad(paste0("has schema ", format(version[["schema"]]), ", this jaspTools reads schema ", jaspVersionSchema, ": update jaspTools."))
 
   isString <- function(x) is.character(x) && length(x) == 1L && !is.na(x) && nzchar(x)
-  for (field in list(c("jaspSyntax", "repo"), c("jaspSyntax", "ref"), c("jaspSyntax", "releaseTag"),
-                     c("jaspDesktop", "sha"), c("jaspBase", "repo"), c("jaspBase", "sha")))
+  for (field in list(c("jaspDesktop", "sha"), c("jaspBase", "repo"), c("jaspBase", "sha")))
     if (!isString(version[[field[1L]]][[field[2L]]]))
       bad(paste0("has no ", paste(field, collapse = "."), "."))
 
@@ -200,10 +199,10 @@ installJaspVersionPkgs <- function(version, quiet = FALSE, force = TRUE) {
          "which would keep running the code that is installed now. Restart R and call setupJaspTools(jaspVersion = \"",
          version[["jaspVersion"]], "\") before anything else.", call. = FALSE)
 
-  syntax <- version[["jaspSyntax"]]
-  # configure downloads the SyntaxInterface library of this release, also when the configure at the ref names another one.
-  withEnvVars(c(JASPSYNTAX_RELEASE_TAG = syntax[["releaseTag"]]),
-    installGithubPkg(paste0(syntax[["repo"]], "@", syntax[["ref"]]), quiet = quiet, force = force)
+  tag <- version[["jaspVersion"]]
+  # configure downloads the SyntaxInterface library of this release, also when the configure at the tag names another one.
+  withEnvVars(c(JASPSYNTAX_RELEASE_TAG = tag),
+    installGithubPkg(paste0(jaspSyntaxReleaseRepo, "@", tag), quiet = quiet, force = force)
   )
 
   jaspBase <- version[["jaspBase"]]

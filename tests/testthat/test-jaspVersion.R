@@ -4,7 +4,6 @@ manifest <- function(...) {
   m <- list(
     schema      = 1L,
     jaspVersion = "v0.99.1",
-    jaspSyntax  = list(repo = "jasp-stats/jaspSyntax",   ref = "v0.99.1", releaseTag = "v0.99.1"),
     jaspDesktop = list(repo = "jasp-stats/jasp-desktop", ref = "v0.99.1", sha = "1204d1892b1233af145bb548fe80719f331ea693"),
     jaspBase    = list(repo = "jasp-stats/jaspBase",     sha = "71e9a4bc843d6d9e4ad5d7946b30b1cf0e6ef11b")
   )
@@ -30,7 +29,7 @@ test_that("a JASP version is read from the jasp-version.json of its release", {
   version <- readJaspVersion("v0.99.1")
   expect_identical(requested, "v0.99.1")
   expect_false(isDevelopmentJaspVersion(version))
-  expect_identical(version$jaspSyntax$releaseTag, "v0.99.1")
+  expect_identical(version$jaspVersion, "v0.99.1")
   # jasp-desktop is downloaded by commit
   expect_identical(version$jaspDesktop$ref, "1204d1892b1233af145bb548fe80719f331ea693")
 })
@@ -51,7 +50,8 @@ test_that("a JASP version that cannot be used gives a clear error", {
 })
 
 test_that("the packages of a JASP version are installed with the libraries of its release", {
-  version <- validateJaspVersion(manifest(), "v0.99.1")
+  # jaspSyntax is installed at the tag that was asked for, not at what jasp-version.json might say about it.
+  version <- validateJaspVersion(manifest(jaspSyntax = list(ref = "elsewhere", releaseTag = "elsewhere")), "v0.99.1")
 
   installs <- list()
   local_mocked_bindings(
