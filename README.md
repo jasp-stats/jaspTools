@@ -27,7 +27,8 @@ By default jaspTools runs the analyses with the development version of JASP. To 
 JASP version, give its tag, e.g. `setupJaspTools(jaspVersion = "v0.99.1")` (or set the environment variable
 `JASPTOOLS_JASP_VERSION`, as CI does), in a fresh R session. That tag names a
 [jaspSyntax release](https://github.com/jasp-stats/jaspSyntax/releases): jaspTools installs jaspSyntax at that tag
-with the library of that release, and the jaspBase listed in the release's `jasp-version.json`.
+with the library of that release, and takes the html files and data sets from the jasp-desktop commit in the
+release's `jasp-version.json`. jaspBase is not part of a JASP version: the module's own jaspBase is used.
 
 ## Functionality
 At the moment jaspTools has three classes of functions.
