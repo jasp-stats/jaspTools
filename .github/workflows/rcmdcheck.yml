@@ -51,10 +51,10 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install libarchive
 
-      # jaspSyntax needs libOpenGL.so.0; pak does not install it, because the R-universe index does not list it
+      # jaspSyntax needs libOpenGL.so.0 and libEGL.so.1; pak does not install them, because the R-universe index does not list them
       - name: Install OpenGL on Linux
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libopengl0
+        run: sudo apt-get update && sudo apt-get install -y libopengl0 libegl1
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
