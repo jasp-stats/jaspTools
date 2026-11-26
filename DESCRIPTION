@@ -30,7 +30,7 @@ Suggests:
   jaspBase,
   withr
 Remotes:
-  jasp-stats/jaspBase,
-  jasp-stats/jaspSyntax
+  jasp-stats/jaspBase
+Additional_repositories: https://jasp-stats.r-universe.dev
 Roxygen: list(markdown = TRUE)
 Config/roxygen2/version: 8.0.0
