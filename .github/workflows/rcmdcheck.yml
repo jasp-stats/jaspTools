@@ -21,8 +21,9 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
-      # jaspTools is not a CRAN package: it imports jaspSyntax from GitHub (Remotes), which the
-      # CRAN incoming feasibility check reports as a WARNING
+      # jaspTools is not a CRAN package: it imports jaspSyntax from the jasp-stats R-universe
+      # (Additional_repositories) and suggests jaspBase from GitHub (Remotes), which the CRAN
+      # incoming feasibility check reports
       _R_CHECK_CRAN_INCOMING_: false
 
     steps:
@@ -36,6 +37,8 @@ jobs:
           r-version: ${{ matrix.config.r }}
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
+          # jaspSyntax comes from here: pak, which setup-r-dependencies uses, ignores Additional_repositories
+          extra-repositories: https://jasp-stats.r-universe.dev
 
 # no longer needed if https://github.com/rstudio/r-system-requirements/issues/81 is resolved
       - name: Install libarchive on macOS
