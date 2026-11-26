@@ -24,6 +24,23 @@ jaspTools needs [jaspSyntax](https://github.com/jasp-stats/jaspSyntax), which co
 options(repos = c(jasp = "https://jasp-stats.r-universe.dev", getOption("repos")))
 ```
 
+### Using another jaspSyntax
+jaspTools uses whatever jaspSyntax is installed; the universe is only used when jaspSyntax is missing or too old. To run jaspTools with another jaspSyntax, install that one over it:
+
+- a branch, tag or commit of jaspSyntax:
+  ```
+  remotes::install_github("jasp-stats/jaspSyntax@<ref>", upgrade = "never")
+  ```
+  This builds from source. Set `Sys.setenv(JASPSYNTAX_RELEASE_TAG = "<release>")` first to use the SyntaxInterface library of another jaspSyntax release.
+- your own jasp-desktop build:
+  ```
+  install.packages("<path to jaspSyntax checkout>", repos = NULL, type = "source",
+                   configure.vars = "JASP_BUILD_DIR='<jasp-desktop build dir>'")
+  ```
+  or `configure.vars = "JASPSYNTAX_LIB_PATH='<path to the SyntaxInterface library>'"` for a single library file.
+
+The universe only serves the latest version of jaspSyntax, so an older one has to come from its git tag. Keep in mind that `update.packages()`, or `pak`/`install.packages()` with the universe in your repositories, replaces your jaspSyntax as soon as the universe has a higher version.
+
 Note: On some macs, it seems to be hard to build the dependency "data.table" from source resulting in the error message "clang: error: unsupported option '-fopenmp'". One hack to get around this is to select no when asked to install the package from source. This will install an older version of data.table without openmp support, which suffices for jaspTools. Alternatively, you might want to upgrade [clang](https://cran.r-project.org/bin/macosx/tools/). 
 
 After loading jaspTools with `library(jaspTools)`, you need to call `setupJaspTools()`. This is
