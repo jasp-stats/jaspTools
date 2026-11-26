@@ -29,10 +29,17 @@ jobs:
         with:
           r-version: ${{ matrix.config.r }}
           use-public-rspm: true
+          # jaspSyntax comes from here: pak, which setup-r-dependencies uses, ignores Additional_repositories
+          extra-repositories: https://jasp-stats.r-universe.dev
 
       - name: Install libarchive on macOS
         if: runner.os == 'macOS'
         run: brew install libarchive
+
+      # jaspSyntax needs libOpenGL.so.0; pak does not install it, because the R-universe index does not list it
+      - name: Install OpenGL on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libopengl0
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
