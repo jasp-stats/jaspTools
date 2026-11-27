@@ -108,6 +108,21 @@ snapshotMigrationSource <- function(path) {
   # before extracting data so a custom producer is evaluated exactly once.
   nodeVar <- "snapshotTableNode"
   while (any(grepl(nodeVar, lines, fixed = TRUE))) nodeVar <- paste0(nodeVar, "_")
+  targetStarts <- sort(vapply(targets, start, numeric(1)))
+  generated <- any(grepl("This test file was auto-generated from a JASP example file.", lines, fixed = TRUE))
+  # Test files often identify the analysis in context() and describe each
+  # output or scenario in test_that(). Use only literal source labels.
+  fileTitle <- sub("^test[-_]", "", tools::file_path_sans_ext(basename(path)))
+  fileTitle <- sub("^(other|verified|library)-", "", fileTitle)
+  headers <- list()
+  for (j in which(p$token == "SYMBOL_FUNCTION_CALL" & p$text == "context")) {
+    call <- parents[parents[j]]
+    if (!parents[call] && isFunction(value(parents[j]), "context", "testthat")) {
+      args <- exprs(call)
+      if (length(args) == 2L && is.character(title <- value(args[2L])))
+        headers[[as.character(p$line1[call])]] <- sub("\\s+--\\s+.*$", "", title)
+    }
+  }
   used <- character()
   current <- which(p$token == "SYMBOL_FUNCTION_CALL" & p$text == "expect_snapshot_table")
   for (i in current) {
@@ -196,19 +211,17 @@ snapshotMigrationSource <- function(path) {
         finalEdits <<- c(finalEdits, list(removeRef))
       }
     }
-    selector <- paste(deparse(nodeExpr, width.cutoff = 500L), collapse = " ")
-    leaf <- if (is.symbol(nodeExpr)) as.character(nodeExpr) else "table"
+    leaf <- if (is.symbol(nodeExpr)) as.character(nodeExpr) else ""
     if (is.call(nodeExpr) && length(nodeExpr) == 3L && is.symbol(nodeExpr[[1L]]) &&
         as.character(nodeExpr[[1L]]) %in% c("$", "[["))
-      leaf <- paste(deparse(nodeExpr[[3L]]), collapse = "")
+      if (is.symbol(nodeExpr[[3L]]) || is.character(nodeExpr[[3L]]) || is.numeric(nodeExpr[[3L]]))
+        leaf <- as.character(nodeExpr[[3L]])
     label <- if (!is.null(args$label)) value(args$label)
-    stem <- resultSnapshotName("table", c(list(context$desc, selector), if (is.character(label)) list(label), list(leaf)))
-    name <- stem
-    n <- 1L
-    while (name %in% used) {
-      n <- n + 1L
-      name <- paste0(stem, "-", n)
-    }
+    priorHeaders <- headers[as.integer(names(headers)) <= p$line1[i]]
+    title <- if (length(priorHeaders)) priorHeaders[[length(priorHeaders)]] else fileTitle
+    multi <- diff(findInterval(c(start(context$body) - 1L, end(context$body)), targetStarts)) > 1L
+    stem <- migrationSnapshotStem(context$desc, label, leaf, title, generated, multi)
+    name <- uniqueSnapshotName(stem, used)
     used <<- c(used, name)
     nameText <- encodeString(name, quote = '"')
     check <- function(fun, node) paste0(fun, "(", node, ", ", nameText, ")")
@@ -291,4 +304,34 @@ snapshotMigrationSource <- function(path) {
     utils::head(out, -1L)
   }
   list(text = rewrite(finalEdits), capture = rewrite(captureEdits), sites = sites)
+}
+
+migrationSnapshotStem <- function(description, label, key, title, generated, multi) {
+  label <- snapshotNameSlug(label)
+  if (nzchar(label)) return(label)
+
+  key <- snapshotKeySlug(key)
+  if (key %in% c("node", "result", "results", "table")) key <- ""
+  title <- snapshotNameSlug(title)
+  desc <- sub("^[0-9]+(?:[.][0-9]+)+\\s+", "", description, perl = TRUE)
+  desc <- snapshotNameSlug(desc)
+  # Generated files share a test case across all outputs from an analysis.
+  if (grepl("-analysis-[0-9]+-results-match$", desc)) {
+    analysis <- sub("^.*-(analysis-[0-9]+)-results-match$", "\\1", desc)
+    return(paste(analysis, if (nzchar(key)) key else "table", sep = "-"))
+  }
+  if (generated && endsWith(desc, "-results-match") && nzchar(key)) return(key)
+  if (grepl("^main-table-(results-)?match(es)?-for-", desc)) {
+    desc <- sub("^main-table-(results-)?match(es)?-for-", "", desc)
+    if (nzchar(title) && endsWith(title, desc)) return(title)
+  } else if (grepl("^(main-)?table-(results-)?match(es)?($|-)", desc)) {
+    return(if (nzchar(title)) title else if (nzchar(key)) key else "table")
+  }
+  desc <- sub("(-(table|results|table-results))?-match(es)?$", "", desc)
+  desc <- sub("-is-consistent-with-.*$", "", desc)
+  if (nzchar(desc) && !desc %in% c("main-table", "table", "results")) {
+    if (multi && nzchar(key) && !grepl(key, desc, fixed = TRUE)) return(paste(desc, key, sep = "-"))
+    return(desc)
+  }
+  if (nzchar(key)) key else if (nzchar(title)) title else "table"
 }

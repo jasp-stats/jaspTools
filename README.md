@@ -240,6 +240,10 @@ rollout <- jaspTools::migrateSnapshotTests(modules, apply = TRUE)
 
 Each file runs in a fresh copy with its original inline comparisons. For
 every supported check, the tool captures the **complete table from that run**.
+Migration takes snapshot names from explicit labels, test descriptions, or
+result keys. For example, the one-sample t-test is stored as
+`one-sample-t-test.table.json`. Newly generated example tests use the table
+title when available. Names that still repeat get a short suffix such as `-2`.
 It reruns the rewritten test with fresh fixtures and the new references before publishing
 the test and its JSON files together. A legacy mismatch or missing capture
 leaves that file for a later attempt. Review the module's Git diff and browse

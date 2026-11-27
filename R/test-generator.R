@@ -331,7 +331,7 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
     return(result)
   }
   previous <- if (file.exists(testFilePath))
-    generatedSnapshotIDs(parse(testFilePath, keep.source = FALSE), regenerating = testFileName)
+    generatedSnapshotCalls(parse(testFilePath, keep.source = FALSE), regenerating = testFileName)
 
   # Run each analysis and generate test expectations
   testBlocks <- list()
@@ -387,7 +387,8 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
       if (length(mismatches) > 0)
         warnJaspFileMismatches(i, analysisName, jaspFile, mismatches)
 
-      tests <- getTests(results$results, analysisIndex = i)
+      tests <- getTests(results$results, analysisIndex = i, multipleAnalyses = length(analyses) > 1L,
+                        previous = previous, description = generatedTestDescription(analysisName, i, length(analyses)))
       snapshots <- c(snapshots, Filter(function(test) test$type != "plot", tests))
     }
     testBlocks[[length(testBlocks) + 1L]] <- generateExampleTestBlock(
@@ -402,9 +403,9 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
   # Generate the test file content
   testContent <- generateExampleTestFileContent(baseName, sourceFolder, testBlocks)
 
-  if (length(previous)) {
-    current <- generatedSnapshotIDs(parse(text = testContent, keep.source = FALSE))
-    removed <- setdiff(previous, current)
+  if (NROW(previous) > 0L) {
+    current <- generatedSnapshotCalls(parse(text = testContent, keep.source = FALSE))
+    removed <- setdiff(paste(previous$type, previous$name), paste(current$type, current$name))
     if (length(removed))
       stop("Regenerating ", testFileName, " would remove snapshot expectations: ", paste(removed, collapse = ", "),
            ". Review these references and remove their expectations from the existing test file ",
@@ -468,20 +469,23 @@ publishGeneratedTest <- function(testFile, jaspFile, copiedTo, content = NULL, s
 }
 
 # Inspect generated R code without evaluating a module's test file or its settings.
-generatedSnapshotIDs <- function(code, regenerating = NULL) {
-  ids <- character()
+generatedSnapshotCalls <- function(code, regenerating = NULL) {
+  calls <- data.frame(type = character(), name = character(), description = character(), node = character())
   types <- c(expect_equal_plots = "plot", expect_snapshot_table = "table", expect_snapshot_html = "html")
   customSettings <- function() {
     stop("Regenerating ", regenerating, " would overwrite custom table snapshot settings. ",
          "Run the existing test file to stage changes with its settings.", call. = FALSE)
   }
-  visit <- function(expr) {
+  visit <- function(expr, description = "") {
     if (is.call(expr)) {
       fun <- expr[[1L]]
+      if (identical(fun, quote(testthat::test_that))) fun <- quote(test_that)
       if (is.call(fun) && identical(fun[[1L]], quote(`::`)) && identical(fun[[2L]], quote(jaspTools)))
         fun <- fun[[3L]]
       if (is.symbol(fun)) {
         name <- as.character(fun)
+        if (name == "test_that" && length(expr) >= 3L && is.character(expr[[2L]]))
+          description <- expr[[2L]]
         if (!is.null(regenerating) && name == "local_table_snapshot_tolerance")
           customSettings()
         if (name %in% names(types)) {
@@ -493,16 +497,16 @@ generatedSnapshotIDs <- function(code, regenerating = NULL) {
             customSettings()
           id <- args[["name"]]
           if (is.character(id) && length(id) == 1L)
-            ids <<- c(ids, paste(types[[name]], id))
+            calls[nrow(calls) + 1L, ] <<- list(types[[name]], id, description, deparse1(args[["node"]]))
         }
       }
     }
     if (is.call(expr) || is.expression(expr))
       for (i in seq_along(expr))
-        visit(expr[[i]])
+        visit(expr[[i]], description)
   }
   visit(code)
-  unique(ids)
+  calls
 }
 
 
@@ -550,14 +554,18 @@ warnJaspFileMismatches <- function(index, analysisName, jaspFile, mismatches) {
 #' @keywords internal
 generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses, jaspFileName,
                                      sourceFolder, results, syntax = NULL,
-                                     tests = getTests(results$results, analysisIndex)) {
-  label <- if (totalAnalyses > 1) paste0(analysisName, " (analysis ", analysisIndex, ")") else analysisName
-  desc <- paste(label, if (is.null(results)) "runs without error" else "results match")
+                                     tests = getTests(results$results, analysisIndex, totalAnalyses > 1L)) {
+  desc <- generatedTestDescription(analysisName, analysisIndex, totalAnalyses, is.null(results))
   lines <- c(paste0("test_that(", encodeString(desc, quote = '"'), ", {"),
              "  jaspTools::preserveSnapshotReferences()", "",
              runFromJaspFileLines(sourceFolder, jaspFileName, analysisIndex, syntax),
              resultExpectationLines(tests), "})")
   paste(lines, collapse = "\n")
+}
+
+generatedTestDescription <- function(analysisName, analysisIndex, totalAnalyses, failed = FALSE) {
+  label <- if (totalAnalyses > 1) paste0(analysisName, " (analysis ", analysisIndex, ")") else analysisName
+  paste(label, if (failed) "runs without error" else "results match")
 }
 
 
@@ -600,7 +608,8 @@ makeUnitTestsFromResults <- function(results, name, dataset, options, datasets =
   cat(output)
 }
 
-getTests <- function(results, analysisIndex = NULL) {
+getTests <- function(results, analysisIndex = NULL, multipleAnalyses = !is.null(analysisIndex),
+                     previous = NULL, description = "") {
   tests <- list()
   figureNumber <- 0L
 
@@ -634,12 +643,18 @@ getTests <- function(results, analysisIndex = NULL) {
           if (!is.character(title) || length(title) != 1L || is.na(title) || !nzchar(title))
             title <- if (length(path)) as.character(path[[length(path)]]) else type
           name <- gsub("-+", "-", gsub("\\W", "-", tolower(title)))
-          used <- vapply(tests, function(test) str_standardise_snapshot_name(test$name), character(1L))
+          plots <- Filter(function(test) test$type == "plot", tests)
+          used <- vapply(plots, function(test) str_standardise_snapshot_name(test$name), character(1L))
           if (!nzchar(str_standardise_snapshot_name(name)) || str_standardise_snapshot_name(name) %in% used)
-            name <- resultSnapshotName("plot", path)
+            name <- duplicatePlotSnapshotName(path)
         }
       } else {
-        name <- resultSnapshotName(type, path, analysisIndex)
+        title <- node[["title"]]
+        name <- if (is.character(title) && length(title) == 1L && !is.na(title) && title != "hide me")
+          snapshotNameSlug(title) else ""
+        if (!nzchar(name) && length(path))
+          name <- snapshotKeySlug(path[[length(path)]])
+        if (!nzchar(name)) name <- type
       }
       tests[[length(tests) + 1L]] <<- list(type = type, path = path, node = node, name = name)
       return()
@@ -670,12 +685,37 @@ getTests <- function(results, analysisIndex = NULL) {
   }
 
   visit(results, list())
+  for (type in c("table", "html")) {
+    indices <- which(vapply(tests, function(test) test$type == type, logical(1)))
+    stems <- vapply(tests[indices], "[[", "", "name")
+    repeated <- duplicated(stems) | duplicated(stems, fromLast = TRUE)
+    known <- previous[previous$type == type, , drop = FALSE]
+    used <- known$name
+    for (i in seq_along(indices)) {
+      test <- tests[[indices[i]]]
+      # A reviewed reference belongs to this output even when its title or a
+      # neighbouring result changes. This also retains older hash-based names.
+      prior <- known$name[known$description == description & known$node == resultNodeCode(test$path)]
+      if (length(prior) == 1L) {
+        test$name <- prior
+      } else {
+        stem <- stems[[i]]
+        if (repeated[i]) {
+          keys <- vapply(test$path, snapshotKeySlug, "")
+          stem <- paste(c(stem, setdiff(keys, c("", "collection", stem))), collapse = "-")
+        }
+        if (multipleAnalyses) stem <- paste("analysis", analysisIndex, stem, sep = "-")
+        test$name <- uniqueSnapshotName(stem, used)
+      }
+      used <- c(used, test$name)
+      tests[[indices[i]]] <- test
+    }
+  }
   tests
 }
 
-# Include the whole path in the hash so punctuation, non-ASCII keys and identically named
-# leaves in different collections remain distinct. Keep a short, readable leaf name in the file.
-resultSnapshotName <- function(type, path, analysisIndex = NULL) {
+# This is the established fallback for manually generated duplicate plot titles.
+duplicatePlotSnapshotName <- function(path) {
   parts <- vapply(path, function(key) {
     if (is.numeric(key)) return(paste0("#", key))
     key <- enc2utf8(key)
@@ -687,14 +727,18 @@ resultSnapshotName <- function(type, path, analysisIndex = NULL) {
   leaf <- chartr("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz", leaf)
   leaf <- gsub("[^a-z0-9]+", "-", leaf, perl = TRUE)
   leaf <- gsub("^-|-$", "", substr(leaf, 1L, 40L))
-  paste(c("analysis", analysisIndex, type, leaf[nzchar(leaf)], hash), collapse = "-")
+  paste(c("analysis", "plot", leaf[nzchar(leaf)], hash), collapse = "-")
+}
+
+resultNodeCode <- function(path) {
+  index <- paste(vapply(path, function(key) {
+    paste0("[[", if (is.numeric(key)) key else encodeString(key, quote = '"'), "]]")
+  }, character(1L)), collapse = "")
+  paste0('results[["results"]]', index)
 }
 
 snapshotExpectationLines <- function(test) {
-  index <- paste(vapply(test$path, function(key) {
-    paste0("[[", if (is.numeric(key)) key else encodeString(key, quote = '"'), "]]")
-  }, character(1L)), collapse = "")
-  node <- paste0('results[["results"]]', index)
+  node <- resultNodeCode(test$path)
   name <- encodeString(test$name, quote = '"')
   if (test$type == "plot")
     return(c(paste0('  plotName <- ', node, '[["data"]]'),

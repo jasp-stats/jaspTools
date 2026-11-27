@@ -12,7 +12,7 @@ generateExampleTestBlock(
   sourceFolder,
   results,
   syntax = NULL,
-  tests = getTests(results$results, analysisIndex)
+  tests = getTests(results$results, analysisIndex, totalAnalyses > 1L)
 )
 }
 \arguments{

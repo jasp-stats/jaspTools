@@ -16,6 +16,8 @@ test_that("generated expectations preserve complete output nodes and stable resu
   names <- vapply(tests, "[[", "", "name")
   expect_false(anyDuplicated(names) > 0L)
   expect_identical(names[c(5, 7)], c("analysis-2_figure-1_same-title", "analysis-2_figure-2_same-title"))
+  expect_identical(names[c(1, 2, 6)], c("analysis-2-summary-a-container-a-b",
+    "analysis-2-summary-a-container-a-b-2", "analysis-2-summary-a-other-a-b"))
   expect_true(all(grepl("^[a-z0-9][a-z0-9_-]+$", names)))
   extra <- getTests(c(list(first = empty), tree), analysisIndex = 2)
   expect_identical(names, vapply(extra[-1L], "[[", "", "name"))
@@ -103,7 +105,8 @@ test_that("regeneration recognises literal snapshot names in previous tests", {
     })
   )
   test <- c(test, parse(text = 'anotherPackage::expect_snapshot_html(html, "elsewhere")'))
-  expect_identical(generatedSnapshotIDs(test), c("table stats", "html details", "plot gg"))
+  calls <- generatedSnapshotCalls(test)
+  expect_identical(paste(calls$type, calls$name), c("table stats", "html details", "plot gg"))
 })
 
 test_that("example generation seeds from the rerun and stages changed snapshots", {
@@ -125,6 +128,8 @@ test_that("example generation seeds from the rerun and stages changed snapshots"
   refHtml <- list.files(refDir, "\\.html$", full.names = TRUE)
   expect_length(refTable, 1)
   expect_length(refHtml, 1)
+  expect_identical(basename(refTable), "results.table.json")
+  expect_identical(basename(refHtml), "html.html")
   expect_equal(jsonlite::read_json(refTable)$data[[1]]$score, 20)
   expect_true(any(grepl("<p>first</p>", readLines(refHtml), fixed = TRUE)))
   replay <- as.data.frame(testthat::test_dir(dirname(file), reporter = "silent", stop_on_failure = FALSE))
@@ -157,6 +162,48 @@ test_that("example generation seeds from the rerun and stages changed snapshots"
   results <- list(status = "fatalError", results = list(errorMessage = "example failed"))
   expect_error(generate(), "Could not regenerate.*example failed")
   expect_identical(tools::md5sum(names(originalFiles)), originalFiles)
+})
+
+test_that("regeneration retains reviewed names when result titles or neighbours change", {
+  module <- withr::local_tempdir()
+  saved <- list(list(name = "Example", status = "complete", results = list()))
+  html <- function(title) list(title = title, rawtext = "value", text = "<p>value</p>")
+  results <- list(status = "complete", results = list(old = html("Analysis summary"), extra = html("Caf\u00e9")))
+  local_mocked_bindings(readAnalysisResultsFromJaspFile = function(...) saved, .package = "jaspSyntax")
+  local_mocked_bindings(hasModuleDirs = function() FALSE, jaspFileAnalysisSyntax = function(...) NULL,
+                        runAnalysisFromJaspFile = function(...) results, jaspFileMismatches = function(...) character())
+  generate <- function() makeTestsFromSingleJASPFile(file.path(module, "fixture.jasp"), module, "other", overwrite = TRUE)
+  file <- generate()
+  dir <- file.path(dirname(file), "_snaps", "other-fixture")
+  oldHash <- "analysis-1-html-old-9687809954ef5456"
+  # An older generated test and a manually chosen name already have reviewed files.
+  content <- readLines(file)
+  content <- sub('"analysis-summary"', paste0('"', oldHash, '"'), content, fixed = TRUE)
+  content <- sub('"cafe"', '"custom-name"', content, fixed = TRUE)
+  writeLines(content, file)
+  old <- file.path(dir, paste0(c(oldHash, "custom-name"), ".html"))
+  expect_true(all(file.rename(file.path(dir, c("analysis-summary.html", "cafe.html")), old)))
+  hashes <- tools::md5sum(old)
+  results$results <- c(list(new = html("Custom name")), results$results)
+  results$results$old$title <- "Updated title"
+  generate()
+  expect_identical(tools::md5sum(old), hashes)
+  expect_true(file.exists(snapshotCandidatePath(old[1L])))
+  expect_true(file.exists(file.path(dir, "custom-name-2.html")))
+  expect_identical(generatedSnapshotCalls(parse(file))$name, c("custom-name-2", oldHash, "custom-name"))
+  all <- c(file, list.files(dir, full.names = TRUE))
+  before <- tools::md5sum(all)
+  generate()
+  expect_identical(tools::md5sum(all), before)
+})
+
+test_that("table and HTML names are portable and independent within each test file", {
+  html <- list(title = "One Sample T-Test", text = "<p>summary</p>", rawtext = "summary")
+  table <- list(title = "One Sample T-Test", schema = list(fields = list()), data = list())
+  tests <- getTests(list(summary = html, ttest = table, note = utils::modifyList(html, list(title = "CON")),
+                        modelSummaryContainer_pooledEstimatesTable = within(table, rm(title))))
+  expect_identical(vapply(tests, "[[", "", "name"),
+                   c("one-sample-t-test", "one-sample-t-test", "con-snapshot", "pooled-estimates"))
 })
 
 test_that("a first failed replay leaves no table, HTML or plot artifacts", {

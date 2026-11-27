@@ -157,3 +157,34 @@ test_that("snapshot names distinguish repeated cases and coexist with existing n
   unrelated <- planMigrationText(c("# new header", "", block))
   expect_identical(unrelated$sites$name, one$sites$name)
 })
+
+test_that("migration names identify the analysis, test scenario or specific result", {
+  fixture <- c('context("One Sample TTest -- Verification project")',
+    'test_that("Main table results match R, SPSS, SAS and MiniTab", {',
+    '  expect_equal_tables(results$results$ttest$data, list(0))', '})',
+    'test_that("Main table results match for Wilcoxon signed rank", {',
+    '  expect_equal_tables(results$results$ttest$data, list(0))', '})',
+    'test_that("Posterior Estimates per Model table results match", {',
+    '  expect_equal_tables(results$bmaTable$data, list(0))', '})',
+    'test_that("WaapWls (analysis 1) results match", {',
+    '  expect_equal_tables(results$modelSummaryContainer_pooledEstimatesTable$data, list(0))',
+    '  expect_equal_tables(results$modelSummaryContainer_testsTable$data, list(0))',
+    '  expect_equal_tables(results$extra$data, list(0), label = "Sensitivity to prior width")', '})')
+  names <- c("one-sample-t-test", "wilcoxon-signed-rank", "posterior-estimates-per-model",
+             "analysis-1-pooled-estimates", "analysis-1-tests", "sensitivity-to-prior-width")
+  plan <- planMigrationText(fixture)
+  expect_identical(plan$sites$name, names)
+  expect_identical(planMigrationText(plan$text)$text, plan$text)
+})
+
+test_that("multiple outputs preserve the meaningful part of the description and key", {
+  fixture <- c('test_that("Cross-validation", {',
+    '  expect_equal_tables(results$weights$data, list(0))',
+    '  expect_equal_tables(results$errors$data, list(0))', '})',
+    'test_that("I\u00b2 table results match", {',
+    '  expect_equal_tables(results$summaryI2Table$data, list(0))', '})',
+    'test_that("Analysis (analysis 2) results match", {',
+    '  expect_equal_tables(results$randomEstimatesContainer_containerS_tableS$data, list(0))', '})')
+  expect_identical(planMigrationText(fixture)$sites$name, c("cross-validation-weights", "cross-validation-errors",
+                                                          "i2", "analysis-2-random-estimates-s"))
+})
