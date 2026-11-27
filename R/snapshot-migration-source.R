@@ -71,10 +71,20 @@ snapshotMigrationSource <- function(path) {
   }
   # Limit alias folding to ordinary option/data setup. An unknown helper,
   # delayed expression or lookup by name might observe the old rows later.
-  ordinarySetup <- function(x, alias) {
+  ordinarySetup <- function(x, alias, generated = FALSE) {
     if (is.symbol(x)) return(!identical(x, alias))
     if (!is.call(x)) return(TRUE)
     fun <- x[[1L]]
+    if (generated && (symbol(fun, "<-") || symbol(fun, "="))) {
+      # Generated setup writes these locals. Rebinding a function (e.g. to
+      # get()) could make an otherwise ordinary call read table indirectly.
+      locals <- c("jaspFile", "opts", "dataset", "results", "plotName", "testPlot")
+      if (length(x) != 3L || !is.symbol(x[[2L]]) || !as.character(x[[2L]]) %in% locals) return(FALSE)
+    }
+    if (generated && (identical(fun, quote(testthat::test_path)) ||
+                      identical(fun, quote(jaspSyntax::readDatasetFromJaspFile)) ||
+                      identical(fun, quote(jaspTools::expect_equal_plots))))
+      return(all(vapply(as.list(x)[-1L], ordinarySetup, logical(1), alias = alias, generated = TRUE)))
     if (is.call(fun) && length(fun) == 3L && symbol(fun[[1L]], "::") &&
         symbol(fun[[2L]], "jaspTools")) fun <- fun[[3L]]
     if (!is.symbol(fun)) return(FALSE)
@@ -82,7 +92,7 @@ snapshotMigrationSource <- function(path) {
     allowed <- c("<-", "=", "$", "[[", "(", "+", "-", "*", "/", ":", "c", "list", "data.frame",
                  "set.seed", "analysisOptions", "runAnalysis", "runAnalysisFromJaspFile")
     if (!name %in% allowed && !grepl("^init[A-Za-z0-9]*Options$", name)) return(FALSE)
-    all(vapply(as.list(x)[-1L], ordinarySetup, logical(1), alias = alias))
+    all(vapply(as.list(x)[-1L], ordinarySetup, logical(1), alias = alias, generated = generated))
   }
   firstToken <- function(i) p$token[children(i)[1L]]
   # A test_that body (and its if-branches) executes a site at most once.
@@ -110,6 +120,31 @@ snapshotMigrationSource <- function(path) {
   while (any(grepl(nodeVar, lines, fixed = TRUE))) nodeVar <- paste0(nodeVar, "_")
   targetStarts <- sort(vapply(targets, start, numeric(1)))
   generated <- any(grepl("This test file was auto-generated from a JASP example file.", lines, fixed = TRUE))
+  # In an unmodified generated test, each write to table supplies exactly
+  # one expectation. Check the whole body, including setup and plot checks,
+  # so a custom call cannot register a deferred read or look up table by name.
+  generatedTableBody <- function(test) {
+    if (!is.call(test) || length(test) != 3L || !isFunction(test[[1L]], "test_that", "testthat") ||
+        !is.call(test[[3L]]) || !symbol(test[[3L]][[1L]], "{")) return(FALSE)
+    pendingTable <- FALSE
+    for (stmt in as.list(test[[3L]])[-1L]) {
+      if (!is.call(stmt)) return(FALSE)
+      if (pendingTable) {
+        if (!identical(stmt[[1L]], quote(jaspTools::expect_equal_tables)) ||
+            length(stmt) != 3L || !is.null(names(stmt)) || !symbol(stmt[[2L]], "table") ||
+            !literal(stmt[[3L]])) return(FALSE)
+        pendingTable <- FALSE
+      } else if (length(stmt) == 3L && symbol(stmt[[1L]], "<-") && symbol(stmt[[2L]], "table")) {
+        if (!dataSelector(stmt[[3L]]) || !ordinarySetup(stmt[[3L]], quote(table), generated = TRUE)) return(FALSE)
+        pendingTable <- TRUE
+      } else if (!ordinarySetup(stmt, quote(table), generated = TRUE)) return(FALSE)
+    }
+    !pendingTable
+  }
+  generatedBodies <- if (generated) {
+    tests <- exprs(0L)[vapply(parsed, generatedTableBody, logical(1))]
+    vapply(tests, function(j) exprs(j)[3L], integer(1))
+  }
   # Test files often identify the analysis in context() and describe each
   # output or scenario in test_that(). Use only literal source labels.
   fileTitle <- sub("^test[-_]", "", tools::file_path_sans_ext(basename(path)))
@@ -235,10 +270,11 @@ snapshotMigrationSource <- function(path) {
       assignment <- parents[rows]
       remaining <- exprs(block)
       if (!is.null(removeRef)) remaining <- setdiff(remaining, definition)
-      if (block == context$body && identical(utils::tail(remaining, 2L), c(assignment, i)) &&
-          !containsComment(end(node) + 1L, end(rows)) &&
-          all(vapply(utils::head(remaining, -2L), function(j) ordinarySetup(value(j), actual), logical(1)))) {
-        # The final local variable has no other consumer and can hold the node.
+      private <- block %in% generatedBodies && symbol(actual, "table")
+      if (!private && block == context$body && identical(utils::tail(remaining, 2L), c(assignment, i)))
+        private <- all(vapply(utils::head(remaining, -2L), function(j) ordinarySetup(value(j), actual), logical(1)))
+      if (private && !containsComment(end(node) + 1L, end(rows))) {
+        # This row assignment has no other consumer and can hold the node.
         finalEdits <<- c(finalEdits, list(edit(rows, nodeText)))
         target <- piece(args$test)
       } else {

@@ -506,6 +506,12 @@ generatedSnapshotCalls <- function(code, regenerating = NULL) {
         visit(expr[[i]], description)
   }
   visit(code)
+  if (!is.null(regenerating)) {
+    repeated <- duplicated(calls[c("type", "name")]) & calls$type != "plot"
+    if (any(repeated))
+      stop("Regenerating ", regenerating, " would reuse a snapshot name: ", calls$name[which(repeated)[1L]],
+           ". Give the outputs distinct names before regenerating.", call. = FALSE)
+  }
   calls
 }
 

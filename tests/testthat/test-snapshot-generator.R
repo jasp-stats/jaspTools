@@ -107,6 +107,8 @@ test_that("regeneration recognises literal snapshot names in previous tests", {
   test <- c(test, parse(text = 'anotherPackage::expect_snapshot_html(html, "elsewhere")'))
   calls <- generatedSnapshotCalls(test)
   expect_identical(paste(calls$type, calls$name), c("table stats", "html details", "plot gg"))
+  duplicated <- c(test, expression(jaspTools::expect_snapshot_table(other, "stats")))
+  expect_error(generatedSnapshotCalls(duplicated, "test-review.R"), "reuse a snapshot name: stats")
 })
 
 test_that("example generation seeds from the rerun and stages changed snapshots", {

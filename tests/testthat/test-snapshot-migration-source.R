@@ -88,6 +88,40 @@ test_that("final private row aliases fold after analysis setup and remain availa
   }
 })
 
+test_that("generated table checks reuse their local variable across tables and plots", {
+  fixture <- c('# This test file was auto-generated from a JASP example file.',
+    'test_that("Example results match", {',
+    '  jaspFile <- testthat::test_path("jaspfiles", "example.jasp")',
+    '  dataset <- jaspSyntax::readDatasetFromJaspFile(jaspFile)',
+    '  results <- jaspTools::runAnalysis("Example", dataset, list())',
+    '  table <- results$first$data',
+    '  jaspTools::expect_equal_tables(table, list(1))',
+    '  plotName <- results$plot[["data"]]',
+    '  testPlot <- results$figures[[plotName]]$obj',
+    '  jaspTools::expect_equal_plots(testPlot, "plot")',
+    '  table <- results$second[["data"]] # second result',
+    '  jaspTools::expect_equal_tables(table, list(2))', '})')
+  plan <- planMigrationText(fixture)
+  expect_identical(plan$sites$name, c("first", "second"))
+  expect_true(all(c('  table <- results$first', '  table <- results$second # second result',
+                    '  jaspTools::expect_snapshot_table(table, "first")',
+                    '  jaspTools::expect_snapshot_table(table, "second")') %in% plan$text))
+  expect_false(any(grepl("snapshotTableNode", plan$text, fixed = TRUE)))
+  expect_true(all(fixture[8:10] %in% plan$text))
+  expect_true(all(trimws(fixture[c(7L, 12L)]) %in% trimws(plan$capture)))
+  expect_true('  table <- (snapshotTableNode <- results$first)$data' %in% plan$capture)
+
+  custom <- list(append(fixture, '  expect_identical(table, list(1))', after = 7L),
+                 append(fixture, '  withr::defer(check(get("table")))', after = 5L),
+                 append(fixture, '  jaspTools::expect_equal_tables(table, list(1))', after = 7L),
+                 append(fixture, c('  runAnalysis <- get', '  results <- runAnalysis("table")'), after = 7L),
+                 fixture[-1L])
+  for (code in custom) {
+    plan <- planMigrationText(code)
+    expect_true('  table <- snapshotTableNode$data' %in% plan$text)
+  }
+})
+
 test_that("capture respects a module's custom legacy expectation or reference constructor", {
   plan <- planMigrationText(c('test_that("overrides", {',
     '  expect_equal_tables(node$data, list(1))', '})'))
