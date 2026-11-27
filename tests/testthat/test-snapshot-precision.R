@@ -4,7 +4,8 @@ test_that("tolerated values survive review and only an explicit refresh stages t
   dir.create(testDir, recursive = TRUE)
   file <- file.path(testDir, "test-results.R")
   id <- "results/model.table.json"
-  ref <- file.path(testDir, "_snaps", id)
+  root <- snapshotReviewRoot(module)
+  ref <- file.path(root, id)
   candidate <- snapshotCandidatePath(ref)
   table <- list(schema = list(fields = list(
     list(name = "estimate", type = "number"), list(name = "se", type = "number")
@@ -19,7 +20,7 @@ test_that("tolerated values survive review and only an explicit refresh stages t
     as.data.frame(testthat::test_dir(testDir, reporter = "silent", stop_on_failure = FALSE))
   }
   accept <- function() {
-    item <- snapshotReviewItem(module, id)
+    item <- snapshotReviewItem(root, id)
     row <- item[c("id", "baselineHash", "candidateHash", "structureBaselineHash", "structureCandidateHash")]
     row$action <- "accept"
     row$comment <- ""
@@ -39,7 +40,7 @@ test_that("tolerated values survive review and only an explicit refresh stages t
 
   table$data[[1L]]$se <- 0.25
   expect_equal(run()$failed, 1L)
-  item <- snapshotReviewItem(module, id)
+  item <- snapshotReviewItem(root, id)
   expect_identical(vapply(item$diff$changes, `[[`, "", "column"), "se")
   expect_identical(item$new$data[[1L]]$estimate, oldEstimate)
   expect_identical(snapshotFileHash(ref), originalHash)
@@ -70,7 +71,7 @@ test_that("tolerated values survive review and only an explicit refresh stages t
   table$schema$fields <- table$schema$fields[1L]
   table$data[[1L]]$se <- NULL
   expect_equal(run(", columns = list(se = list(atol = 0))")$failed, 1L)
-  expect_identical(snapshotReviewItem(module, id)$diff$changes[[1L]]$kind, "column_removed")
+  expect_identical(snapshotReviewItem(root, id)$diff$changes[[1L]]$kind, "column_removed")
   expect_true(run(", columns = list(typo = list(atol = 0))")$error)
   expect_true(file.exists(ref))
   priorHashes <- tools::md5sum(c(ref, candidate))

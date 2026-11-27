@@ -16,8 +16,10 @@ Each call copies the example tests and their accepted snapshots to a fresh tempo
 | Analysis summary | The HTML summary changes the mean with the cloak from 5.00 to 5.50. |
 | Group means | The second bar rises from 5.00 to 5.50. |
 
-Click a changed table, figure or HTML preview to see the candidate, then the
-baseline, then the differences again. Use **Accept** or **Decline** above the
+In the t-test example the shaded statistic prints the same way on both sides.
+Click the table to see the differing digit at full precision, then click through
+the formatted candidate and baseline. Figures and HTML cycle from differences
+to candidate to baseline. Use **Accept** or **Decline** above the
 preview. Use **Comment only** below it to leave the decision open for the agent.
 Export the decision file and apply it to the example copy in the same R session.
 

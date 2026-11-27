@@ -19,7 +19,9 @@ A data frame with one row per decision, including the snapshot
 \description{
 Checks the reviewed file contents in the module's \verb{tests/testthat/_snaps}
 directory before applying any decisions. Accepting promotes the candidate
-and any reviewed plot structure candidate together. Declining records the
+and any reviewed plot structure candidate together. For a figure without
+a new structure, accepting removes the old structure when the export marks
+it for removal. Earlier exports keep it. Declining records the
 decision and comment for follow-up. A comment alone leaves the decision
 unresolved. Both actions preserve the reference and candidate files.
 Earlier exports that use \code{keep} also preserve those files.

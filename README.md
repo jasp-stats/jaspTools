@@ -232,12 +232,18 @@ result$snapshotReviews
 reviewSnapshots(modulePath = "../jaspFrequencies")
 ```
 
-Each changed snapshot opens on its visual differences. Click the preview or
-press **T** to cycle through the candidate, the baseline and the differences.
-Tables show changes in place with footnotes directly below. Expand **Change
-details** for exact values, numeric deltas and the first differing decimal
-place. Figures open on a pixel overlay. HTML shows additions and edits inside
-the rendered element.
+Tables open with differences highlighted using JASP's default number formatting.
+Click the preview or press **T** to see the full-precision differences, then the
+formatted candidate, the formatted baseline, and the formatted differences again.
+When only a candidate or baseline exists, the same control toggles between
+its formatted and full-precision values.
+A changed cell stays shaded even when both values round to the same number.
+Footnotes appear below the table. Expand **Change details** for exact values,
+numeric deltas and the first differing decimal place.
+
+Figures open on a pixel overlay. HTML shows changes inside the rendered element.
+Both cycle through differences, candidate and baseline. To review only figures
+from one analysis, use `manageTestPlots("AnalysisName")`.
 
 Choose **Accept** or **Decline** at the top. To leave the decision to an agent,
 write a note below the preview and choose **Comment only**. Select **Export

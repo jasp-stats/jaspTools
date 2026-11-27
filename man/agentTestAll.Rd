@@ -35,9 +35,8 @@ suitable for LLM/MCP consumption. Detailed results (failures, warnings, backtrac
 are written to a JSON log file that can be queried on demand.
 }
 \details{
-Uses testthat's \code{LlmReporter} internally — a reporter designed for non-interactive
-environments that disables spinner animations and dynamic output while retaining full
-snapshot/vdiffr support.
+Uses testthat's agent reporter when available. Earlier testthat versions
+collect the same test results and snapshots with the silent reporter.
 }
 \examples{
 \dontrun{

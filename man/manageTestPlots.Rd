@@ -2,24 +2,22 @@
 % Please edit documentation in R/test.R
 \name{manageTestPlots}
 \alias{manageTestPlots}
-\title{Visually inspect failed test plots.}
+\title{Review pending JASP figure snapshots}
 \usage{
-manageTestPlots(name = NULL)
+manageTestPlots(name = NULL, open = interactive())
 }
 \arguments{
-\item{name}{Optional string name of the analysis whose plots should be
-tested.}
+\item{name}{Optional analysis name. By default, review all configured modules.}
+
+\item{open}{Open the reports in the default browser.}
 }
 \value{
-A Shiny app that shows all failed cases. The app allows
-test plots to be validated, at which point they are placed in the _snaps
-directory and used as a reference for future tests.
+Invisibly, a named list of report paths for modules with pending figures.
 }
 \description{
-This function is a wrapper around \code{testthat::snapshot_review()}. It allows
-visual inspection of the plots in the unit tests that produced an error.
-If no analysis is specified it will iterate over all test
-cases.
+Uses the \code{\link[=reviewSnapshots]{reviewSnapshots()}} viewer for new and changed figures produced by
+\code{\link[=expect_equal_plots]{expect_equal_plots()}}. Export and apply decisions with \code{\link[=applySnapshotReview]{applySnapshotReview()}}
+to accept an SVG together with its reviewed ggplot structure.
 }
 \examples{
 

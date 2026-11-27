@@ -22,103 +22,26 @@ localPlotSnapshotRoot <- function(root = tempfile("plot-snapshot-root-")) {
   invisible(root)
 }
 
-test_that("vdiffr mismatch falls back to ggplot structural snapshot", {
+test_that("a drawing failure cannot pass via the structural fallback", {
   skip_if_not_installed("ggplot2")
-
-  tmp <- tempfile("plot-fallback-")
-  dir.create(tmp, recursive = TRUE, showWarnings = FALSE)
-  oldWd <- setwd(tmp)
-  on.exit(setwd(oldWd), add = TRUE)
-
-  p <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) + ggplot2::geom_point()
-
-  snapshotRoot <- tempfile("plot-snapshot-root-")
-  snapshotName <- jaspTools:::ggplot_structure_snapshot_name("demo-plot")
-  snapshotPath <- file.path(snapshotRoot, snapshotName)
-  dir.create(dirname(snapshotPath), recursive = TRUE, showWarnings = FALSE)
-  saveRDS(jaspTools:::extract_ggplot_structure(p), snapshotPath)
-  localPlotSnapshotRoot(snapshotRoot)
+  root <- localPlotSnapshotRoot()
+  name <- "failed-draw"
+  plot <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) + ggplot2::geom_point()
+  structure <- file.path(root, "reference_plotobject", "failed-draw.rds")
+  dir.create(dirname(structure))
+  saveRDS(jaspTools:::extract_ggplot_structure(plot), structure)
+  pending <- file.path(root, "failed-draw.new.svg")
+  writeLines("previous visual candidate", pending)
+  pendingStructure <- file.path(dirname(structure), "failed-draw.new.rds")
+  saveRDS("previous structure", pendingStructure)
 
   testthat::local_mocked_bindings(
-    expect_doppelganger = function(...) {
-      stop(makeExpectationFailure(), call. = FALSE)
-    },
+    expect_doppelganger = function(...) stop(makeExpectationFailure("drawing failed")),
     .package = "vdiffr"
   )
-
-  vdiffrResult <- jaspTools:::capture_vdiffr_expectation("demo-plot", p)
-  expect_false(vdiffrResult$passed)
-  expect_s3_class(vdiffrResult$exception, "expectation_failure")
-
-  fallbackResult <- jaspTools:::expect_doppelganger_fallback(p, "demo-plot", vdiffr_result = vdiffrResult)
-  expect_true(fallbackResult$has_fallback)
-  expect_true(fallbackResult$passed)
-})
-
-test_that("default fallback reports no method for non-ggplot", {
-  testthat::local_mocked_bindings(
-    expect_doppelganger = function(...) {
-      stop(makeExpectationFailure("forced mismatch"), call. = FALSE)
-    },
-    .package = "vdiffr"
-  )
-
-  vdiffrResult <- jaspTools:::capture_vdiffr_expectation("non-ggplot", function() plot(1:3))
-  expect_false(vdiffrResult$passed)
-  expect_s3_class(vdiffrResult$exception, "expectation_failure")
-
-  fallbackResult <- jaspTools:::expect_doppelganger_fallback(function() plot(1:3), "non-ggplot", vdiffr_result = vdiffrResult)
-  expect_false(fallbackResult$passed)
-  expect_false(fallbackResult$has_fallback)
-  expect_match(fallbackResult$message, "No fallback expectation is implemented")
-})
-
-test_that("update mode writes ggplot structural snapshot when missing", {
-  skip_if_not_installed("ggplot2")
-  oldOpts <- options(jaspTools.plotStructure.update = TRUE)
-  on.exit(options(oldOpts), add = TRUE)
-
-  tmp <- tempfile("plot-snapshot-")
-  dir.create(tmp, recursive = TRUE, showWarnings = FALSE)
-  oldWd <- setwd(tmp)
-  on.exit(setwd(oldWd), add = TRUE)
-  localPlotSnapshotRoot()
-
-  p <- ggplot2::ggplot(mtcars, ggplot2::aes(disp, hp)) + ggplot2::geom_point()
-
-  fallbackResult <- jaspTools:::expect_equal_ggplot_structure(p, "new-plot")
-  expect_true(fallbackResult$passed)
-  expect_true(fallbackResult$has_fallback)
-})
-
-test_that("interactive run seeds missing ggplot structural snapshot", {
-  skip_if_not_installed("ggplot2")
-
-  tmp <- tempfile("plot-seed-")
-  dir.create(tmp, recursive = TRUE, showWarnings = FALSE)
-  oldWd <- setwd(tmp)
-  on.exit(setwd(oldWd), add = TRUE)
-  localPlotSnapshotRoot()
-
-  p <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) + ggplot2::geom_point()
-  snapshotPath <- jaspTools:::ggplot_structure_snapshot_path("seed-plot")
-  if (file.exists(snapshotPath))
-    file.remove(snapshotPath)
-
-  testthat::local_mocked_bindings(
-    expect_doppelganger = function(...) {
-      testthat::succeed()
-    },
-    .package = "vdiffr"
-  )
-
-  testthat::local_mocked_bindings(
-    is_interactive_plot_snapshot_mode = function() TRUE,
-    .package = "jaspTools"
-  )
-
-  jaspTools:::expect_plot_with_fallback("seed-plot", p)
-  expect_true(file.exists(snapshotPath))
+  expect_failure(jaspTools:::expect_plot_with_fallback(name, plot), "drawing failed")
+  expect_identical(readLines(pending), "previous visual candidate")
+  expect_identical(readRDS(pendingStructure), "previous structure")
 })
 
 test_that("plot candidates follow the same review lifecycle locally and on CI", {
@@ -129,11 +52,12 @@ test_that("plot candidates follow the same review lifecycle locally and on CI", 
   testDir <- withr::local_tempdir()
   writeLines(c(
     'testthat::test_that("plot snapshot", {',
-    '  jaspTools:::expect_plot_with_fallback("Demo Plot", getOption("jaspTools.testPlot"))',
+    '  jaspTools:::expect_plot_with_fallback("Demo Plot", getOption("jaspTools.testPlot"),',
+    '                                        tolerance = getOption("jaspTools.testTolerance"))',
     '})'
   ), file.path(testDir, "test-figures.R"))
-  runPlotTest <- function(plot, ci) {
-    withr::local_options(jaspTools.testPlot = plot)
+  runPlotTest <- function(plot, ci, tolerance = NULL) {
+    withr::local_options(jaspTools.testPlot = plot, jaspTools.testTolerance = tolerance)
     withr::local_envvar(c(CI = ci))
     as.data.frame(testthat::test_dir(testDir, reporter = "silent", stop_on_failure = FALSE))
   }
@@ -174,6 +98,17 @@ test_that("plot candidates follow the same review lifecycle locally and on CI", 
   vdiffr::write_svg(changed, expectedSvg, "Demo Plot")
   expect_true(testthat::compare_file_binary(expectedSvg, newSvg))
 
+  # Update mode cannot overwrite an accepted structure after a visual mismatch.
+  withr::with_options(list(jaspTools.plotStructure.update = TRUE), runPlotTest(changed, "true"))
+  expect_identical(readRDS(structure), jaspTools:::extract_ggplot_structure(plot))
+
+  shifted <- plot
+  shifted$data$mpg[1L] <- shifted$data$mpg[1L] + 0.5
+  expect_equal(runPlotTest(shifted, "true", tolerance = 0)$failed, 1L)
+  result <- runPlotTest(shifted, "true", tolerance = 0.1)
+  expect_equal(result$failed, 0L)
+  expect_equal(result$warning, 1L)
+
   # A theme change keeps the structural fallback valid and the SVG reviewable.
   themeChange <- plot + ggplot2::theme_bw()
   result <- runPlotTest(themeChange, "false")
@@ -192,6 +127,51 @@ test_that("plot candidates follow the same review lifecycle locally and on CI", 
   expect_false(result$error)
   expect_false(any(file.exists(c(newSvg, newStructure))))
   expect_true(all(file.exists(c(svg, structure))))
+
+  # An SVG-only candidate supersedes the pending ggplot pair. Preserve both accepted references.
+  runPlotTest(changed, "false")
+  result <- runPlotTest(function() graphics::plot(1:3), "false")
+  expect_equal(result$failed, 1L)
+  expect_false(result$error)
+  expect_true(all(file.exists(c(svg, structure, newSvg))))
+  expect_false(file.exists(newStructure))
+
+  # Matching an accepted SVG can restore its legacy missing companion in update or interactive mode.
+  unlink(structure)
+  result <- runPlotTest(themeChange, "false")
+  expect_equal(result$failed, 1L)
+  expect_false(file.exists(structure))
+  result <- withr::with_options(list(jaspTools.plotStructure.update = TRUE), runPlotTest(plot, "false"))
+  expect_false(result$error)
+  expect_identical(readRDS(structure), jaspTools:::extract_ggplot_structure(plot))
+  unlink(structure)
+  testthat::local_mocked_bindings(is_interactive_plot_snapshot_mode = function() TRUE, .package = "jaspTools")
+  result <- runPlotTest(plot, "false")
+  expect_false(result$error)
+  expect_identical(readRDS(structure), jaspTools:::extract_ggplot_structure(plot))
+  unlink(structure)
+  testthat::local_mocked_bindings(extract_ggplot_structure = function(...) stop("build failed"), .package = "jaspTools")
+  result <- runPlotTest(plot, "false")
+  expect_false(result$error)
+  expect_equal(result$failed, 0L)
+  expect_false(file.exists(structure))
+})
+
+test_that("a staging failure cannot leave a new SVG accepted", {
+  root <- localPlotSnapshotRoot()
+  svg <- file.path(root, "blocked.svg")
+  dir.create(file.path(root, "blocked.new.svg"))
+  testthat::local_mocked_bindings(
+    expect_doppelganger = function(title, fig, writer) {
+      current <- tempfile(fileext = ".svg")
+      writer(fig, current, title)
+      file.copy(current, svg)
+    },
+    .package = "vdiffr"
+  )
+  expect_error(jaspTools:::capture_vdiffr_expectation("blocked", function() graphics::plot(1:3)),
+               "Could not stage the new visual snapshot")
+  expect_false(file.exists(svg))
 })
 
 test_that("a reporter returning silently still stages the vdiffr rendering", {
@@ -210,7 +190,6 @@ test_that("a reporter returning silently still stages the vdiffr rendering", {
     .package = "vdiffr"
   )
   result <- jaspTools:::capture_vdiffr_expectation("silent", plot)
-  expect_false(result$passed)
   expect_true(result$new_svg_current)
   expectedSvg <- tempfile(fileext = ".svg")
   vdiffr::write_svg(plot, expectedSvg, "silent")
@@ -218,37 +197,21 @@ test_that("a reporter returning silently still stages the vdiffr rendering", {
 })
 
 test_that("a failed ggplot structure build clears an incomplete review pair", {
+  skip_if_not_installed("ggplot2")
   root <- localPlotSnapshotRoot()
   svg <- file.path(root, "incomplete.new.svg")
   structure <- file.path(root, "reference_plotobject", "incomplete.new.rds")
   dir.create(dirname(structure))
   writeLines("<svg>current</svg>", svg)
   saveRDS("stale structure", structure)
-  result <- list(passed = FALSE, new_svg_current = TRUE, new_svg_path = svg)
+  plot <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) + ggplot2::geom_point()
   testthat::local_mocked_bindings(
-    build_ggplot_structure_snapshot = function(plot) stop("build failed"),
+    capture_vdiffr_expectation = function(...) list(compared = TRUE, new_svg_current = TRUE, new_svg_path = svg),
+    extract_ggplot_structure = function(plot) stop("build failed"),
     .package = "jaspTools"
   )
-  expect_error(jaspTools:::expect_equal_ggplot_structure(NULL, "incomplete", result), "build failed")
+  expect_error(jaspTools:::expect_plot_with_fallback("incomplete", plot), "build failed")
   expect_false(any(file.exists(c(svg, structure))))
-})
-
-test_that("visual failure with missing structural snapshot does not create fallback", {
-  skip_if_not_installed("ggplot2")
-  oldOpts <- options(jaspTools.plotStructure.update = TRUE)
-  on.exit(options(oldOpts), add = TRUE)
-  localPlotSnapshotRoot()
-
-  p <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) + ggplot2::geom_point()
-  snapshotPath <- jaspTools:::ggplot_structure_snapshot_path("missing-plot")
-  vdiffrResult <- list(passed = FALSE, exception = makeExpectationFailure())
-
-  fallbackResult <- jaspTools:::expect_equal_ggplot_structure(p, "missing-plot", vdiffr_result = vdiffrResult)
-
-  expect_false(fallbackResult$passed)
-  expect_true(fallbackResult$has_fallback)
-  expect_false(file.exists(snapshotPath))
-  expect_match(fallbackResult$message, "No accepted ggplot structural snapshot", fixed = TRUE)
 })
 
 test_that("stale new svg is overwritten after visual failure", {
@@ -258,7 +221,7 @@ test_that("stale new svg is overwritten after visual failure", {
   p <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) + ggplot2::geom_point()
   svgPath <- jaspTools:::snapshot_relative_path("stale-failure-plot.svg")
   newSvgPath <- jaspTools:::snapshot_relative_path("stale-failure-plot.new.svg")
-  snapshotPath <- jaspTools:::ggplot_structure_snapshot_path("stale-failure-plot")
+  snapshotPath <- jaspTools:::snapshot_relative_path(jaspTools:::ggplot_structure_snapshot_name("stale-failure-plot"))
   dir.create(dirname(svgPath), recursive = TRUE, showWarnings = FALSE)
   dir.create(dirname(snapshotPath), recursive = TRUE, showWarnings = FALSE)
   writeLines("<svg>old</svg>", svgPath)
@@ -282,49 +245,6 @@ test_that("stale new svg is overwritten after visual failure", {
   expect_true(testthat::compare_file_binary(newSvgPath, expectedSvg))
 })
 
-test_that("update mode does not overwrite structural snapshot after visual failure", {
-  skip_if_not_installed("ggplot2")
-  oldOpts <- options(jaspTools.plotStructure.update = TRUE)
-  on.exit(options(oldOpts), add = TRUE)
-  localPlotSnapshotRoot()
-
-  p1 <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) + ggplot2::geom_point()
-  p2 <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) + ggplot2::geom_point(colour = "red")
-  snapshotName <- jaspTools:::ggplot_structure_snapshot_name("locked-plot")
-  snapshotPath <- jaspTools:::snapshot_relative_path(snapshotName)
-  dir.create(dirname(snapshotPath), recursive = TRUE, showWarnings = FALSE)
-  saveRDS(jaspTools:::extract_ggplot_structure(p1), snapshotPath)
-  original <- readBin(snapshotPath, what = "raw", n = file.info(snapshotPath)$size)
-  vdiffrResult <- list(passed = FALSE, exception = makeExpectationFailure())
-
-  fallbackResult <- jaspTools:::expect_equal_ggplot_structure(p2, "locked-plot", vdiffr_result = vdiffrResult)
-  current <- readBin(snapshotPath, what = "raw", n = file.info(snapshotPath)$size)
-
-  expect_false(fallbackResult$passed)
-  expect_identical(current, original)
-})
-
-test_that("compare_ggplot_structure_snapshot returns TRUE only for equal structures", {
-  skip_if_not_installed("ggplot2")
-
-  p1 <- ggplot2::ggplot(mtcars, ggplot2::aes(disp, hp)) + ggplot2::geom_point()
-  p2 <- ggplot2::ggplot(mtcars, ggplot2::aes(disp, hp)) + ggplot2::geom_point(colour = "red")
-
-  s1 <- jaspTools:::extract_ggplot_structure(p1)
-  s2 <- jaspTools:::extract_ggplot_structure(p2)
-
-  f1 <- tempfile(fileext = ".rds")
-  f2 <- tempfile(fileext = ".rds")
-  f3 <- tempfile(fileext = ".rds")
-
-  saveRDS(s1, f1)
-  saveRDS(s1, f2)
-  saveRDS(s2, f3)
-
-  expect_true(jaspTools:::compare_ggplot_structure_snapshot(f1, f2))
-  expect_false(jaspTools:::compare_ggplot_structure_snapshot(f1, f3))
-})
-
 test_that("vdiffr and fallback can use different plot objects", {
   rendered <- structure(list(), class = "rendered-plot")
   original <- structure(list(), class = "original-plot")
@@ -334,12 +254,12 @@ test_that("vdiffr and fallback can use different plot objects", {
     capture_vdiffr_expectation = function(name, test) {
       seen$vdiffr <- test
       # a mismatch against an existing reference, so not a fresh snapshot
-      list(passed = FALSE, exception = simpleError("forced mismatch"),
-           svg_path = tempfile(fileext = ".svg"), reference_existed = TRUE, new_svg_current = FALSE)
+      list(exception = simpleError("forced mismatch"), new_svg_path = tempfile(fileext = ".svg"),
+           reference_existed = TRUE, new_svg_current = TRUE)
     },
     expect_doppelganger_fallback = function(test, ...) {
       seen$fallback <- test
-      list(passed = TRUE, has_fallback = TRUE, exception = NULL, message = NULL)
+      list(passed = TRUE)
     },
     .package = "jaspTools"
   )

@@ -11,13 +11,9 @@ runTestsQuietly(testFun)
 \code{function() testthat::test_dir(...)}).}
 }
 \value{
-A list with \code{result} (the testthat_results, or NULL on error)
-and \code{error} (error message string, or NULL on success).
+The test results, or a module-level error with its message.
 }
 \description{
-Encapsulates the tryCatch + withCallingHandlers + capture.output pattern that
-both \code{agentTestAll} and \code{agentTestAnalysis} need. Some stderr noise
-(ggplot messages, tryCatch-printed errors) may leak but is minor (~1KB)
-compared to the original ~27KB.
+Captures standard output while preserving conditions recorded by testthat.
 }
 \keyword{internal}

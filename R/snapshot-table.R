@@ -117,23 +117,22 @@ snapshotTableJSON <- function(node) {
 .snapshotAlignedRows <- function(old, new) {
   a <- old$data
   b <- new$data
-  ids <- intersect(.snapshotFieldNames(old), .snapshotFieldNames(new))
+  ids <- if (length(a) && length(b)) intersect(.snapshotFieldNames(old), .snapshotFieldNames(new))
   labels <- function(rows, id) {
     vapply(rows, function(row) {
       x <- row[[id]]
       if (is.character(x) && length(x) == 1L && !is.na(x)) x else ""
     }, character(1))
   }
-  pairs <- lapply(ids, function(id) list(a = labels(a, id), b = labels(b, id)))
-  pairs <- Filter(function(p) length(p$a) && length(p$b) &&
-    all(nzchar(p$a)) && all(nzchar(p$b)), pairs)
   best <- 0L
   keyA <- seq_along(a)
   keyB <- seq_along(b)
   labelA <- if (length(a)) paste("Row", seq_along(a)) else character()
   labelB <- if (length(b)) paste("Row", seq_along(b)) else character()
   partsA <- partsB <- NULL
-  for (p in pairs) {
+  for (id in ids) {
+    p <- list(a = labels(a, id), b = labels(b, id))
+    if (!all(nzchar(p$a)) || !all(nzchar(p$b))) next
     # Length prefixes make a composite unambiguous even for labels containing
     # punctuation or the separator used for the human-readable row label.
     compositeA <- paste0(partsA, nchar(p$a), ":", p$a)
@@ -157,22 +156,20 @@ snapshotTableJSON <- function(node) {
   }
   oldIndex <- match(keyB, keyA)
   newIndex <- match(keyA, keyB)
+  removed <- which(is.na(newIndex))
   # Retain the candidate's order; insert a removed row before its next
   # surviving old neighbor, or at the end if there is no such neighbor.
   anchor <- length(b) + 1L
   for (i in rev(seq_along(newIndex))) {
     if (is.na(newIndex[i])) newIndex[i] <- anchor else anchor <- newIndex[i]
   }
-  removed <- which(!keyA %in% keyB)
-  alignment <- list()
-  for (j in seq_len(length(b) + 1L)) {
-    for (i in removed[newIndex[removed] == j])
-      alignment[[length(alignment) + 1L]] <- list(oldRow = i, newRow = NULL, rowLabel = labelA[i])
-    if (j <= length(b))
-      alignment[[length(alignment) + 1L]] <- list(
-        oldRow = if (!is.na(oldIndex[j])) oldIndex[j], newRow = j, rowLabel = labelB[j])
-  }
-  alignment
+  oldRow <- c(removed, oldIndex)
+  newRow <- c(rep.int(NA_integer_, length(removed)), seq_along(b))
+  rowLabel <- c(labelA[removed], labelB)
+  # A stable sort puts removed rows before the candidate at their anchor.
+  positions <- order(c(newIndex[removed], seq_along(b)), method = "radix")
+  lapply(positions, function(i) list(oldRow = if (!is.na(oldRow[i])) oldRow[i],
+    newRow = if (!is.na(newRow[i])) newRow[i], rowLabel = rowLabel[i]))
 }
 
 snapshotTableDiff <- function(old, new, tolerance = NULL, merge = FALSE) {

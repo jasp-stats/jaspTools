@@ -40,7 +40,8 @@ runTestsTravis <- function(modulePath) {
 #' created by \code{\link{makeTestsFromExamples}} are included when testing an analysis.
 #'
 #' @param name String name of the analysis to test (case sensitive).
-#' @param onlyPlots Would you like to only run the tests for plots? This can speed up the generating of reference images in case you are not interested in the other unit tests.
+#' @param onlyPlots Run only test blocks containing \code{expect_equal_plots()}.
+#'   In mixed blocks, run the setup and plot checks and skip JASP table and HTML comparisons.
 #' @param includeAll Logical (default \code{TRUE}). When \code{TRUE}, also
 #'   includes auto-generated example test files (\code{test-library-*.R},
 #'   \code{test-verified-*.R}, \code{test-other-*.R}) that contain
@@ -61,11 +62,8 @@ testAnalysis <- function(name, onlyPlots = FALSE, includeAll = TRUE) {
     Sys.setenv("NOT_CRAN" = envirValue)
   })
 
-  if (onlyPlots) {
-    originalFn <- testthat::test_that
-    on.exit(undoPlotTestingChanges(originalFn), add=TRUE)
-    adjustTestthatForPlotTesting()
-  }
+  if (onlyPlots)
+    localPlotTests()
 
   testthat:::test_files(test_paths = filesToTest, test_dir = file.path(modulePath, "tests", "testthat"), reporter = testthat::default_compact_reporter(), test_package = NULL)
 
@@ -77,7 +75,7 @@ testAnalysis <- function(name, onlyPlots = FALSE, includeAll = TRUE) {
 #' Tests all R analyses found under modules/tests/testthat. Useful to perform before making
 #' a pull request, to prevent failing builds.
 #'
-#' @param onlyPlots Would you like to only run the tests for plots? This can speed up the generating of reference images in case you are not interested in the other unit tests.
+#' @inheritParams testAnalysis
 #'
 #' @export testAll
 testAll <- function(onlyPlots = FALSE) {
@@ -92,11 +90,8 @@ testAll <- function(onlyPlots = FALSE) {
     options("testthat.progress.max_fails" = optsValue)
   })
 
-  if (onlyPlots) {
-    originalFn <- testthat::test_that
-    on.exit(undoPlotTestingChanges(originalFn), add=TRUE)
-    adjustTestthatForPlotTesting()
-  }
+  if (onlyPlots)
+    localPlotTests()
 
   modulePaths <- getModulePathsForTesting()
 
@@ -125,49 +120,38 @@ testAll <- function(onlyPlots = FALSE) {
   return(invisible(status))
 }
 
-#' Visually inspect failed test plots.
+#' Review pending JASP figure snapshots
 #'
-#' This function is a wrapper around \code{testthat::snapshot_review()}. It allows
-#' visual inspection of the plots in the unit tests that produced an error.
-#' If no analysis is specified it will iterate over all test
-#' cases.
+#' Uses the [reviewSnapshots()] viewer for new and changed figures produced by
+#' [expect_equal_plots()]. Export and apply decisions with [applySnapshotReview()]
+#' to accept an SVG together with its reviewed ggplot structure.
 #'
-#'
-#' @param name Optional string name of the analysis whose plots should be
-#' tested.
-#' @return A Shiny app that shows all failed cases. The app allows
-#' test plots to be validated, at which point they are placed in the _snaps
-#' directory and used as a reference for future tests.
+#' @param name Optional analysis name. By default, review all configured modules.
+#' @param open Open the reports in the default browser.
+#' @return Invisibly, a named list of report paths for modules with pending figures.
 #' @examples
 #'
 #' # manageTestPlots("Anova")
 #'
 #' @export manageTestPlots
-manageTestPlots <- function(name = NULL) {
-  if (is.null(name))
-    manageAllTestPlots()
-  else
-    manageTestPlotsFile(name)
-}
-
-manageAllTestPlots <- function() {
-  modulePaths <- getModulePathsForTesting()
-  for (modulePath in modulePaths) {
-    if (length(modulePaths) > 1)
-      message("\nTesting plots from ", modulePath, "\n")
-
-    .manageTestPlots(modulePath)
+manageTestPlots <- function(name = NULL, open = interactive()) {
+  files <- NULL
+  if (is.null(name)) {
+    modulePaths <- getModulePathsForTesting()
+  } else {
+    modulePaths <- getModulePathFromRFunction(name)
+    files <- getTestFilesMatchingName(name, modulePaths)
   }
-}
-
-manageTestPlotsFile <- function(name) {
-  modulePath <- getModulePathFromRFunction(name)
-  testFiles <- getTestFilesMatchingName(name, modulePath)
-  .manageTestPlots(modulePath, testFiles)
-}
-
-.manageTestPlots <- function(modulePath, testFiles = NULL) {
-  testthat::snapshot_review(files = testFiles, path = file.path(modulePath, "tests", "testthat"))
+  reports <- list()
+  for (modulePath in modulePaths) {
+    ids <- snapshotReviewIds(modulePath, files = files)
+    figures <- ids[endsWith(ids, ".svg")]
+    if (length(figures))
+      reports[[basename(modulePath)]] <- writeSnapshotReview(modulePath, figures, output = NULL, open = open)
+  }
+  if (!length(reports))
+    message("No pending JASP figures to review.")
+  invisible(reports)
 }
 
 #' Aids in the creation of tests for tables.
@@ -299,39 +283,31 @@ collapseTestTable <- function(rows) {
   return(x)
 }
 
-adjustTestthatForPlotTesting <- function() {
+localPlotTests <- function(envir = parent.frame()) {
+  # test_dir attaches testthat. Attach before rebinding so both qualified and
+  # unqualified calls see the same functions and are restored after the run.
+  for (package in c("testthat", "jaspTools"))
+    if (!paste0("package:", package) %in% search())
+      withr::local_package(package, .local_envir = envir)
+  withr::local_envvar(c(JASP_PLOT_TEST = "true", TESTTHAT_PARALLEL = "false"), .local_envir = envir)
 
-  # taken from testthat::test_that
-  test_thatStandIn <- function (desc, code) {
-    if (!is.character(desc) || length(desc) != 1) {
-      rlang::abort("`desc` must be a string")
-    }
-    reporter <- testthat::get_reporter()
-    if (is.null(reporter)) {
-      reporter <- testthat:::local_interactive_reporter()
-    }
-    testthat::local_test_context()
-    code <- substitute(code)
-    if (testthat::edition_get() >= 3) {
-      if (!rlang::is_call(code, "{")) {
-        rlang::warn("The `code` argument to `test_that()` must be a braced expression to get accurate file-line information for failures.")
-      }
-    }
-
-    # and added these lines
-    envirPlotTest <- Sys.getenv("JASP_PLOT_TEST")
-    if (envirPlotTest == "true" && !any(grepl("expect_equal_plots", code, fixed=TRUE)))
-      return()
-    # until here
-
-    testthat:::test_code(desc, code, env = parent.frame(), reporter = reporter)
+  testThat <- testthat::test_that
+  plotTest <- function(desc, code) {
+    if (!"expect_equal_plots" %in% all.names(substitute(code)))
+      return(invisible(NULL))
+    call <- match.call()
+    call[[1L]] <- testThat
+    eval(call, parent.frame())
   }
 
-  Sys.setenv("JASP_PLOT_TEST" = "true")
-  replaceFn("test_that", test_thatStandIn, "testthat")
-}
-
-undoPlotTestingChanges <- function(originalFn) {
-  Sys.unsetenv("JASP_PLOT_TEST")
-  replaceFn("test_that", originalFn, "testthat")
+  omit <- function(...) invisible(NULL)
+  # Plot files are written during the expectation. A partial run must neither
+  # rewrite inline Markdown snapshots at end_file nor prune unvisited files.
+  snapshotReporter <- utils::getFromNamespace("SnapshotReporter", "testthat")
+  plotReporter <- R6::R6Class(inherit = snapshotReporter,
+                              public = list(end_file = omit, end_reporter = omit))
+  testthat::local_mocked_bindings(test_that = plotTest, SnapshotReporter = plotReporter,
+                                  .package = "testthat", .env = envir)
+  testthat::local_mocked_bindings(expect_snapshot_table = omit, expect_snapshot_html = omit,
+                                  expect_equal_tables = omit, .package = "jaspTools", .env = envir)
 }

@@ -20,6 +20,7 @@ Imports:
   jsonlite,
   lifecycle,
   pkgload,
+  R6,
   remotes,
   rjson,
   stringi,

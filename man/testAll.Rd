@@ -7,7 +7,8 @@
 testAll(onlyPlots = FALSE)
 }
 \arguments{
-\item{onlyPlots}{Would you like to only run the tests for plots? This can speed up the generating of reference images in case you are not interested in the other unit tests.}
+\item{onlyPlots}{Run only test blocks containing \code{expect_equal_plots()}.
+In mixed blocks, run the setup and plot checks and skip JASP table and HTML comparisons.}
 }
 \description{
 Tests all R analyses found under modules/tests/testthat. Useful to perform before making

@@ -4,9 +4,8 @@
 #' suitable for LLM/MCP consumption. Detailed results (failures, warnings, backtraces)
 #' are written to a JSON log file that can be queried on demand.
 #'
-#' Uses testthat's \code{LlmReporter} internally — a reporter designed for non-interactive
-#' environments that disables spinner animations and dynamic output while retaining full
-#' snapshot/vdiffr support.
+#' Uses testthat's agent reporter when available. Earlier testthat versions
+#' collect the same test results and snapshots with the silent reporter.
 #'
 #' @param logFile Path for the detailed JSON log. Defaults to a temp file.
 #'   The path is printed in the summary so it can be read later.
@@ -60,30 +59,17 @@ agentTestAll <- function(logFile = NULL) {
   for (modulePath in modulePaths) {
     testDir <- file.path(modulePath, "tests", "testthat")
 
-    out <- runTestsQuietly(function() {
+    allResults[[basename(modulePath)]] <- runTestsQuietly(function() {
       testthat::test_dir(
         testDir,
-        reporter        = testthat::LlmReporter$new(),
+        reporter        = agentTestReporter(),
         stop_on_failure = FALSE,
         stop_on_warning = FALSE
       )
     })
-
-    if (!is.null(out$error) || is.null(out$result)) {
-      allResults[[basename(modulePath)]] <- list(
-        error = TRUE,
-        errorMessage = if (is.null(out$error)) "Unknown error" else out$error
-      )
-    } else {
-      allResults[[basename(modulePath)]] <- out$result
-    }
   }
 
-  result <- buildAgentTestResult(allResults, logFile)
-  result$snapshotReviews <- agentSnapshotReviews(modulePaths)
-  writeAgentTestLog(allResults, logFile, result$snapshotReviews)
-  print(result)
-  invisible(result)
+  finishAgentTestRun(allResults, modulePaths, logFile)
 }
 
 
@@ -125,44 +111,45 @@ agentTestAnalysis <- function(name, logFile = NULL, includeAll = TRUE) {
 
   testDir <- file.path(modulePath, "tests", "testthat")
 
-  out <- runTestsQuietly(function() {
+  allResults <- list()
+  allResults[[basename(modulePath)]] <- runTestsQuietly(function() {
     testthat:::test_files(
       test_paths   = filesToTest,
       test_dir     = testDir,
-      reporter     = testthat::LlmReporter$new(),
+      reporter     = agentTestReporter(),
       test_package = NULL
     )
   })
 
-  allResults <- list()
-  if (!is.null(out$error) || is.null(out$result)) {
-    allResults[[basename(modulePath)]] <- list(
-      error = TRUE,
-      errorMessage = if (is.null(out$error)) "Unknown error" else out$error
-    )
-  } else {
-    allResults[[basename(modulePath)]] <- out$result
-  }
+  finishAgentTestRun(allResults, modulePath, logFile)
+}
 
+
+# ---- Internal helpers --------------------------------------------------------
+
+finishAgentTestRun <- function(allResults, modulePaths, logFile) {
   result <- buildAgentTestResult(allResults, logFile)
-  result$snapshotReviews <- agentSnapshotReviews(modulePath, filesToTest)
+  result$snapshotReviews <- agentSnapshotReviews(modulePaths, result$tests)
   writeAgentTestLog(allResults, logFile, result$snapshotReviews)
   print(result)
   invisible(result)
 }
 
 
-# ---- Internal helpers --------------------------------------------------------
+agentTestReporter <- function() {
+  if ("LlmReporter" %in% getNamespaceExports("testthat"))
+    testthat::LlmReporter$new()
+  else
+    testthat::SilentReporter$new()
+}
 
-agentSnapshotReviews <- function(modulePaths, files = NULL) {
+agentSnapshotReviews <- function(modulePaths, tests) {
   reports <- list()
   for (module in modulePaths) {
+    files <- unique(tests$file[tests$module == basename(module)])
+    if (!length(files)) next
     report <- tryCatch({
-      ids <- snapshotReviewIds(module)
-      if (!is.null(files)) {
-        contexts <- sub("^test[-_]", "", tools::file_path_sans_ext(basename(files)))
-        ids <- ids[dirname(ids) %in% contexts]
-      }
+      ids <- snapshotReviewIds(module, files = files)
       if (length(ids)) writeSnapshotReview(module, ids, output = NULL, open = FALSE)
     }, error = function(e) {
       warning("Could not build the snapshot review for ", basename(module), ": ", conditionMessage(e), call. = FALSE)
@@ -175,23 +162,14 @@ agentSnapshotReviews <- function(modulePaths, files = NULL) {
 
 #' Run a test function quietly, capturing stdout and muffling sink warnings.
 #'
-#' Encapsulates the tryCatch + withCallingHandlers + capture.output pattern that
-#' both \code{agentTestAll} and \code{agentTestAnalysis} need. Some stderr noise
-#' (ggplot messages, tryCatch-printed errors) may leak but is minor (~1KB)
-#' compared to the original ~27KB.
+#' Captures standard output while preserving conditions recorded by testthat.
 #'
 #' @param testFun A zero-argument function that runs tests (e.g.,
 #'   \code{function() testthat::test_dir(...)}).
-#' @return A list with \code{result} (the testthat_results, or NULL on error)
-#'   and \code{error} (error message string, or NULL on success).
+#' @return The test results, or a module-level error with its message.
 #' @keywords internal
 runTestsQuietly <- function(testFun) {
-  # Fix cli.spinner: btw::local_reproducible_output() (called by btw_tool_run_r)
-
-  # sets options(cli.spinner = FALSE). This is invalid — cli::get_spinner()
-  # expects NULL, a string, or a list. When testthat::LlmReporter$new() calls
-  # ProgressReporter$initialize() -> cli::get_spinner()$frames, it crashes with
-  # "$ operator is invalid for atomic vectors". Guard against non-string values.
+  # Agent tools may set cli.spinner = FALSE, which cli::get_spinner() rejects.
   oldSpinner <- getOption("cli.spinner")
   if (!is.null(oldSpinner) && !is.character(oldSpinner) && !is.list(oldSpinner))
     options(cli.spinner = "line")
@@ -218,7 +196,9 @@ runTestsQuietly <- function(testFun) {
       errMsg <<- conditionMessage(e)
     }
   )
-  list(result = env$res, error = errMsg)
+  if (!is.null(errMsg) || is.null(env$res))
+    return(list(error = TRUE, errorMessage = if (is.null(errMsg)) "Unknown error" else errMsg))
+  env$res
 }
 
 

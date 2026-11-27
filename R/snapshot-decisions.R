@@ -2,7 +2,9 @@
 #'
 #' Checks the reviewed file contents in the module's `tests/testthat/_snaps`
 #' directory before applying any decisions. Accepting promotes the candidate
-#' and any reviewed plot structure candidate together. Declining records the
+#' and any reviewed plot structure candidate together. For a figure without
+#' a new structure, accepting removes the old structure when the export marks
+#' it for removal. Earlier exports keep it. Declining records the
 #' decision and comment for follow-up. A comment alone leaves the decision
 #' unresolved. Both actions preserve the reference and candidate files.
 #' Earlier exports that use `keep` also preserve those files.
@@ -21,9 +23,9 @@ applySnapshotReview <- function(decisions, modulePath = ".") {
   review <- jsonlite::read_json(normalizePath(decisions), simplifyVector = FALSE)
   if (!is.list(review) || !all(c("version", "decisions") %in% names(review)) ||
       anyDuplicated(names(review)) || !is.numeric(review$version) ||
-      !identical(as.numeric(review$version), 1) || !is.list(review$decisions) ||
+      length(review$version) != 1L || !review$version %in% 1:2 || !is.list(review$decisions) ||
       !is.null(names(review$decisions)))
-    stop("Expected a version 1 JSON object with a decisions array.", call. = FALSE)
+    stop("Expected a version 1 or 2 JSON object with a decisions array.", call. = FALSE)
 
   rows <- review$decisions
   hashFields <- c(baseline = "baselineHash", candidate = "candidateHash",
@@ -42,6 +44,12 @@ applySnapshotReview <- function(decisions, modulePath = ".") {
     }
     if (row$action == "accept" && is.null(row$candidateHash))
       stop("Cannot accept a snapshot without a reviewed candidate: ", row$id, call. = FALSE)
+    if ("removeStructure" %in% names(row)) {
+      canRemove <- review$version == 2 && isTRUE(row$removeStructure) && endsWith(row$id, ".svg") &&
+        !is.null(row$candidateHash) && !is.null(row$structureBaselineHash) && is.null(row$structureCandidateHash)
+      if (!canRemove)
+        stop("Invalid plot structure removal for snapshot ", row$id, ".", call. = FALSE)
+    }
   }
   action <- vapply(rows, `[[`, "", "action")
   result <- data.frame(id = vapply(rows, `[[`, "", "id"), action = action,
@@ -52,7 +60,6 @@ applySnapshotReview <- function(decisions, modulePath = ".") {
   if (!nrow(result))
     return(result)
 
-  modulePath <- normalizePath(modulePath, winslash = "/", mustWork = TRUE)
   root <- snapshotReviewRoot(modulePath)
   if (any(result$action == "accept")) {
     lock <- file.path(root, ".jaspTools-review-lock")
@@ -72,16 +79,19 @@ applySnapshotReview <- function(decisions, modulePath = ".") {
   final <- vector("list", length(rows))
   for (i in seq_along(rows)) {
     row <- rows[[i]]
-    paths <- snapshotReviewPaths(modulePath, row$id)
+    paths <- snapshotReviewPaths(root, row$id)
     expected <- vapply(hashFields, function(key) {
       if (is.null(row[[key]])) NA_character_ else row[[key]]
     }, "")
     actual <- snapshotDecisionHashes(root, paths)
     accepted <- expected
-    accepted["baseline"] <- expected["candidate"]
-    if (!is.na(expected["structureCandidate"]))
-      accepted["structureBaseline"] <- expected["structureCandidate"]
-    accepted[c("candidate", "structureCandidate")] <- NA_character_
+    pairs <- list(c("baseline", "candidate"))
+    if (!is.na(expected["structureCandidate"]) || isTRUE(row[["removeStructure"]]))
+      pairs[[2L]] <- c("structureBaseline", "structureCandidate")
+    for (pair in pairs) {
+      accepted[pair[1L]] <- expected[pair[2L]]
+      accepted[pair[2L]] <- NA_character_
+    }
     final[[i]] <- list(id = row$id, paths = paths, hashes = if (row$action == "accept") accepted else expected)
     if (row$action == "accept" && identical(actual, accepted)) {
       result$status[i] <- "already accepted"
@@ -90,10 +100,8 @@ applySnapshotReview <- function(decisions, modulePath = ".") {
     if (!identical(actual, expected))
       stop("Snapshot files have changed since review: ", row$id, call. = FALSE)
     if (row$action == "accept") {
-      for (pair in list(c("baseline", "candidate"), c("structureBaseline", "structureCandidate"))) {
-        if (!is.na(expected[pair[2L]]))
-          changes[[length(changes) + 1L]] <- list(paths = unname(paths[pair]), hashes = unname(expected[pair]))
-      }
+      for (pair in pairs)
+        changes[[length(changes) + 1L]] <- list(paths = unname(paths[pair]), hashes = unname(expected[pair]))
     }
   }
   if (length(changes))
@@ -103,31 +111,37 @@ applySnapshotReview <- function(decisions, modulePath = ".") {
 
 # Check every component, including the parent of a yet-to-be-created reference.
 checkSnapshotDecisionPaths <- function(root, paths) {
-  for (path in paths[!is.na(paths)]) {
-    if (!startsWith(path, paste0(root, "/")) || dir.exists(path))
-      stop("Invalid snapshot file path: ", path, call. = FALSE)
-    node <- path
-    repeat {
-      if (utils::file_test("-L", node) ||
-          (file.exists(node) && normalizePath(node, winslash = "/", mustWork = TRUE) != node))
-        stop("Linked snapshot path: ", node, call. = FALSE)
-      if (node == root)
-        break
-      node <- dirname(node)
-    }
+  paths <- paths[!is.na(paths)]
+  invalid <- !startsWith(paths, paste0(root, "/")) | dir.exists(paths)
+  if (any(invalid))
+    stop("Invalid snapshot file path: ", paths[invalid][1L], call. = FALSE)
+  while (length(paths)) {
+    linked <- snapshotLinkedPaths(paths)
+    if (any(linked))
+      stop("Linked snapshot path: ", paths[linked][1L], call. = FALSE)
+    paths <- unique(dirname(paths[paths != root]))
   }
 }
 
 snapshotDecisionHashes <- function(root, paths) {
   checkSnapshotDecisionPaths(root, paths)
   vapply(paths, function(path) {
-    hash <- if (!is.na(path)) snapshotFileHash(path)
+    hash <- snapshotFileHash(path)
     if (is.null(hash)) NA_character_ else hash
   }, "")
 }
 
 # Keep originals in their own directories until every replacement succeeds.
 commitSnapshotDecisions <- function(root, changes, final) {
+  # Renaming a read-only file can succeed even when its backup cannot be removed.
+  for (change in changes) {
+    checkSnapshotDecisionPaths(root, change$paths)
+    existing <- change$paths[!is.na(change$paths) & file.exists(change$paths)]
+    readOnly <- which(bitwAnd(file.mode(existing), as.octmode("222")) == 0L | file.access(existing, 2L) != 0L)
+    if (length(readOnly))
+      stop("Cannot change read-only file ", existing[readOnly[1L]], ".", call. = FALSE)
+  }
+
   temporary <- character()
   moves <- list()
   committed <- FALSE
@@ -171,9 +185,10 @@ commitSnapshotDecisions <- function(root, changes, final) {
       stop("Snapshot changed while applying decisions: ", from, call. = FALSE)
   }
 
-  staged <- character(length(changes))
+  staged <- rep(NA_character_, length(changes))
   for (i in seq_along(changes)) {
     change <- changes[[i]]
+    if (is.na(change$hashes[2L])) next # Remove an obsolete plot structure.
     checkSnapshotDecisionPaths(root, change$paths)
     staged[i] <- temp(change$paths[1L])
     if (!file.copy(change$paths[2L], staged[i]) ||
@@ -186,8 +201,10 @@ commitSnapshotDecisions <- function(root, changes, final) {
       stop("Snapshot changed while applying decisions: ", change$paths[1L], call. = FALSE)
     if (!is.na(change$hashes[1L]))
       moveFile(change$paths[1L], temp(change$paths[1L]), change$hashes[1L])
-    moveFile(change$paths[2L], temp(change$paths[2L]), change$hashes[2L])
-    moveFile(staged[i], change$paths[1L], change$hashes[2L])
+    if (!is.na(staged[i])) {
+      moveFile(change$paths[2L], temp(change$paths[2L]), change$hashes[2L])
+      moveFile(staged[i], change$paths[1L], change$hashes[2L])
+    }
   }
   for (item in final) {
     if (!identical(snapshotDecisionHashes(root, item$paths), item$hashes))

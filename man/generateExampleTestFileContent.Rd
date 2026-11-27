@@ -4,17 +4,10 @@
 \alias{generateExampleTestFileContent}
 \title{Generate test file content for source-based tests}
 \usage{
-generateExampleTestFileContent(
-  baseName,
-  sanitizedName,
-  sourceFolder,
-  testBlocks
-)
+generateExampleTestFileContent(baseName, sourceFolder, testBlocks)
 }
 \arguments{
 \item{baseName}{Original JASP file name without extension.}
-
-\item{sanitizedName}{Sanitized name for use in code.}
 
 \item{sourceFolder}{String indicating the source folder: \code{"library"},
 \code{"verified"}, or \code{"other"}.}

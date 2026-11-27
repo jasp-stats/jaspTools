@@ -7,6 +7,9 @@
   Passing reruns retain the accepted values, including in unchanged cells
   of a table with other changes under review.
 * `reviewSnapshots()` shows table, HTML and figure changes together.
+  Tables open with JASP's default number formatting. Click once for
+  full-precision differences, then cycle through the candidate and baseline.
+  `manageTestPlots()` opens the same reviewer for pending figures.
   `agentTestAnalysis()` and `agentTestAll()` link the report from their results
   and logs. `applySnapshotReview()` applies exported decisions and returns
   comments for each reviewed snapshot.

@@ -11,7 +11,7 @@
 <body>
   <header class="masthead">
     <div><h1>Snapshot review</h1><p id="progress"></p></div>
-    <div class="buttons" aria-label="Snapshot decision">
+    <div class="buttons" role="group" aria-label="Snapshot decision">
       <button id="accept" class="accept" title="Accept candidate (A)" disabled>Accept</button>
       <button id="decline" class="decline" title="Decline candidate (R)" disabled>Decline</button>
     </div>
@@ -47,7 +47,7 @@
         </div>
         <div class="view-controls">
           <strong id="view-label" aria-live="polite"></strong>
-          <button id="cycle" title="Cycle preview (T)"></button>
+          <button id="cycle">Cycle preview</button>
         </div>
         <div id="preview"></div>
         <div id="preview-details"></div>

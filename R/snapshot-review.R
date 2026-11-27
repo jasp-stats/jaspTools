@@ -22,24 +22,41 @@ snapshotReviewRoot <- function(modulePath) {
   if (!dir.exists(tests))
     stop("No tests/testthat directory under ", modulePath, call. = FALSE)
   root <- file.path(tests, "_snaps")
-  for (path in c(dirname(tests), tests, root)) {
-    if (file.exists(path) && !identical(normalizePath(path, winslash = "/", mustWork = TRUE), path))
-      stop("Redirected snapshot directory: ", path, call. = FALSE)
-  }
+  directories <- c(dirname(tests), tests, root)
+  redirected <- snapshotLinkedPaths(directories)
+  if (any(redirected))
+    stop("Redirected snapshot directory: ", directories[redirected][1L], call. = FALSE)
   root
 }
 
-snapshotReviewIds <- function(modulePath, includeUnchanged = FALSE) {
-  root <- snapshotReviewRoot(modulePath)
-  files <- list.files(root, recursive = TRUE)
-  files <- files[grepl("\\.(svg|html)$|\\.table(\\.new)?\\.json$", files)]
-  if (!includeUnchanged)
-    files <- files[grepl("\\.new\\.[^./]+$", files)]
-  sort(unique(sub("\\.new(\\.[^./]+)$", "\\1", files)))
+snapshotLinkedPaths <- function(paths) {
+  utils::file_test("-L", paths) |
+    (file.exists(paths) & normalizePath(paths, winslash = "/", mustWork = FALSE) != paths)
 }
 
-snapshotReviewPaths <- function(modulePath, id) {
+snapshotReviewIds <- function(modulePath, includeUnchanged = FALSE, files = NULL) {
   root <- snapshotReviewRoot(modulePath)
+  # Recursive list.files() follows linked directories outside the module.
+  discover <- function(directory) {
+    entries <- list.files(directory, full.names = TRUE)
+    isDir <- dir.exists(entries)
+    children <- entries[isDir]
+    children <- children[!snapshotLinkedPaths(children)]
+    c(entries[!isDir], unlist(lapply(children, discover), use.names = FALSE))
+  }
+  paths <- substring(discover(root), nchar(root) + 2L)
+  paths <- paths[grepl("\\.(svg|html)$|\\.table(\\.new)?\\.json$", paths)]
+  if (!is.null(files)) {
+    contexts <- sub("[.][Rr]$", "", sub("^test[-_]", "", basename(files)))
+    # testthat stores optional variants under _snaps/<variant>/<context>.
+    paths <- paths[basename(dirname(paths)) %in% contexts]
+  }
+  if (!includeUnchanged)
+    paths <- paths[grepl("\\.new\\.[^./]+$", paths)]
+  sort(unique(sub("\\.new(\\.[^./]+)$", "\\1", paths)))
+}
+
+snapshotReviewPaths <- function(root, id) {
   base <- file.path(root, id)
   structure <- if (endsWith(id, ".svg")) {
     file.path(dirname(base), "reference_plotobject", sub("\\.svg$", ".rds", basename(base)))
@@ -53,9 +70,9 @@ snapshotFileHash <- function(path) {
   digest::digest(file = path, algo = "sha256", serialize = FALSE)
 }
 
-snapshotReviewItem <- function(modulePath, id) {
-  paths <- snapshotReviewPaths(modulePath, id)
-  checkSnapshotDecisionPaths(snapshotReviewRoot(modulePath), paths)
+snapshotReviewItem <- function(root, id) {
+  paths <- snapshotReviewPaths(root, id)
+  checkSnapshotDecisionPaths(root, paths)
   kind <- if (endsWith(id, ".table.json")) "table" else if (endsWith(id, ".svg")) "figure" else "html"
   readSide <- function(path) {
     if (!file.exists(path)) return(list(hash = NULL, value = NULL))
@@ -73,36 +90,41 @@ snapshotReviewItem <- function(modulePath, id) {
   old <- readSide(paths[["baseline"]])
   new <- readSide(paths[["candidate"]])
   diff <- if (kind == "table" && !is.null(new$value)) snapshotTableDiff(old$value, new$value)
-  list(id = id, kind = kind, baselineHash = old$hash, candidateHash = new$hash,
-       structureBaselineHash = snapshotFileHash(paths[["structureBaseline"]]),
-       structureCandidateHash = snapshotFileHash(paths[["structureCandidate"]]),
-       old = old$value, new = new$value, diff = diff)
+  item <- list(id = id, kind = kind, baselineHash = old$hash, candidateHash = new$hash,
+               structureBaselineHash = snapshotFileHash(paths[["structureBaseline"]]),
+               structureCandidateHash = snapshotFileHash(paths[["structureCandidate"]]),
+               old = old$value, new = new$value, diff = diff)
+  if (!is.null(new$hash) && !is.null(item$structureBaselineHash) && is.null(item$structureCandidateHash))
+    item$removeStructure <- TRUE
+  item
 }
 
 writeSnapshotReview <- function(modulePath, ids, output, open) {
-  items <- lapply(ids, function(id) snapshotReviewItem(modulePath, id))
+  root <- snapshotReviewRoot(modulePath)
+  if (is.null(output))
+    output <- tempfile("jasp-snapshot-review-", tmpdir = dirname(tempdir()), fileext = ".html")
+  output <- file.path(normalizePath(dirname(output), winslash = "/", mustWork = TRUE), basename(output))
+  # Reserve _snaps even before the first snapshot creates the directory.
+  if (startsWith(paste0(tolower(output), "/"), paste0(tolower(root), "/")))
+    stop("Write the review outside the _snaps directory.", call. = FALSE)
+  items <- lapply(ids, function(id) snapshotReviewItem(root, id))
   data <- .snapshotJSON(list(version = 1L, items = items))
   # The HTML parser recognises closing script tags even inside application/json.
   data <- gsub("<", "\\u003c", as.character(data), fixed = TRUE)
   data <- paste0('<script type="application/json" id="review-data">', data, "</script>")
   assets <- system.file("snapshot-review", package = "jaspTools", mustWork = TRUE)
   template <- readLines(file.path(assets, "index.html"), encoding = "UTF-8", warn = FALSE)
+  scripts <- file.path(assets, c("table-format.js", "review.js"))
+  license <- snapshotText(file.path(assets, "JASP-Desktop-LICENSE.txt"))
+  js <- paste0("/*\n", license, "\n*/\n", paste(vapply(scripts, snapshotText, ""), collapse = "\n"))
   replacements <- list("/* SNAPSHOT_REVIEW_CSS */" = snapshotText(file.path(assets, "review.css")),
-                       "/* SNAPSHOT_REVIEW_JS */" = snapshotText(file.path(assets, "review.js")),
+                       "/* SNAPSHOT_REVIEW_JS */" = js,
                        "<!-- SNAPSHOT_REVIEW_DATA -->" = data)
   for (marker in names(replacements)) {
     line <- which(trimws(template) == marker)
     if (length(line) != 1L) stop("Missing report template marker ", marker, call. = FALSE)
     template[line] <- replacements[[marker]]
   }
-  if (is.null(output))
-    output <- tempfile("jasp-snapshot-review-", tmpdir = dirname(tempdir()), fileext = ".html")
-  # A report written under _snaps would be discovered as another HTML reference.
-  outDir <- normalizePath(dirname(output), winslash = "/", mustWork = TRUE)
-  output <- file.path(outDir, basename(output))
-  root <- snapshotReviewRoot(modulePath)
-  if (startsWith(tolower(output), paste0(tolower(root), "/")))
-    stop("Write the review outside the _snaps directory.", call. = FALSE)
   writeSnapshotText(paste(template, collapse = "\n"), output)
   if (open) utils::browseURL(output)
   invisible(output)

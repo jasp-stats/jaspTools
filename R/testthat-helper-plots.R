@@ -146,115 +146,49 @@ decode_plot_labels <- function(labels) {
 expect_plot_with_fallback <- function(name, test, fallback_test = test, tolerance = NULL) {
   testthat::local_edition(3)
   structureName <- ggplot_structure_snapshot_name(name)
-  if (is_ggplot(fallback_test))
-    testthat::announce_snapshot_file(name = structureName)
-
+  # A non-ggplot can replace an accepted ggplot. Keep the old structure until review.
+  testthat::announce_snapshot_file(name = structureName)
+  structurePath <- snapshot_relative_path(structureName)
+  structureCandidate <- snapshotCandidatePath(structurePath)
   result <- capture_vdiffr_expectation(name, test)
-  structureCandidate <- snapshotCandidatePath(snapshot_relative_path(structureName))
-  if ((isTRUE(result$compared) || isTRUE(result$new_svg_current)) &&
-      file.exists(structureCandidate) && !file.remove(structureCandidate))
+
+  if (!result$new_svg_current && !is.null(result$exception))
+    return(testthat::fail(conditionMessage(result$exception)))
+  if (!result$new_svg_current && !result$compared)
+    return(invisible(TRUE))
+
+  # Once vdiffr replaces the SVG, its old structural candidate must not be reviewed with it.
+  pairReady <- !result$new_svg_current
+  on.exit({
+    if (!pairReady)
+      unlink(c(result$new_svg_path, structureCandidate), expand = FALSE)
+  })
+  if (file.exists(structureCandidate) && !file.remove(structureCandidate))
     stop("Could not clear the previous structural candidate at ", structureCandidate, call. = FALSE)
 
-  if (isTRUE(result$passed)) {
-    if (isTRUE(result$compared))
-      maybe_seed_ggplot_structure_snapshot(test, name)
+  if (!result$new_svg_current) {
+    if (is_ggplot(test) && (should_update_ggplot_structure_snapshots() ||
+        (!file.exists(structurePath) && is_interactive_plot_snapshot_mode()))) {
+      # A matching SVG already satisfies the expectation independently of optional seeding.
+      tryCatch(write_ggplot_structure_snapshot(extract_ggplot_structure(test), structurePath),
+               error = function(e) NULL)
+    }
     return(invisible(TRUE))
   }
 
-  fallbackResult <- expect_doppelganger_fallback(fallback_test, name, vdiffr_result = result, tolerance = tolerance)
-
-  if (!isTRUE(result$reference_existed) && isTRUE(result$new_svg_current))
-    return(fail_fresh_visual_snapshot(name, result))
-
-  if (isTRUE(fallbackResult$passed)) {
-    warning(build_structural_fallback_review_message(name, result), call. = FALSE)
-    testthat::succeed(paste0("vdiffr mismatch for '", name, "' accepted by fallback."))
-    return(invisible(TRUE))
+  fallback <- expect_doppelganger_fallback(fallback_test, name, snapshot_path = structurePath, tolerance = tolerance)
+  pairReady <- TRUE
+  if (!result$reference_existed) {
+    testthat::fail(paste0("vdiffr created a new visual snapshot for '", name,
+                          "'. Review and accept it with jaspTools::reviewSnapshots(modulePath)."))
+  } else if (isTRUE(fallback$passed)) {
+    warning("vdiffr mismatch for '", name, "' accepted by structural fallback. Review the visual change at ",
+            result$new_svg_path, " with jaspTools::reviewSnapshots(modulePath).", call. = FALSE)
+    testthat::succeed()
+  } else {
+    testthat::fail(paste0("vdiffr mismatch for '", name, "'.\n", conditionMessage(result$exception),
+                          "\nFallback failure: ", fallback$message))
   }
-
-  vdiffrMsg <- conditionMessage(result$exception)
-  fallbackMsg <- build_fallback_failure_message(fallbackResult)
-  testthat::fail(paste0(
-    "vdiffr mismatch for '", name, "'.\n",
-    "Original vdiffr failure: ", vdiffrMsg, "\n",
-    "Fallback failure: ", fallbackMsg
-  ))
-
-  invisible(FALSE)
-}
-
-fail_fresh_visual_snapshot <- function(name, vdiffr_result) {
-  vdiffrMsg <- if (!is.null(vdiffr_result$exception))
-    conditionMessage(vdiffr_result$exception)
-  else
-    "<no vdiffr details available>"
-
-  testthat::fail(paste0(
-    "vdiffr created a new visual snapshot for '",
-    name,
-    "'. Review and accept the visual snapshot before structural fallback can be used. ",
-    "Original vdiffr failure: ",
-    vdiffrMsg
-  ))
-}
-
-build_fallback_failure_message <- function(fallbackResult) {
-  fallbackMsg <- fallbackResult$message
-
-  fallbackExceptionMsg <- NULL
-  if (!is.null(fallbackResult$exception) && inherits(fallbackResult$exception, "condition"))
-    fallbackExceptionMsg <- conditionMessage(fallbackResult$exception)
-
-  combinedFallbackMsg <- fallbackMsg
-  if (!is.null(fallbackExceptionMsg) && nzchar(fallbackExceptionMsg)) {
-    if (is.null(combinedFallbackMsg) || !nzchar(combinedFallbackMsg))
-      combinedFallbackMsg <- fallbackExceptionMsg
-    else
-      combinedFallbackMsg <- paste0(combinedFallbackMsg, " (", fallbackExceptionMsg, ")")
-  }
-
-  structuralDiff <- get_last_structural_diff()
-  if (!is.null(structuralDiff) && nzchar(structuralDiff)) {
-    combinedFallbackMsg <- paste0(combinedFallbackMsg, "\n", structuralDiff)
-  }
-
-  if (is.null(combinedFallbackMsg) || !nzchar(combinedFallbackMsg))
-    combinedFallbackMsg <- "<no fallback details available>"
-
-  combinedFallbackMsg
-}
-
-maybe_seed_ggplot_structure_snapshot <- function(test, name) {
-  if (!is_ggplot(test))
-    return(invisible(FALSE))
-
-  testthat::local_edition(3)
-
-  snapshotName <- ggplot_structure_snapshot_name(name)
-  snapshotPath <- snapshot_relative_path(snapshotName)
-
-  updateMode <- should_update_ggplot_structure_snapshots()
-
-  if (!updateMode && file.exists(snapshotPath))
-    return(invisible(FALSE))
-
-  if (!updateMode && !is_interactive_plot_snapshot_mode())
-    return(invisible(FALSE))
-
-  ensure_snapshot_subdir(snapshotName)
-  testthat::announce_snapshot_file(path = snapshotPath, name = snapshotName)
-
-  writeRes <- write_ggplot_structure_snapshot(test, snapshotName, snapshotPath, overwrite = updateMode)
-  if (!isTRUE(writeRes$passed))
-    return(invisible(FALSE))
-
-  action <- if (updateMode) "Updated" else "Created"
-  testthat::succeed(paste0(
-    action, " ggplot structural snapshot for '",
-    name,
-    "'."
-  ))
-  invisible(TRUE)
 }
 
 capture_vdiffr_expectation <- function(name, test) {
@@ -270,6 +204,8 @@ capture_vdiffr_expectation <- function(name, test) {
     renderedPath <<- file
   }
 
+  # Outside a test file, vdiffr prints the rendered path for interactive inspection.
+  on.exit(if (!is.null(renderedPath) && !is.null(get_snapshotter())) unlink(renderedPath, expand = FALSE))
   compared <- FALSE
   skippedOnCran <- FALSE
   exception <- tryCatch({
@@ -284,8 +220,14 @@ capture_vdiffr_expectation <- function(name, test) {
   newSvgCurrent <- FALSE
   if (!referenceExisted && file.exists(svgPath)) {
     # testthat initially writes a reference in both local and CI runs.
-    if (!file.rename(svgPath, newSvgPath))
+    if (is.null(renderedPath) || !testthat::compare_file_binary(renderedPath, svgPath))
+      stop("A different visual reference appeared during the test at ", svgPath, call. = FALSE)
+    if (!suppressWarnings(file.rename(svgPath, newSvgPath))) {
+      # A failed staging must not leave testthat's unreviewed SVG as an accepted reference.
+      if (!file.remove(svgPath))
+        stop("Could not clear the unreviewed visual snapshot at ", svgPath, call. = FALSE)
       stop("Could not stage the new visual snapshot at ", newSvgPath, call. = FALSE)
+    }
     newSvgCurrent <- TRUE
   } else if (!is.null(renderedPath)) {
     newSvgCurrent <- !is.null(exception)
@@ -298,7 +240,7 @@ capture_vdiffr_expectation <- function(name, test) {
     }
     if (newSvgCurrent) {
       # Use the exact rendering that vdiffr compared, including its title and theme.
-      ensure_snapshot_subdir(paste0(slug, ".new.svg"))
+      dir.create(dirname(newSvgPath), recursive = TRUE, showWarnings = FALSE)
       if (!file.copy(renderedPath, newSvgPath, overwrite = TRUE))
         stop("Could not save the visual snapshot at ", newSvgPath, call. = FALSE)
     }
@@ -307,8 +249,8 @@ capture_vdiffr_expectation <- function(name, test) {
   if (newSvgCurrent && is.null(exception))
     exception <- simpleError(paste0("Visual snapshot for '", name, "' requires review."))
 
-  list(passed = is.null(exception), exception = exception, compared = compared,
-       svg_path = svgPath, new_svg_path = newSvgPath, reference_existed = referenceExisted,
+  list(exception = exception, compared = compared,
+       new_svg_path = newSvgPath, reference_existed = referenceExisted,
        new_svg_current = newSvgCurrent)
 }
 
@@ -317,10 +259,6 @@ maybe_collect_plot_snapshot_garbage <- function() {
     return(invisible(FALSE))
 
   invisible(gc(FALSE))
-}
-
-is_visual_failure_result <- function(vdiffr_result) {
-  !is.null(vdiffr_result) && !isTRUE(vdiffr_result$passed)
 }
 
 #' @noRd
@@ -344,8 +282,6 @@ expect_doppelganger_fallback <- function(test, name, ..., tolerance = NULL) {
 expect_doppelganger_fallback.default <- function(test, name, ...) {
   list(
     passed = FALSE,
-    has_fallback = FALSE,
-    exception = NULL,
     message = paste0(
       "No fallback expectation is implemented for class(es): ",
       paste(class(test), collapse = ", "),
@@ -357,212 +293,46 @@ expect_doppelganger_fallback.default <- function(test, name, ...) {
 #' @noRd
 #' @method expect_doppelganger_fallback ggplot
 #' @export
-expect_doppelganger_fallback.ggplot <- function(test, name, vdiffr_result = NULL, ..., tolerance = NULL) {
-  expect_equal_ggplot_structure(test, name, vdiffr_result = vdiffr_result, tolerance = tolerance)
-}
+expect_doppelganger_fallback.ggplot <- function(test, name, snapshot_path, ..., tolerance = NULL) {
+  current <- extract_ggplot_structure(test)
+  write_ggplot_structure_snapshot(current, snapshotCandidatePath(snapshot_path))
+  if (!file.exists(snapshot_path))
+    return(list(passed = FALSE, message = paste0("No accepted ggplot structural snapshot exists for '", name, "'.")))
 
-expect_equal_ggplot_structure <- function(plot, name, vdiffr_result = NULL, tolerance = NULL) {
-  testthat::local_edition(3)
-  clear_last_structural_diff()
+  previous <- tryCatch(readRDS(snapshot_path), error = identity)
+  if (inherits(previous, "error"))
+    return(list(passed = FALSE, message = conditionMessage(previous)))
 
-  if (!is.null(tolerance))
-    withr::local_options(jaspTools.plotStructure.tolerance = tolerance)
+  if (is.null(tolerance))
+    tolerance <- getOption("jaspTools.plotStructure.tolerance", 1e-6)
+  differences <- all.equal(normalize_snapshot_structure(previous), normalize_snapshot_structure(current),
+                           tolerance = tolerance, check.attributes = FALSE)
+  if (isTRUE(differences))
+    return(list(passed = TRUE))
 
-  snapshotName <- ggplot_structure_snapshot_name(name)
-  snapshotPath <- snapshot_relative_path(snapshotName)
-  visualFailure <- is_visual_failure_result(vdiffr_result)
-  stageCandidate <- visualFailure && isTRUE(vdiffr_result$new_svg_current)
-  if (stageCandidate) {
-    candidatePath <- snapshotCandidatePath(snapshotPath)
-    candidateReady <- FALSE
-    on.exit({
-      if (!candidateReady)
-        unlink(c(vdiffr_result$new_svg_path, candidatePath), expand = FALSE)
-    }, add = TRUE)
-  }
-
-  ensure_snapshot_subdir(snapshotName)
-  testthat::announce_snapshot_file(path = snapshotPath, name = snapshotName)
-
-  buildRes <- build_ggplot_structure_snapshot(plot)
-  if (!isTRUE(buildRes$passed)) {
-    if (stageCandidate)
-      stop("Could not build the structural snapshot for '", name, "': ", buildRes$message, call. = FALSE)
-    return(list(
-      passed = FALSE,
-      has_fallback = TRUE,
-      exception = buildRes$exception,
-      message = buildRes$message
-    ))
-  }
-
-  tmpPath <- buildRes$tmpPath
-  on.exit(unlink(tmpPath, expand = FALSE), add = TRUE)
-
-  if (!visualFailure && should_update_ggplot_structure_snapshots()) {
-    hadSnapshot <- file.exists(snapshotPath)
-    writeRes <- write_ggplot_structure_snapshot(plot, snapshotName, snapshotPath, overwrite = TRUE, buildRes = buildRes)
-    if (!isTRUE(writeRes$passed))
-      return(writeRes)
-
-    action <- if (hadSnapshot) "updated" else "created"
-    return(list(
-      passed = TRUE,
-      has_fallback = TRUE,
-      exception = NULL,
-      message = paste0(
-        "ggplot structural snapshot for '",
-        name,
-        "' ",
-        action,
-        " in update mode."
-      )
-    ))
-  }
-
-  if (visualFailure) {
-    if (stageCandidate) {
-      if (!file.copy(tmpPath, candidatePath, overwrite = TRUE))
-        stop("Could not stage the structural snapshot at ", candidatePath, call. = FALSE)
-      candidateReady <- TRUE
-    }
-
-    if (!file.exists(snapshotPath))
-      return(list(passed = FALSE, has_fallback = TRUE, exception = NULL,
-                  message = paste0("No accepted ggplot structural snapshot exists for '", name, "'.")))
-
-    passed <- compare_ggplot_structure_snapshot(snapshotPath, tmpPath)
-    return(list(
-      passed = isTRUE(passed),
-      has_fallback = TRUE,
-      exception = NULL,
-      message = if (isTRUE(passed)) {
-        paste0("vdiffr mismatch for '", name, "' accepted by ggplot structural fallback.")
-      } else {
-        paste0("ggplot structural snapshot for '", name, "' failed.")
-      }
-    ))
-  }
-
-  snapshotRes <- tryCatch(
-    {
-      testthat::expect_snapshot_file(
-        tmpPath,
-        name = snapshotName,
-        cran = FALSE,
-        compare = compare_ggplot_structure_snapshot
-      )
-
-      list(
-        passed = TRUE,
-        has_fallback = TRUE,
-        exception = NULL,
-        message = if (is.null(vdiffr_result) || isTRUE(vdiffr_result$passed)) {
-          paste0("ggplot structural snapshot for '", name, "' passed.")
-        } else {
-          paste0("vdiffr mismatch for '", name, "' accepted by ggplot structural fallback.")
-        }
-      )
-    },
-    expectation_failure = function(cnd) {
-      list(
-        passed = FALSE,
-        has_fallback = TRUE,
-        exception = cnd,
-        message = conditionMessage(cnd)
-      )
-    },
-    error = function(cnd) {
-      list(
-        passed = FALSE,
-        has_fallback = TRUE,
-        exception = cnd,
-        message = conditionMessage(cnd)
-      )
-    }
-  )
-
-  snapshotRes
+  list(passed = FALSE, message = paste0(
+    "Structural fallback mismatch (tolerance = ", format(tolerance, scientific = TRUE), "):\n  ",
+    paste(utils::head(differences, 10L), collapse = "\n  "),
+    if (length(differences) > 10L) paste0("\n  ... and ", length(differences) - 10L, " more differences")
+  ))
 }
 
 is_interactive_plot_snapshot_mode <- function() {
   interactive() && !identical(tolower(Sys.getenv("CI", "false")), "true")
 }
 
-build_ggplot_structure_snapshot <- function(plot) {
-  current <- tryCatch(
-    extract_ggplot_structure(plot),
-    error = function(cnd) cnd
-  )
-
-  if (inherits(current, "error")) {
-    return(list(
-      passed = FALSE,
-      exception = current,
-      message = conditionMessage(current)
-    ))
-  }
-
-  tmpPath <- tempfile(pattern = "ggplot-structure-", fileext = ".rds")
-  saveRDS(current, tmpPath)
-
-  list(
-    passed = TRUE,
-    exception = NULL,
-    message = NULL,
-    tmpPath = tmpPath
-  )
-}
-
-write_ggplot_structure_snapshot <- function(plot, snapshotName, snapshotPath, overwrite = FALSE, buildRes = NULL) {
-  ensure_snapshot_subdir(snapshotName)
-  if (is.null(buildRes))
-    buildRes <- build_ggplot_structure_snapshot(plot)
-
-  if (!isTRUE(buildRes$passed)) {
-    return(list(
-      passed = FALSE,
-      has_fallback = TRUE,
-      exception = buildRes$exception,
-      message = buildRes$message
-    ))
-  }
-
-  writeRes <- tryCatch(
-    file.copy(buildRes$tmpPath, snapshotPath, overwrite = overwrite),
-    error = function(cnd) cnd
-  )
-
-  if (!isTRUE(writeRes)) {
-    err <- if (inherits(writeRes, "error")) {
-      writeRes
-    } else {
-      simpleError(paste0("Failed to write snapshot file: ", snapshotPath))
-    }
-
-    return(list(
-      passed = FALSE,
-      has_fallback = TRUE,
-      exception = err,
-      message = conditionMessage(err)
-    ))
-  }
-
-  list(
-    passed = TRUE,
-    has_fallback = TRUE,
-    exception = NULL,
-    message = NULL
-  )
+write_ggplot_structure_snapshot <- function(structure, path) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  tmp <- tempfile(".plot-structure-", tmpdir = dirname(path))
+  on.exit(unlink(tmp, expand = FALSE))
+  saveRDS(structure, tmp)
+  if (!file.rename(tmp, path))
+    stop("Could not write the structural snapshot at ", path, call. = FALSE)
 }
 
 should_update_ggplot_structure_snapshots <- function() {
   isTRUE(getOption("jaspTools.plotStructure.update", FALSE)) ||
     identical(tolower(Sys.getenv("JASP_PLOT_STRUCTURE_UPDATE", "false")), "true")
-}
-
-ggplot_structure_snapshot_path <- function(name) {
-  snapshot_relative_path(ggplot_structure_snapshot_name(name))
 }
 
 ggplot_structure_snapshot_name <- function(name) {
@@ -584,29 +354,6 @@ is_ggplot <- function(x) {
   "ggplot" %in% sub("^.*::", "", class(x))
 }
 
-build_structural_fallback_review_message <- function(name, vdiffr_result = NULL) {
-  newSvgPath <- if (!is.null(vdiffr_result)) vdiffr_result$new_svg_path else NULL
-  reviewPath <- if (!is.null(newSvgPath) && file.exists(newSvgPath))
-    newSvgPath
-  else
-    "<no .new.svg was saved>"
-
-  paste0(
-    "vdiffr mismatch for '",
-    name,
-    "' accepted by structural fallback. Review the visual change at ",
-    reviewPath,
-    " and accept the visual snapshot with jaspTools::reviewSnapshots(modulePath). ",
-    "Until the visual snapshot is accepted, ",
-    "future runs will keep using the slower structural fallback."
-  )
-}
-
-# Environment to store the last structural comparison details, so they can be
-# retrieved and included in failure messages (message() output is lost on CI).
-.structuralDiffEnv <- new.env(parent = emptyenv())
-.structuralDiffEnv$lastDiff <- NULL
-
 # Recursively strip waiver objects from a snapshot structure so that
 # snapshots created with older code (which stored waivers) can be compared
 # with snapshots created by the current code (which normalises them to NULL).
@@ -616,51 +363,6 @@ normalize_snapshot_structure <- function(x) {
   if (is.list(x))
     return(lapply(x, normalize_snapshot_structure))
   x
-}
-
-compare_ggplot_structure_snapshot <- function(old, new) {
-  .structuralDiffEnv$lastDiff <- NULL
-
-  oldStructure <- tryCatch(readRDS(old), error = function(cnd) cnd)
-  newStructure <- tryCatch(readRDS(new), error = function(cnd) cnd)
-
-  if (inherits(oldStructure, "error") || inherits(newStructure, "error")) {
-    .structuralDiffEnv$lastDiff <- "Could not read one or both .rds snapshot files."
-    return(FALSE)
-  }
-
-  # Normalize both sides so old snapshots (with waiver objects) match new ones
-  oldStructure <- normalize_snapshot_structure(oldStructure)
-  newStructure <- normalize_snapshot_structure(newStructure)
-
-  tol <- getOption("jaspTools.plotStructure.tolerance", 1e-6)
-  result <- all.equal(
-    oldStructure,
-    newStructure,
-    tolerance = tol,
-    check.attributes = FALSE
-  )
-
-  if (!isTRUE(result)) {
-    diffLines <- utils::head(result, 10)
-    diffSummary <- paste0(
-      "Structural fallback mismatch (tolerance = ", format(tol, scientific = TRUE), "):\n  ",
-      paste(diffLines, collapse = "\n  "),
-      if (length(result) > 10) paste0("\n  ... and ", length(result) - 10, " more differences") else ""
-    )
-    .structuralDiffEnv$lastDiff <- diffSummary
-  }
-
-  isTRUE(result)
-}
-
-get_last_structural_diff <- function() {
-  .structuralDiffEnv$lastDiff
-}
-
-clear_last_structural_diff <- function() {
-  .structuralDiffEnv$lastDiff <- NULL
-  invisible(NULL)
 }
 
 get_snapshotter <- function() {
@@ -678,12 +380,6 @@ snapshot_relative_path <- function(name) {
     return(file.path("tests", "testthat", "_snaps", name))
 
   file.path(snapshotter$snap_dir, snapshotter$file, name)
-}
-
-ensure_snapshot_subdir <- function(name) {
-  path <- snapshot_relative_path(name)
-  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
-  invisible(path)
 }
 
 extract_ggplot_structure <- function(plot) {

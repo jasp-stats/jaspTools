@@ -7,7 +7,8 @@
   const status = item => item.candidateHash == null ? "reference" : decisions.get(item.id)?.action || "pending";
   let current = (items.find(item => status(item) === "pending") || items[0])?.id;
   const modeLabels = {diff: "Visual differences", candidate: "Candidate", baseline: "Baseline"};
-  const nextMode = {diff: "candidate", candidate: "baseline", baseline: "diff"};
+  const tableModeLabels = {diff: "Differences (formatted)", precision: "Differences (full precision)",
+    candidate: "Candidate (formatted)", baseline: "Baseline (formatted)"};
   let drawn, mode;
 
   function el(tag, text, className) {
@@ -33,24 +34,21 @@
     const resolved = candidates.filter(entry => ["accept", "decline"].includes(status(entry))).length;
     byId("progress").textContent = resolved + " of " + candidates.length + " resolved";
     byId("export").disabled = !decisions.size;
-    byId("items").replaceChildren(...list.map(entry => {
+    const sidebar = byId("items"), sidebarFocused = sidebar.contains(document.activeElement);
+    sidebar.replaceChildren(...list.map(entry => {
       const button = el("button", entry.id, "item");
       button.setAttribute("aria-current", String(entry.id === current));
       button.append(el("small", labels[status(entry)]));
       button.onclick = () => { current = entry.id; draw(); };
       return button;
     }));
+    if (sidebarFocused) sidebar.querySelector('[aria-current="true"]')?.focus();
     byId("empty").hidden = Boolean(item);
     byId("review").hidden = !item;
     byId("undo").disabled = !history.length;
     byId("accept").disabled = byId("decline").disabled = !item || item.candidateHash == null;
     if (!item) return;
     const reference = status(item) === "reference";
-    if (drawn !== current) {
-      mode = reference ? "baseline" : item.old == null ? "candidate" : "diff";
-      document.querySelector("main").scrollTop = 0;
-      drawn = current;
-    }
     byId("previous").disabled = index === 0;
     byId("next").disabled = index === list.length - 1;
     byId("status").textContent = item.kind + " · " + labels[status(item)] + (item.old == null ? " · New snapshot" : "");
@@ -58,38 +56,61 @@
     byId("comment").value = drafts.get(item.id) ?? decisions.get(item.id)?.comment ?? "";
     byId("comment-only").disabled = !byId("comment").value.trim();
     byId("decision").hidden = reference;
-    drawPreview(item);
+    if (drawn !== item) {
+      mode = reference ? "baseline" : item.old == null ? "candidate" : "diff";
+      document.querySelector("main").scrollTop = 0;
+      drawn = item;
+      drawPreview(item);
+    }
   }
 
-  function drawPreview(item) {
+  function previewModes(item) {
+    const labels = item.kind === "table" ? tableModeLabels : modeLabels;
+    if (item.old != null && item.new != null) return labels;
+    const side = item.new == null ? "baseline" : "candidate";
+    const modes = {[side]: labels[side]};
+    if (item.kind === "table") modes.raw = modeLabels[side] + " (full precision)";
+    return modes;
+  }
+
+  function nextMode(labels) {
+    const keys = Object.keys(labels);
+    return keys[(keys.indexOf(mode) + 1) % keys.length];
+  }
+
+  function drawPreview(item, scrollLeft = 0) {
     const target = byId("preview"), cycle = byId("cycle");
-    const scrollLeft = target.querySelector(".scroll")?.scrollLeft || 0;
-    const shown = mode === "baseline" ? item.old : item.new;
+    const shown = mode === "baseline" || item.new == null ? item.old : item.new;
     byId("title").textContent = plainText(shown?.title) || item.id.split("/").pop();
     target.replaceChildren();
     byId("preview-details").replaceChildren();
-    const comparable = item.old != null && item.new != null;
-    target.classList.toggle("swappable", comparable);
-    byId("view-label").textContent = modeLabels[mode];
-    cycle.hidden = !comparable;
-    cycle.textContent = "Show " + modeLabels[nextMode[mode]].toLowerCase();
-    target.title = comparable ? "Click to show " + modeLabels[nextMode[mode]].toLowerCase() + " (T)" : "";
-    if (item.kind === "table") showTable(item, mode, target);
-    if (item.kind === "figure") void showFigure(item, mode, target);
+    const labels = previewModes(item), next = nextMode(labels);
+    target.classList.toggle("swappable", next !== mode);
+    byId("view-label").textContent = labels[mode];
+    cycle.hidden = next === mode;
+    cycle.title = "Show " + labels[next].toLowerCase() + " (T)";
+    target.title = cycle.hidden ? "" : cycle.title;
+    if (item.kind === "table") showTable(item, mode, shown, target);
+    if (item.kind === "figure") {
+      void showFigure(item, mode, target);
+      if (item.removeStructure)
+        byId("preview-details").append(el("p", "Accepting this figure also removes its previous plot structure reference.", "caption"));
+    }
     if (item.kind === "html") showHtml(item, mode, target);
     if (scrollLeft && target.querySelector(".scroll")) target.querySelector(".scroll").scrollLeft = scrollLeft;
   }
 
   function cyclePreview() {
     const item = visible().find(entry => entry.id === current);
-    if (!item || item.old == null || item.new == null) return;
-    mode = nextMode[mode];
-    drawPreview(item);
+    if (!item || byId("cycle").hidden) return;
+    mode = nextMode(previewModes(item));
+    drawPreview(item, byId("preview").querySelector(".scroll")?.scrollLeft);
   }
 
   function valueText(value) {
     if (value === undefined) return "—";
     if (value === "") return '""';
+    if (Object.is(value, -0)) return "-0";
     return typeof value === "string" ? value : JSON.stringify(value);
   }
 
@@ -173,20 +194,25 @@
     return insertRemovedEntries(old.length, matches);
   }
 
-  function markTableNumber(cell, previous, value) {
-    const before = String(previous), after = String(value);
-    const [a, ae] = before.split("e"), [b, be] = after.split("e");
-    const point = s => s.includes(".") ? s.indexOf(".") : s.length;
-    let marked = false;
-    for (let i = 0; i < after.length; i++) {
-      const j = i < b.length ? i + point(a) - point(b) : i + a.length - b.length;
-      if (after[i] !== before[j] || (ae !== be && i >= b.length)) {
-        cell.append(el("span", after[i], "changed-digit"));
-        marked = true;
-      } else cell.append(after[i]);
+  function markTableNumber(cell, before, after) {
+    // A change below the displayed precision still needs a highlighted cell.
+    cell.classList.add("changed-value");
+    if (before === after) { cell.append(after); return; }
+    const scientific = /([eE](?=[+-]?\d)|×\s*10)/;
+    const [a, , oldExponent = ""] = before.split(scientific);
+    const [b, separator = "", exponent = ""] = after.split(scientific);
+    const point = text => text.match(/^[^\d.]*[\d,]*/)[0].length;
+    function markDigits(text, old, offset) {
+      for (let i = 0; i < text.length; i++) {
+        const digit = text[i];
+        if (/[\d⁰¹²³⁴⁵⁶⁷⁸⁹]/.test(digit) && digit !== old[i + offset])
+          cell.append(el("span", digit, "changed-digit"));
+        else cell.append(digit);
+      }
     }
-    // A deleted trailing digit can be the only difference.
-    if (!marked) cell.classList.add("changed");
+    markDigits(b, a, point(a) - point(b));
+    cell.append(separator);
+    markDigits(exponent, oldExponent, oldExponent.length - exponent.length);
   }
 
   function tableFootnotes(target, baseline, candidate, compare) {
@@ -210,19 +236,27 @@
     target.append(list);
   }
 
-  function showTable(item, mode, target) {
-    const compare = mode === "diff";
-    const current = mode === "baseline" ? item.old : item.new, previous = compare ? item.old : null;
+  function showTable(item, mode, current, target) {
+    const compare = mode === "diff" || mode === "precision";
+    const previous = compare ? item.old : null;
+    let display = [], oldDisplay = [];
+    if (mode !== "precision" && mode !== "raw") {
+      try {
+        display = window.snapshotTableDisplay(current);
+        oldDisplay = window.snapshotTableDisplay(previous);
+      } catch (error) {
+        display = []; oldDisplay = [];
+        target.append(el("p", "JASP could not format this table. Showing full-precision values. " + error.message, "caption"));
+      }
+    }
     const oldFields = previous?.schema?.fields || [], fields = current?.schema?.fields || [];
     const oldData = previous?.data || [], data = current?.data || [];
     const changes = compare ? item.diff?.changes || [] : [];
     const columns = compare ? alignTableEntries(oldFields, fields, [field => field.name]) :
       fields.map((_, j) => ({i: null, j}));
-    const oldForNew = data.map((_, j) => j < oldData.length ? j : null);
-    if (compare) for (const row of item.diff?.rows || []) {
-      if (row.newRow != null) oldForNew[row.newRow - 1] = row.oldRow == null ? null : row.oldRow - 1;
-    }
-    const rows = compare ? insertRemovedEntries(oldData.length, oldForNew) : data.map((_, j) => ({i: null, j}));
+    const rows = compare ? item.diff.rows.map(({oldRow, newRow}) => ({
+      i: oldRow == null ? null : oldRow - 1, j: newRow == null ? null : newRow - 1
+    })) : data.map((_, j) => ({i: null, j}));
     const cellChanges = new Map(), columnChanges = new Set(), rowChanges = new Set();
     for (const change of changes) {
       if (change.kind === "column_metadata") columnChanges.add(change.column);
@@ -245,6 +279,8 @@
       return cell;
     }
 
+    const fieldValue = (record, name) => record != null && Object.hasOwn(record, name) ? record[name] : undefined;
+    const payload = raw => raw != null && typeof raw === "object" && Object.hasOwn(raw, "value") ? raw.value : raw;
     function dataCell(row, col, tag = "td") {
       const removed = compare && (row.j == null || col.j == null);
       const added = compare && !removed && (row.i == null || col.i == null);
@@ -254,25 +290,30 @@
       const cell = el(tag, undefined, removed ? "removed" : added ? "added" : "");
       // New-only columns have no value at their intersection with deleted rows.
       if (!record || !field) return cell;
-      const name = field.name, raw = record[name];
-      const value = raw != null && typeof raw === "object" && Object.hasOwn(raw, "value") ? raw.value : raw;
-      const changesHere = compare && !removed && !added ? cellChanges.get(JSON.stringify([row.j + 1, name])) : null;
-      const numeric = changesHere?.find(c => c.delta && (c.path === "" || c.path === "value"));
-      if (numeric && typeof value === "number") markTableNumber(cell, Number(numeric.old), value);
-      else {
-        cell.append(valueText(value));
-        if (changesHere) cell.classList.add("changed");
+      const name = field.name;
+      const raw = fieldValue(record, name), value = payload(raw);
+      const shown = fieldValue(removed ? oldDisplay[row.i] : display[row.j], name) ?? valueText(value);
+      const paired = compare && !removed && !added;
+      const before = paired ? fieldValue(oldDisplay[row.i], name) : undefined;
+      const displayChanged = before != null && before !== shown;
+      const changesHere = paired ? cellChanges.get(JSON.stringify([row.j + 1, name])) : null;
+      const oldValue = paired ? payload(fieldValue(oldData[row.i], name)) : undefined;
+      if (typeof value === "number" && typeof oldValue === "number" && (displayChanged || !Object.is(oldValue, value))) {
+        markTableNumber(cell, before ?? valueText(oldValue), shown);
+      } else {
+        cell.append(shown);
+        if (changesHere || displayChanged) cell.classList.add("changed");
       }
       if (changesHere) cell.title = changesHere.map(c => [c.path, c.old + " → " + c.new, decimalText(c)].filter(Boolean).join(" · ")).join("\n");
       else if (value !== raw) cell.title = valueText(raw);
-      noteRefs(cell, record[".footnotes"]?.[name], snapshot);
+      noteRefs(cell, fieldValue(record[".footnotes"], name), snapshot);
       return cell;
     }
 
     if (columns.length) {
       const table = el("table", undefined, "snapshot-table"), head = table.createTHead(), body = table.createTBody();
-      if ((current || previous)?.casesAcrossColumns) {
-        const titleRows = (current || previous).overTitle && columns.length > 1 ? 2 : 1;
+      if (current.casesAcrossColumns) {
+        const titleRows = current.overTitle && columns.length > 1 ? 2 : 1;
         for (let k = 0; k < titleRows; k++) {
           const tr = head.insertRow(); tr.append(headerCell(columns[k]));
           for (const row of rows) tr.append(dataCell(row, columns[k], "th"));
@@ -296,7 +337,7 @@
       const scroll = el("div", undefined, "scroll");
       scroll.append(table); target.append(scroll);
     }
-    const error = (current || previous)?.error;
+    const error = current?.error;
     if (error) target.append(el("p", error.errorMessage ?? valueText(error), "table-error"));
     tableFootnotes(target, previous, current, compare);
     if (changes.length) {
@@ -495,15 +536,19 @@
   }
 
   function showHtml(item, mode, target) {
-    const old = staticHtml(item.old ?? ""), updated = staticHtml(item.new ?? "");
     // Styles affect rendering but have no visible text to mark up. Use the
     // chosen side's CSS and retain both original sources in the disclosure.
-    const chosen = mode === "baseline" || item.new == null ? old : updated;
-    const styles = Array.from(chosen.querySelectorAll("style"), node => node.outerHTML).join("");
-    for (const node of [...old.querySelectorAll("style"), ...updated.querySelectorAll("style")]) node.remove();
-    const body = el("div");
-    if (mode === "diff") htmlChildrenDiff(body, old, updated);
-    else body.append(...chosen.childNodes);
+    const chosen = staticHtml(mode === "baseline" ? item.old : item.new);
+    const styles = [...chosen.querySelectorAll("style")];
+    styles.forEach(node => node.remove());
+    let content = chosen;
+    if (mode === "diff") {
+      const old = staticHtml(item.old);
+      old.querySelectorAll("style").forEach(node => node.remove());
+      content = el("div");
+      htmlChildrenDiff(content, old, chosen);
+    }
+    content.dataset.reviewDocument = "";
     const frame = el("iframe");
     frame.title = (mode === "diff" ? "Changes" : mode === "candidate" ? "Candidate" : "Baseline") + " in HTML output";
     // The parent measures the document after layout. Scripts and outbound
@@ -511,23 +556,23 @@
     frame.setAttribute("sandbox", "allow-same-origin");
     frame.setAttribute("tabindex", "-1");
     frame.referrerPolicy = "no-referrer";
-    frame.style.cssText = "display:block;width:100%;height:1px;min-height:0;border:0;pointer-events:none";
     frame.addEventListener("load", () => {
-      const content = frame.contentDocument?.body?.firstElementChild;
-      if (!content) return;
+      const doc = frame.contentDocument;
+      if (!doc?.body) return;
+      doc.head.lastElementChild.before(...styles);
+      doc.body.append(content);
       const size = () => { frame.style.height = Math.ceil(Math.max(1, content.scrollHeight, content.getBoundingClientRect().height)) + "px"; };
       size();
       new ResizeObserver(size).observe(content);
     }, {once: true});
     frame.srcdoc = '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" ' +
       'content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; form-action \'none\'; base-uri \'none\'">' +
-      '<style>body{font:15px/1.45 system-ui,sans-serif}img{max-width:100%}table{border-collapse:collapse}</style>' + styles +
+      '<style>body{font:15px/1.45 system-ui,sans-serif}img{max-width:100%}table{border-collapse:collapse}</style>' +
       '<style>html,body{margin:0!important;height:auto!important;min-height:0!important;overflow:hidden!important}' +
       '[data-review-document]{display:flow-root;padding:12px;overflow-wrap:anywhere}' +
       '[data-review-edit="added"]{background:#def4e4!important;color:#145739!important}' +
       '[data-review-edit="removed"],[data-review-edit="replaced"]{background:#fbe4e1!important;color:#922c31!important}' +
-      '[data-review-edit="removed"]{text-decoration:line-through!important}</style></head><body>' +
-      '<div data-review-document>' + body.innerHTML + '</div></body></html>';
+      '[data-review-edit="removed"]{text-decoration:line-through!important}</style></head><body></body></html>';
     target.append(frame);
     const source = el("details");
     source.append(el("summary", "HTML source"));
@@ -551,6 +596,7 @@
       history.push({id: current, previous});
       decisions.set(current, {action, comment});
     }
+    drafts.delete(current);
     const next = list.slice(i + 1).concat(list.slice(0, i)).find(item => status(item) === "pending");
     if (next) current = next.id;
     draw();
@@ -559,8 +605,13 @@
   function undo() {
     const last = history.pop();
     if (!last) return;
-    if (last.previous) decisions.set(last.id, last.previous);
-    else decisions.delete(last.id);
+    if (last.previous) {
+      decisions.set(last.id, last.previous);
+      drafts.delete(last.id);
+    } else {
+      drafts.set(last.id, decisions.get(last.id).comment);
+      decisions.delete(last.id);
+    }
     current = last.id;
     if (!visible().some(item => item.id === current)) {
       byId("filter").value = "all";
@@ -574,10 +625,12 @@
     const entries = reviewed.map(item => ({
       id: item.id, baselineHash: item.baselineHash, candidateHash: item.candidateHash,
       structureBaselineHash: item.structureBaselineHash ?? null, structureCandidateHash: item.structureCandidateHash ?? null,
+      ...(item.removeStructure && decisions.get(item.id).action === "accept" ? {removeStructure: true} : {}),
       ...decisions.get(item.id),
       ...(item.diff ? {summary: item.diff.summary, changes: item.diff.changes} : {})
     }));
-    const blob = new Blob([JSON.stringify({version: 1, decisions: entries}, null, 2)], {type: "application/json"});
+    const version = entries.some(entry => entry.removeStructure) ? 2 : 1;
+    const blob = new Blob([JSON.stringify({version, decisions: entries}, null, 2)], {type: "application/json"});
     const url = URL.createObjectURL(blob), link = el("a");
     link.href = url; link.download = "snapshot-decisions.json";
     document.body.append(link); link.click(); link.remove();

@@ -58,6 +58,30 @@ test_that("result metadata distinguishes HTML, report and JSON in nested collect
   expect_error(getTests(tree), "Missing html result at outer/collection/markup", fixed = TRUE)
 })
 
+test_that("manual replays retain explicit options and single or multiple datasets", {
+  name <- "Example"
+  options <- list('option "A"' = c("group A", "group B"), fixed = 0L,
+                  label = 'quoted "title"', value = 1.2345678901234567, removed = NULL)
+  frame <- data.frame(group = factor(c("A", "B")), count = c(1L, NA_integer_))
+  many <- list('first "sample"' = frame, second = "debug.csv")
+  replay <- function(dataset = NULL, datasets = NULL) {
+    runAnalysis <- function(name, dataset = NULL, options, datasets = NULL)
+      list(name = name, options = options, dataset = dataset, datasets = datasets)
+    code <- addPreambleLines(name, options, dataset, datasets)
+    eval(parse(text = code))
+  }
+  for (dataset in list(frame, 'C:\\data\\example.csv', NULL))
+    expect_identical(replay(dataset), list(name = name, options = options, dataset = dataset, datasets = NULL))
+  expect_identical(replay(datasets = many), list(name = name, options = options, dataset = NULL, datasets = many))
+
+  table <- data.table::as.data.table(frame)
+  data.table::setkey(table, group)
+  expect_identical(replay(table)$dataset, frame)
+  many[[1L]] <- table
+  expect_identical(replay(datasets = many)$datasets, list('first "sample"' = frame, second = "debug.csv"))
+  expect_identical(data.table::key(table), "group")
+})
+
 test_that("numeric collection positions stay distinct from literal numeric names", {
   html <- list(text = "<p>text</p>", rawtext = "text")
   tree <- list(container = list(collection = stats::setNames(list(html, html), c("", "1"))))
@@ -159,4 +183,74 @@ test_that("a first failed replay leaves no table, HTML or plot artifacts", {
   expect_equal(replay$passed, c(0L, 0L))
   expect_false(any(replay$error | replay$skipped))
   expect_length(list.files(file.path(testDir, "_snaps"), recursive = TRUE), 0L)
+})
+
+test_that("failed publication restores the generated test, example, references and candidates", {
+  module <- withr::local_tempdir()
+  testDir <- file.path(module, "tests", "testthat")
+  testFile <- file.path(testDir, "test-other-case.R")
+  fixture <- file.path(module, "case.jasp")
+  copy <- file.path(testDir, "jaspfiles", "other", "case.jasp")
+  snapDir <- file.path(testDir, "_snaps", "other-case")
+  writeSnapshotText("old test\n", testFile)
+  writeSnapshotText("old fixture\n", copy)
+  for (name in c("change", "match")) {
+    writeSnapshotText("baseline\n", file.path(snapDir, paste0(name, ".html")))
+    writeSnapshotText("previous change\n", file.path(snapDir, paste0(name, ".new.html")))
+  }
+  nodes <- Map(function(name, node) list(name = name, node = node, type = "html"),
+               c("change", "match", "first"), c("changed", "baseline", "first"))
+  publish <- function() publishGeneratedTest(testFile, fixture, copy, "new test", nodes)
+  hashes <- function() tools::md5sum(list.files(testDir, recursive = TRUE, full.names = TRUE, all.files = TRUE))
+  old <- hashes()
+  expect_error(suppressWarnings(publish()), "Could not copy the JASP example")
+  expect_identical(hashes(), old)
+
+  writeSnapshotText("new fixture\n", fixture)
+  realHashes <- snapshotDecisionHashes
+  fail <- TRUE
+  local_mocked_bindings(snapshotDecisionHashes = function(root, paths) {
+    value <- realHashes(root, paths)
+    # Fail after all live files, including the last replacement, have been moved.
+    if (fail && length(paths) == 1L && identical(paths, file.path(root, basename(testFile))) &&
+        identical(snapshotText(paths), "new test\n"))
+      stop("simulated final publication failure")
+    value
+  })
+  expect_error(publish(), "simulated final publication failure")
+  expect_identical(hashes(), old)
+
+  fail <- FALSE
+  publish()
+  expect_identical(snapshotText(testFile), "new test\n")
+  expect_identical(snapshotText(copy), "new fixture\n")
+  expect_identical(snapshotText(file.path(snapDir, "change.new.html")), "changed\n")
+  expect_false(file.exists(file.path(snapDir, "match.new.html")))
+  expect_identical(snapshotText(file.path(snapDir, "first.html")), "first\n")
+})
+
+test_that("generation can copy read-only inputs and preserves read-only reviewed files", {
+  module <- withr::local_tempdir()
+  testDir <- file.path(module, "tests", "testthat")
+  dir.create(testDir, recursive = TRUE)
+  fixture <- file.path(module, "case.jasp")
+  testFile <- file.path(testDir, "test-other-case.R")
+  copy <- file.path(testDir, "jaspfiles", "other", "case.jasp")
+  ref <- file.path(testDir, "_snaps", "other-case", "summary.html")
+  writeSnapshotText("fixture\n", fixture)
+  withr::defer(Sys.chmod(c(fixture, testFile, ref), "0644"))
+  expect_true(Sys.chmod(fixture, "0444"))
+  publish <- function(content) publishGeneratedTest(testFile, fixture, copy, content,
+    list(list(node = "summary", type = "html", name = "summary")))
+  publish("old test")
+  expect_identical(snapshotText(copy), "fixture\n")
+  expect_false(any(grepl("[.]jaspTools-", list.files(testDir, all.files = TRUE, recursive = TRUE, include.dirs = TRUE))))
+
+  expect_true(all(Sys.chmod(c(testFile, ref), "0444")))
+  publish("old test")
+  expect_error(publish("new test"), "read-only file .*test-other-case[.]R")
+  expect_identical(snapshotText(testFile), "old test\n")
+  expect_identical(snapshotText(ref), "summary\n")
+  expect_true(all(bitwAnd(file.mode(c(fixture, testFile, ref)), as.octmode("222")) == 0L))
+  expect_false(any(grepl("[.]jaspTools-", list.files(testDir, all.files = TRUE, recursive = TRUE, include.dirs = TRUE))))
 })

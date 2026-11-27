@@ -180,9 +180,17 @@ expectResultSnapshot <- function(node, name, type, rtol = NULL, atol = NULL, col
     stop("Run this expectation in a test file with a testthat snapshot reporter.", call. = FALSE)
   file <- snapshotFilename(name, type)
   id <- file.path(snapshotter$file, file)
-  if (id %in% snapshotter$snap_file_saved)
+  # Older testthat reporters have no saved-file registry. Their current
+  # FileSnaps object has the same lifetime (one test file).
+  saved <- snapshotter$snap_file_saved
+  if (is.null(saved))
+    saved <- attr(snapshotter$cur_snaps, "jaspTools.savedFiles", exact = TRUE)
+  if (id %in% saved)
     stop("Snapshot name used twice in this test file: ", file, call. = FALSE)
-  snapshotter$snap_file_saved <- c(snapshotter$snap_file_saved, id)
+  if (is.null(snapshotter$snap_file_saved))
+    attr(snapshotter$cur_snaps, "jaspTools.savedFiles") <- c(saved, id)
+  else
+    snapshotter$snap_file_saved <- c(saved, id)
   testthat::announce_snapshot_file(name = file)
   pending <- storeResultSnapshot(node, name, type, dirname(snapshot_relative_path(file)),
                                  seed = FALSE, rtol = rtol, atol = atol, columns = columns, refresh = refresh)

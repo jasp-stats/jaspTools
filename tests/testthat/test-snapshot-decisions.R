@@ -4,9 +4,9 @@ localSnapshotDecisionModule <- function(env = parent.frame()) {
   module
 }
 
-writeSnapshotDecisionFile <- function(module, rows) {
+writeSnapshotDecisionFile <- function(module, rows, version = 1L) {
   file <- file.path(module, "decisions.json")
-  jsonlite::write_json(list(version = 1, decisions = rows), file, auto_unbox = TRUE, null = "null")
+  jsonlite::write_json(list(version = version, decisions = rows), file, auto_unbox = TRUE, null = "null")
   file
 }
 
@@ -100,6 +100,46 @@ test_that("declines and comment-only reviews keep the files and return distinct 
   expect_error(applySnapshotReview(file, module), "changed since review.*demo/b.html")
 })
 
+test_that("an SVG-only acceptance retires its reviewed fallback and replays", {
+  module <- localSnapshotDecisionModule()
+  root <- snapshotReviewRoot(module)
+  id <- "demo/a.svg"
+  paths <- snapshotReviewPaths(root, id)
+  writeLines("old SVG", paths["baseline"])
+  writeLines("new SVG", paths["candidate"])
+  saveRDS("old structure", paths["structureBaseline"])
+  item <- snapshotReviewItem(root, id)
+  expect_true(item$removeStructure)
+  row <- snapshotDecisionRow(module, id, "decline")
+  row$removeStructure <- item$removeStructure
+  apply <- function(version = 2L)
+    applySnapshotReview(writeSnapshotDecisionFile(module, list(row), version), module)
+  expect_identical(apply()$status, "declined")
+  expect_identical(readRDS(paths["structureBaseline"]), "old structure")
+  row$action <- "accept"
+  expect_error(apply(1L), "Invalid plot structure removal")
+  saveRDS("different", paths["structureBaseline"])
+  expect_error(apply(), "changed since review")
+  expect_identical(readLines(paths["baseline"]), "old SVG")
+  saveRDS("old structure", paths["structureBaseline"])
+  local({
+    hashes <- snapshotDecisionHashes
+    testthat::local_mocked_bindings(snapshotDecisionHashes = function(root, paths) {
+      if (length(paths) == 4L && !file.exists(paths["structureBaseline"]))
+        stop("Final review check failed")
+      hashes(root, paths)
+    })
+    expect_error(apply(), "Final review check failed")
+  })
+  expect_identical(readRDS(paths["structureBaseline"]), "old structure")
+  expect_identical(readLines(paths["baseline"]), "old SVG")
+  expect_identical(readLines(paths["candidate"]), "new SVG")
+  expect_identical(apply()$status, "accepted")
+  expect_identical(readLines(paths["baseline"]), "new SVG")
+  expect_false(any(file.exists(paths[-1L])))
+  expect_identical(apply()$status, "already accepted")
+})
+
 test_that("review validates decisions and rediscovers the permitted ids", {
   module <- localSnapshotDecisionModule()
   folder <- file.path(module, "tests/testthat/_snaps/demo")
@@ -110,6 +150,9 @@ test_that("review validates decisions and rediscovers the permitted ids", {
   expect_error(apply(list(row)), "without a reviewed candidate")
   row$action <- "keep"
   expect_identical(apply(list(row))$status, "kept")
+  row$removeStructure <- TRUE
+  expect_error(apply(list(row)), "Invalid plot structure removal")
+  row$removeStructure <- NULL
   expect_error(apply(list(row, row)), "more than once")
   row$id <- "../a.html"
   expect_error(apply(list(row)), "Unknown snapshot id")
@@ -137,12 +180,32 @@ test_that("a failure partway through a plot acceptance restores both originals a
   expect_false(any(grepl("jaspTools-review", list.files(folder, recursive = TRUE, all.files = TRUE))))
 })
 
+test_that("acceptance leaves read-only references and candidates intact", {
+  module <- localSnapshotDecisionModule()
+  folder <- file.path(module, "tests/testthat/_snaps/demo")
+  files <- file.path(folder, c("a.html", "a.new.html"))
+  for (i in seq_along(files))
+    writeLines(as.character(i), files[i])
+  row <- snapshotDecisionRow(module, "demo/a.html", "accept")
+  decision <- writeSnapshotDecisionFile(module, list(row))
+  original <- tools::md5sum(files)
+  withr::defer(Sys.chmod(files, "0644"))
+  for (path in files) {
+    expect_true(Sys.chmod(path, "0444"))
+    expect_error(applySnapshotReview(decision, module), "Cannot change read-only file")
+    expect_identical(tools::md5sum(files), original)
+    expect_true(Sys.chmod(path, "0644"))
+  }
+  expect_false(any(grepl("[.]jaspTools-", list.files(folder, recursive = TRUE, all.files = TRUE))))
+})
+
 test_that("linked companion directories cannot redirect an acceptance", {
   module <- localSnapshotDecisionModule()
   folder <- file.path(module, "tests/testthat/_snaps/demo")
   outside <- file.path(module, "outside")
   dir.create(outside)
   writeLines("outside", file.path(outside, "a.rds"))
+  writeLines("unrelated", file.path(outside, "notice.new.html"))
   writeLines("new", file.path(folder, "a.new.svg"))
   structure <- file.path(folder, "reference_plotobject")
   unlink(structure, recursive = TRUE)
@@ -151,8 +214,30 @@ test_that("linked companion directories cannot redirect an acceptance", {
   else
     suppressWarnings(file.symlink(outside, structure))
   skip_if_not(linked, "Creating directory symlinks is unavailable")
+  expect_identical(snapshotReviewIds(module), "demo/a.svg")
   file <- writeSnapshotDecisionFile(module, list(snapshotDecisionRow(module, "demo/a.svg", "accept")))
   expect_error(applySnapshotReview(file, module), "[Ll]inked|[Uu]nsafe|[Oo]utside")
   expect_false(file.exists(file.path(folder, "a.svg")))
   expect_identical(readLines(file.path(outside, "a.rds")), "outside")
+})
+
+test_that("review discovery scopes named test files and their variants", {
+  module <- localSnapshotDecisionModule()
+  root <- snapshotReviewRoot(module)
+  for (dir in c("model A.v2", "windows/model A.v2", "other")) {
+    dir.create(file.path(root, dir), recursive = TRUE)
+    writeLines("candidate", file.path(root, dir, "notice.new.html"))
+  }
+  testFile <- file.path(module, "tests", "testthat", "test_model A.v2.r")
+  expect_identical(snapshotReviewIds(module, files = testFile),
+                   c("model A.v2/notice.html", "windows/model A.v2/notice.html"))
+  expect_identical(snapshotReviewIds(module, files = character()), character())
+})
+
+test_that("an empty review leaves the directory for future snapshots available", {
+  module <- withr::local_tempdir()
+  dir.create(file.path(module, "tests", "testthat"), recursive = TRUE)
+  root <- snapshotReviewRoot(module)
+  expect_error(reviewSnapshots(module, output = root, open = FALSE), "outside the _snaps directory")
+  expect_false(file.exists(root))
 })
