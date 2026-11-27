@@ -22,6 +22,17 @@ localPlotSnapshotRoot <- function(root = tempfile("plot-snapshot-root-")) {
   invisible(root)
 }
 
+test_that("a figure comparison restores its caller's testthat edition", {
+  testthat::local_edition(2)
+  localPlotSnapshotRoot()
+  testthat::local_mocked_bindings(
+    capture_vdiffr_expectation = function(...) list(new_svg_current = FALSE, compared = TRUE),
+    .package = "jaspTools"
+  )
+  jaspTools:::expect_plot_with_fallback("matches", function() NULL)
+  expect_equal(testthat::edition_get(), 2L)
+})
+
 test_that("a drawing failure cannot pass via the structural fallback", {
   skip_if_not_installed("ggplot2")
   root <- localPlotSnapshotRoot()

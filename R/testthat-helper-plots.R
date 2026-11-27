@@ -162,7 +162,7 @@ expect_plot_with_fallback <- function(name, test, fallback_test = test, toleranc
   on.exit({
     if (!pairReady)
       unlink(c(result$new_svg_path, structureCandidate), expand = FALSE)
-  })
+  }, add = TRUE)
   if (file.exists(structureCandidate) && !file.remove(structureCandidate))
     stop("Could not clear the previous structural candidate at ", structureCandidate, call. = FALSE)
 
