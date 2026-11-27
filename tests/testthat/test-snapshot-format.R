@@ -38,10 +38,16 @@ test_that("the standalone table opens with the default JASP number formats", {
 
   dom <- file.path(module, "rendered.html")
   log <- file.path(module, "browser.log")
+  # Hosted Ubuntu runners restrict Chrome's user namespaces. This browser
+  # instance renders only the fixed fixture above in a temporary profile.
+  hostedLinux <- identical(Sys.getenv("RUNNER_ENVIRONMENT"), "github-hosted") &&
+    identical(Sys.getenv("RUNNER_OS"), "Linux")
   status <- system2(browser, c("--headless", "--disable-gpu", "--disable-background-networking",
+                               if (hostedLinux) "--no-sandbox",
                                shQuote(paste0("--user-data-dir=", file.path(module, "profile"))),
                                "--dump-dom", shQuote(report)), stdout = dom, stderr = log, timeout = 30)
   expect_equal(status, 0L, info = paste(readLines(log, warn = FALSE), collapse = "\n"))
+  if (status != 0L) return(invisible(NULL))
   html <- snapshotText(dom)
   table <- regmatches(html, regexpr('(?s)<table class="snapshot-table">.*?</table>', html, perl = TRUE))
   cells <- regmatches(table, gregexpr("<td[^>]*>[^<]*</td>", table))[[1L]]
