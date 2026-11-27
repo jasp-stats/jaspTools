@@ -16,6 +16,8 @@ Invisibly returns a \code{jaspAgentTestResults} object (S3 class) with:
 \item{status}{0 = all passed, 1 = failures, errors, or module-level errors.}
 \item{summary}{Named list of counts: \code{fail}, \code{error}, \code{warn}, \code{skip}, \code{pass}, \code{time}.}
 \item{logFile}{Path to the detailed JSON log file.}
+\item{snapshotReviews}{Named list of standalone HTML reports for modules
+with pending snapshots in the tested files.}
 \item{failures}{Data frame with columns \code{module}, \code{file}, \code{test}, \code{message}
 — one row per failed expectation or test error.}
 \item{warnings}{Data frame with columns \code{module}, \code{file}, \code{test}, \code{message}.}

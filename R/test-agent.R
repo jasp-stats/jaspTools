@@ -16,6 +16,8 @@
 #'     \item{status}{0 = all passed, 1 = failures, errors, or module-level errors.}
 #'     \item{summary}{Named list of counts: \code{fail}, \code{error}, \code{warn}, \code{skip}, \code{pass}, \code{time}.}
 #'     \item{logFile}{Path to the detailed JSON log file.}
+#'     \item{snapshotReviews}{Named list of standalone HTML reports for modules
+#'       with pending snapshots in the tested files.}
 #'     \item{failures}{Data frame with columns \code{module}, \code{file}, \code{test}, \code{message}
 #'       — one row per failed expectation or test error.}
 #'     \item{warnings}{Data frame with columns \code{module}, \code{file}, \code{test}, \code{message}.}
@@ -39,7 +41,7 @@
 #' @export agentTestAll
 agentTestAll <- function(logFile = NULL) {
   if (is.null(logFile))
-    logFile <- tempfile(pattern = "jasp-test-results-", fileext = ".json")
+    logFile <- tempfile(pattern = "jasp-test-results-", tmpdir = dirname(tempdir()), fileext = ".json")
 
   envirValue <- Sys.getenv("NOT_CRAN")
   Sys.setenv("NOT_CRAN" = "true")
@@ -78,7 +80,8 @@ agentTestAll <- function(logFile = NULL) {
   }
 
   result <- buildAgentTestResult(allResults, logFile)
-  writeAgentTestLog(allResults, logFile)
+  result$snapshotReviews <- agentSnapshotReviews(modulePaths)
+  writeAgentTestLog(allResults, logFile, result$snapshotReviews)
   print(result)
   invisible(result)
 }
@@ -109,7 +112,7 @@ agentTestAll <- function(logFile = NULL) {
 #' @export agentTestAnalysis
 agentTestAnalysis <- function(name, logFile = NULL, includeAll = TRUE) {
   if (is.null(logFile))
-    logFile <- tempfile(pattern = paste0("jasp-test-", name, "-"), fileext = ".json")
+    logFile <- tempfile(pattern = paste0("jasp-test-", name, "-"), tmpdir = dirname(tempdir()), fileext = ".json")
 
   modulePath <- getModulePathFromRFunction(name)
   filesToTest <- getTestFilesMatchingName(name, modulePath, includeAll = includeAll)
@@ -142,13 +145,33 @@ agentTestAnalysis <- function(name, logFile = NULL, includeAll = TRUE) {
   }
 
   result <- buildAgentTestResult(allResults, logFile)
-  writeAgentTestLog(allResults, logFile)
+  result$snapshotReviews <- agentSnapshotReviews(modulePath, filesToTest)
+  writeAgentTestLog(allResults, logFile, result$snapshotReviews)
   print(result)
   invisible(result)
 }
 
 
 # ---- Internal helpers --------------------------------------------------------
+
+agentSnapshotReviews <- function(modulePaths, files = NULL) {
+  reports <- list()
+  for (module in modulePaths) {
+    report <- tryCatch({
+      ids <- snapshotReviewIds(module)
+      if (!is.null(files)) {
+        contexts <- sub("^test[-_]", "", tools::file_path_sans_ext(basename(files)))
+        ids <- ids[dirname(ids) %in% contexts]
+      }
+      if (length(ids)) writeSnapshotReview(module, ids, output = NULL, open = FALSE)
+    }, error = function(e) {
+      warning("Could not build the snapshot review for ", basename(module), ": ", conditionMessage(e), call. = FALSE)
+      NULL
+    })
+    if (!is.null(report)) reports[[basename(module)]] <- report
+  }
+  reports
+}
 
 #' Run a test function quietly, capturing stdout and muffling sink warnings.
 #'
@@ -361,14 +384,19 @@ print.jaspAgentTestResults <- function(x, ...) {
     }
   }
 
+  for (module in names(x$snapshotReviews))
+    cat(sprintf("\nSnapshot review (%s): %s\n", module, x$snapshotReviews[[module]]))
   cat(sprintf("\nDetails: %s\n", x$logFile))
   invisible(x)
 }
 
 
 #' Write detailed test results to a JSON log file.
+#' @param allResults Per-module testthat results.
+#' @param logFile Output JSON path.
+#' @param snapshotReviews Named list of module report paths.
 #' @keywords internal
-writeAgentTestLog <- function(allResults, logFile) {
+writeAgentTestLog <- function(allResults, logFile, snapshotReviews = list()) {
   logData <- list()
 
   for (moduleName in names(allResults)) {
@@ -432,6 +460,8 @@ writeAgentTestLog <- function(allResults, logFile) {
     )
   }
 
+  for (module in names(snapshotReviews))
+    logData[[module]]$snapshotReview <- snapshotReviews[[module]]
   jsonlite::write_json(logData, logFile, pretty = TRUE, auto_unbox = TRUE)
 }
 

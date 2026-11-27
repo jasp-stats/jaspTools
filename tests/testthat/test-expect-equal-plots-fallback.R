@@ -107,7 +107,7 @@ test_that("interactive run seeds missing ggplot structural snapshot", {
 
   testthat::local_mocked_bindings(
     expect_doppelganger = function(...) {
-      invisible(NULL)
+      testthat::succeed()
     },
     .package = "vdiffr"
   )
@@ -121,84 +121,116 @@ test_that("interactive run seeds missing ggplot structural snapshot", {
   expect_true(file.exists(snapshotPath))
 })
 
-test_that("fresh visual snapshot seeds structure but still requires review", {
+test_that("plot candidates follow the same review lifecycle locally and on CI", {
   skip_if_not_installed("ggplot2")
-  localPlotSnapshotRoot()
+  withr::local_envvar(c(NOT_CRAN = "true"))
+  withr::local_options(jaspTools.plotSnapshot.gc = FALSE)
 
-  p <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) + ggplot2::geom_point()
-  newSvgPath <- jaspTools:::snapshot_relative_path("fresh-plot.new.svg")
-  snapshotPath <- jaspTools:::ggplot_structure_snapshot_path("fresh-plot")
+  testDir <- withr::local_tempdir()
+  writeLines(c(
+    'testthat::test_that("plot snapshot", {',
+    '  jaspTools:::expect_plot_with_fallback("Demo Plot", getOption("jaspTools.testPlot"))',
+    '})'
+  ), file.path(testDir, "test-figures.R"))
+  runPlotTest <- function(plot, ci) {
+    withr::local_options(jaspTools.testPlot = plot)
+    withr::local_envvar(c(CI = ci))
+    as.data.frame(testthat::test_dir(testDir, reporter = "silent", stop_on_failure = FALSE))
+  }
 
-  testthat::local_mocked_bindings(
-    expect_doppelganger = function(...) {
-      dir.create(dirname(newSvgPath), recursive = TRUE, showWarnings = FALSE)
-      writeLines("<svg>fresh</svg>", newSvgPath)
-      invisible(NULL)
-    },
-    .package = "vdiffr"
-  )
+  plot <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) + ggplot2::geom_point()
+  dir <- file.path(testDir, "_snaps", "figures")
+  svg <- file.path(dir, "demo-plot.svg")
+  newSvg <- file.path(dir, "demo-plot.new.svg")
+  structure <- file.path(dir, "reference_plotobject", "demo-plot.rds")
+  newStructure <- file.path(dir, "reference_plotobject", "demo-plot.new.rds")
+  expectedSvg <- tempfile(fileext = ".svg")
+  vdiffr::write_svg(plot, expectedSvg, "Demo Plot")
 
-  failure <- tryCatch(
-    {
-      jaspTools:::expect_plot_with_fallback("fresh-plot", p)
-      NULL
-    },
-    expectation_failure = function(cnd) cnd
-  )
+  for (ci in c("false", "true")) {
+    # testthat writes the first snapshot to the canonical path in both modes.
+    result <- runPlotTest(plot, ci)
+    expect_equal(result$failed, 1L)
+    expect_false(any(file.exists(c(svg, structure))))
+    expect_true(all(file.exists(c(newSvg, newStructure))))
+    expect_true(testthat::compare_file_binary(expectedSvg, newSvg))
+    expect_identical(readRDS(newStructure), jaspTools:::extract_ggplot_structure(plot))
+  }
 
-  expect_s3_class(failure, "expectation_failure")
-  expect_match(conditionMessage(failure), "created a new visual snapshot", fixed = TRUE)
-  expect_true(file.exists(snapshotPath))
+  # Accept both files, then verify a full passing run preserves the references.
+  expect_true(file.rename(newSvg, svg))
+  expect_true(file.rename(newStructure, structure))
+  result <- runPlotTest(plot, "false")
+  expect_equal(result$failed, 0L)
+  expect_false(result$error)
+  expect_true(all(file.exists(c(svg, structure))))
+  expect_false(any(file.exists(c(newSvg, newStructure))))
+
+  changed <- plot + ggplot2::geom_line()
+  result <- runPlotTest(changed, "true")
+  expect_equal(result$failed, 1L)
+  expect_identical(readRDS(structure), jaspTools:::extract_ggplot_structure(plot))
+  expect_identical(readRDS(newStructure), jaspTools:::extract_ggplot_structure(changed))
+  vdiffr::write_svg(changed, expectedSvg, "Demo Plot")
+  expect_true(testthat::compare_file_binary(expectedSvg, newSvg))
+
+  # A theme change keeps the structural fallback valid and the SVG reviewable.
+  themeChange <- plot + ggplot2::theme_bw()
+  result <- runPlotTest(themeChange, "false")
+  expect_equal(result$failed, 0L)
+  expect_false(result$error)
+  expect_equal(result$warning, 1L)
+  expect_true(all(file.exists(c(newSvg, newStructure))))
+  expect_identical(readRDS(newStructure), readRDS(structure))
+
+  withr::with_envvar(c(NOT_CRAN = "false"), runPlotTest(plot, "true"))
+  expect_true(all(file.exists(c(newSvg, newStructure))))
+
+  result <- runPlotTest(plot, "false")
+  expect_equal(result$failed, 0L)
+  expect_equal(result$warning, 0L)
+  expect_false(result$error)
+  expect_false(any(file.exists(c(newSvg, newStructure))))
+  expect_true(all(file.exists(c(svg, structure))))
 })
 
-test_that("visual mismatch with structural pass reports current new svg", {
-  skip_if_not_installed("ggplot2")
-  localPlotSnapshotRoot()
-
-  p <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) + ggplot2::geom_point()
-  svgPath <- jaspTools:::snapshot_relative_path("review-plot.svg")
-  newSvgPath <- jaspTools:::snapshot_relative_path("review-plot.new.svg")
-  snapshotPath <- jaspTools:::ggplot_structure_snapshot_path("review-plot")
-  dir.create(dirname(svgPath), recursive = TRUE, showWarnings = FALSE)
-  dir.create(dirname(snapshotPath), recursive = TRUE, showWarnings = FALSE)
-  writeLines("<svg>old</svg>", svgPath)
-  saveRDS(jaspTools:::extract_ggplot_structure(p), snapshotPath)
-
+test_that("a reporter returning silently still stages the vdiffr rendering", {
+  root <- localPlotSnapshotRoot()
+  svg <- file.path(root, "silent.svg")
+  candidate <- file.path(root, "silent.new.svg")
+  writeLines("<svg>old</svg>", svg)
+  plot <- function() graphics::plot(1:3)
   testthat::local_mocked_bindings(
-    expect_doppelganger = function(...) {
-      writeLines("<svg>current</svg>", newSvgPath)
+    expect_doppelganger = function(title, fig, writer) {
+      current <- tempfile(fileext = ".svg")
+      writer(fig, current, title)
+      file.copy(current, candidate, overwrite = TRUE)
       invisible(NULL)
     },
     .package = "vdiffr"
   )
-
-  expect_warning(
-    jaspTools:::expect_plot_with_fallback("review-plot", p),
-    "Review the visual change"
-  )
-  expect_true(file.exists(newSvgPath))
+  result <- jaspTools:::capture_vdiffr_expectation("silent", plot)
+  expect_false(result$passed)
+  expect_true(result$new_svg_current)
+  expectedSvg <- tempfile(fileext = ".svg")
+  vdiffr::write_svg(plot, expectedSvg, "silent")
+  expect_true(testthat::compare_file_binary(candidate, expectedSvg))
 })
 
-test_that("stale new svg is ignored when vdiffr passes", {
-  skip_if_not_installed("ggplot2")
-  localPlotSnapshotRoot()
-
-  p <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) + ggplot2::geom_point()
-  newSvgPath <- jaspTools:::snapshot_relative_path("stale-plot.new.svg")
-  dir.create(dirname(newSvgPath), recursive = TRUE, showWarnings = FALSE)
-  writeLines("<svg></svg>", newSvgPath)
-
+test_that("a failed ggplot structure build clears an incomplete review pair", {
+  root <- localPlotSnapshotRoot()
+  svg <- file.path(root, "incomplete.new.svg")
+  structure <- file.path(root, "reference_plotobject", "incomplete.new.rds")
+  dir.create(dirname(structure))
+  writeLines("<svg>current</svg>", svg)
+  saveRDS("stale structure", structure)
+  result <- list(passed = FALSE, new_svg_current = TRUE, new_svg_path = svg)
   testthat::local_mocked_bindings(
-    expect_doppelganger = function(...) {
-      invisible(NULL)
-    },
-    .package = "vdiffr"
+    build_ggplot_structure_snapshot = function(plot) stop("build failed"),
+    .package = "jaspTools"
   )
-
-  result <- jaspTools:::capture_vdiffr_expectation("stale-plot", p)
-  expect_true(result$passed)
-  expect_false(result$new_svg_current)
-  expect_true(file.exists(newSvgPath))
+  expect_error(jaspTools:::expect_equal_ggplot_structure(NULL, "incomplete", result), "build failed")
+  expect_false(any(file.exists(c(svg, structure))))
 })
 
 test_that("visual failure with missing structural snapshot does not create fallback", {
@@ -216,12 +248,11 @@ test_that("visual failure with missing structural snapshot does not create fallb
   expect_false(fallbackResult$passed)
   expect_true(fallbackResult$has_fallback)
   expect_false(file.exists(snapshotPath))
-  expect_match(fallbackResult$message, "Not creating one because the visual comparison failed", fixed = TRUE)
+  expect_match(fallbackResult$message, "No accepted ggplot structural snapshot", fixed = TRUE)
 })
 
 test_that("stale new svg is overwritten after visual failure", {
   skip_if_not_installed("ggplot2")
-  skip_if_not_installed("svglite")
   localPlotSnapshotRoot()
 
   p <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) + ggplot2::geom_point()
@@ -235,7 +266,8 @@ test_that("stale new svg is overwritten after visual failure", {
   saveRDS(jaspTools:::extract_ggplot_structure(p), snapshotPath)
 
   testthat::local_mocked_bindings(
-    expect_doppelganger = function(...) {
+    expect_doppelganger = function(title, fig, writer) {
+      writer(fig, tempfile(fileext = ".svg"), title)
       stop(makeExpectationFailure(), call. = FALSE)
     },
     .package = "vdiffr"
@@ -245,7 +277,9 @@ test_that("stale new svg is overwritten after visual failure", {
     jaspTools:::expect_plot_with_fallback("stale-failure-plot", p),
     "Review the visual change"
   )
-  expect_false(any(grepl("stale", readLines(newSvgPath, warn = FALSE), fixed = TRUE)))
+  expectedSvg <- tempfile(fileext = ".svg")
+  vdiffr::write_svg(p, expectedSvg, "stale-failure-plot")
+  expect_true(testthat::compare_file_binary(newSvgPath, expectedSvg))
 })
 
 test_that("update mode does not overwrite structural snapshot after visual failure", {
@@ -303,7 +337,6 @@ test_that("vdiffr and fallback can use different plot objects", {
       list(passed = FALSE, exception = simpleError("forced mismatch"),
            svg_path = tempfile(fileext = ".svg"), reference_existed = TRUE, new_svg_current = FALSE)
     },
-    save_failed_plot_svg = function(...) invisible(NULL),
     expect_doppelganger_fallback = function(test, ...) {
       seen$fallback <- test
       list(passed = TRUE, has_fallback = TRUE, exception = NULL, message = NULL)

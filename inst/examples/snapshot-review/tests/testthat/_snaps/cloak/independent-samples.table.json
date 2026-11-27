@@ -1,0 +1,33 @@
+{
+  "data": [
+    {
+      "Statistic": -1.7134593839651469,
+      "test": "Student",
+      "v": "Mischief"
+    }
+  ],
+  "footnotes": [],
+  "name": "ttest",
+  "schema": {
+    "fields": [
+      {
+        "name": "v",
+        "title": "Variable",
+        "type": "string"
+      },
+      {
+        "name": "test",
+        "title": "Test",
+        "type": "string"
+      },
+      {
+        "format": "sf:4;dp:3",
+        "name": "Statistic",
+        "title": "Statistic",
+        "type": "number"
+      }
+    ]
+  },
+  "status": "complete",
+  "title": "Independent Samples T-Test"
+}

@@ -19,25 +19,17 @@ for plots whose data vary across platforms (e.g. MCMC-based Bayesian plots).}
 }
 \description{
 This function compares a stored .svg of a plot, to the plot that is created when the tests are run.
-If no visual reference (.svg) exists yet, \pkg{vdiffr} handles it like other visual snapshots.
+New and changed figures are saved as pending \code{.new.svg} files. Use
+\code{reviewSnapshots(modulePath)} to inspect and accept them.
 }
 \details{
-Plot recipes are materialized before they are passed to \pkg{vdiffr}. For
-rendered \pkg{ggplot2} objects, a structural fallback snapshot is also maintained.
-In interactive test runs, if that structural snapshot is missing, it is created automatically
-(even when the visual comparison passes).
-
-To accept changed structural snapshots, use \code{testthat::snapshot_accept()} from the
-package root after running tests.
-For \pkg{ggplot2} objects, a structural fallback snapshot is also maintained.
-When a visual comparison passes, missing structural snapshots are created in
-interactive test runs, in update mode (\code{options(jaspTools.plotStructure.update = TRUE)}
-or \code{JASP_PLOT_STRUCTURE_UPDATE=true}), and for newly generated visual snapshots.
-They are not created after a visual mismatch against an existing visual snapshot.
-
-If a visual mismatch is accepted by the structural fallback, inspect and accept
-the generated visual snapshot with \code{manageTestPlots()} so future runs do
-not keep using the slower fallback.
+Plot recipes are materialized before they are passed to \pkg{vdiffr}. For a
+\pkg{ggplot2} figure, the reviewer accepts its structural snapshot together
+with its SVG. An existing structural reference can satisfy the test when the
+SVG changes, and the visual change remains available for review.
+When an existing SVG matches, missing structural references are seeded in
+interactive runs and in update mode (\code{options(jaspTools.plotStructure.update = TRUE)}
+or \code{JASP_PLOT_STRUCTURE_UPDATE=true}).
 Plot snapshot rendering triggers garbage collection by default to avoid
 accumulated \pkg{ggplot2} build state slowing large generated test files; set
 \code{options(jaspTools.plotSnapshot.gc = FALSE)} to disable this.

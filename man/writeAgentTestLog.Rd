@@ -4,7 +4,14 @@
 \alias{writeAgentTestLog}
 \title{Write detailed test results to a JSON log file.}
 \usage{
-writeAgentTestLog(allResults, logFile)
+writeAgentTestLog(allResults, logFile, snapshotReviews = list())
+}
+\arguments{
+\item{allResults}{Per-module testthat results.}
+
+\item{logFile}{Output JSON path.}
+
+\item{snapshotReviews}{Named list of module report paths.}
 }
 \description{
 Write detailed test results to a JSON log file.

@@ -1,3 +1,16 @@
+# Development version
+
+* Generated table and HTML tests use external JSON and HTML snapshots.
+  `expect_snapshot_table()` checks the complete JASP table, including typed
+  cells, column order and footnotes. Existing inline tests remain supported.
+  Continuous results use configurable per-cell numerical tolerances.
+  Passing reruns retain the accepted values, including in unchanged cells
+  of a table with other changes under review.
+* `reviewSnapshots()` shows table, HTML and figure changes together.
+  `agentTestAnalysis()` and `agentTestAll()` link the report from their results
+  and logs. `applySnapshotReview()` applies exported decisions and returns
+  comments for each reviewed snapshot.
+
 # jaspTools 0.21.0
 
 ## Running analyses

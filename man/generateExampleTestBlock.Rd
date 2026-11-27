@@ -11,7 +11,8 @@ generateExampleTestBlock(
   jaspFileName,
   sourceFolder,
   results,
-  syntax = NULL
+  syntax = NULL,
+  tests = getTests(results$results, analysisIndex)
 )
 }
 \arguments{
@@ -30,6 +31,8 @@ generateExampleTestBlock(
 
 \item{syntax}{The R syntax the test runs, or NULL to run the analysis with
 \code{runAnalysisFromJaspFile()}.}
+
+\item{tests}{Output nodes collected from the analysis results.}
 }
 \value{
 Character string with the test_that block.

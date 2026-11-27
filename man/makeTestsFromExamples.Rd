@@ -54,8 +54,13 @@ blocks within the same test file.
 
 Each test runs the R syntax of its analysis: the call of the R wrapper of the analysis, as JASP
 shows it, with the options saved in the file upgraded to the version of the module. It runs
-with \code{\link{runAnalysisSyntax}} on the data of the file, and the test expects the tables
-and plots that run gives now. When these tables differ from the results JASP saved in the file
+with \code{\link{runAnalysisSyntax}} on the data of the file. Its tables and HTML output
+are recorded in the test file's \code{_snaps} folder. Generating the tests again stages
+changes to existing references for review. If a generated test file has custom table
+tolerances or refresh settings, rerun that test file to stage changes under its
+settings. Regeneration stops before overwriting these customizations.
+Plots use \code{\link{expect_equal_plots}}.
+When the tables differ from the results JASP saved in the file
 (see \code{\link{expect_equal_jasp_file}}), a warning says what differs. An analysis without
 R wrapper is run with \code{\link{runAnalysisFromJaspFile}} instead.
 
