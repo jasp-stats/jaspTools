@@ -81,7 +81,7 @@ jobs:
               return(FALSE)
 
             # R reports the existing methods dependency in the singular when it is the only import.
-            if (length(warnings) == 1L && grepl("imports? not declared from: .methods.", warnings))
+            if (length(warnings) == 1L && grepl("imports? not declared from:[[:space:]]+.methods.", warnings))
               return(FALSE)
 
             # otherwise, new warnings got introduced
