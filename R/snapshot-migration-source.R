@@ -321,14 +321,6 @@ snapshotMigrationSource <- function(path) {
   }
   if (!length(finalEdits)) return(list(text = lines, capture = lines, sites = sites))
 
-  # Register pre-existing references even when a top-level analysis fails
-  # before the first test body executes. Keep file headers and shebangs.
-  top <- exprs(0L)[1L]
-  if (!identical(value(top), quote(jaspTools::preserveSnapshotReferences()))) {
-    guard <- list(from = start(top), to = start(top) - 1L, text = "jaspTools::preserveSnapshotReferences()\n")
-    finalEdits <- c(list(guard), finalEdits)
-    captureEdits <- c(list(guard), captureEdits)
-  }
   rewrite <- function(edits) {
     from <- vapply(edits, "[[", numeric(1), "from")
     to <- vapply(edits, "[[", numeric(1), "to")

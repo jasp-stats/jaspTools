@@ -17,6 +17,7 @@ test_that("tolerated values survive review and only an explicit refresh stages t
     writeLines(c(filePolicy, 'testthat::test_that("model", {',
       '  result <- readRDS(testthat::test_path("observed.rds"))',
       paste0('  jaspTools::expect_snapshot_table(result, "model"', args, ')'), '})'), file)
+    preserveSnapshotReferences(environment())
     as.data.frame(testthat::test_dir(testDir, reporter = "silent", stop_on_failure = FALSE))
   }
   accept <- function() {

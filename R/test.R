@@ -53,6 +53,7 @@ runTestsTravis <- function(modulePath) {
 #'
 #' @export testAnalysis
 testAnalysis <- function(name, onlyPlots = FALSE, includeAll = TRUE) {
+  preserveSnapshotReferences(environment())
   modulePath <- getModulePathFromRFunction(name)
   filesToTest <- getTestFilesMatchingName(name, modulePath, includeAll = includeAll)
 
@@ -60,7 +61,7 @@ testAnalysis <- function(name, onlyPlots = FALSE, includeAll = TRUE) {
   Sys.setenv("NOT_CRAN" = "true") # this is to prevent vdiffr from skipping plots
   on.exit({
     Sys.setenv("NOT_CRAN" = envirValue)
-  })
+  }, add = TRUE)
 
   if (onlyPlots)
     localPlotTests()
@@ -88,7 +89,7 @@ testAll <- function(onlyPlots = FALSE) {
   on.exit({
     Sys.setenv("NOT_CRAN" = envirValue)
     options("testthat.progress.max_fails" = optsValue)
-  })
+  }, add = TRUE)
 
   if (onlyPlots)
     localPlotTests()
@@ -101,7 +102,7 @@ testAll <- function(onlyPlots = FALSE) {
       message("\nRunning tests from ", modulePath, "\n")
 
     testDir <- file.path(modulePath, "tests", "testthat")
-    results <- try(as.data.frame(testthat::test_dir(testDir)))
+    results <- try(as.data.frame(runModuleTestDir(testDir)))
 
     if (inherits(results, "try-error") || (sum(results$failed) > 0 || sum(results$error) > 0))
       testResults[["failedModules"]] <- c(testResults[["failedModules"]], basename(modulePath))
@@ -283,6 +284,16 @@ collapseTestTable <- function(rows) {
   return(x)
 }
 
+runModuleTestDir <- function(testDir, ...) {
+  preserveSnapshotReferences(environment())
+  # testthat writes inline Markdown in its workers. Keep those comparisons
+  # in the protected process when a module has accepted Markdown references.
+  markdown <- list.files(file.path(testDir, "_snaps"), pattern = "[.]md$", recursive = TRUE)
+  if (any(!endsWith(markdown, ".new.md")))
+    withr::local_envvar(c(TESTTHAT_PARALLEL = "false"))
+  testthat::test_dir(testDir, ...)
+}
+
 localPlotTests <- function(envir = parent.frame()) {
   # test_dir attaches testthat. Attach before rebinding so both qualified and
   # unqualified calls see the same functions and are restored after the run.
@@ -302,10 +313,10 @@ localPlotTests <- function(envir = parent.frame()) {
 
   omit <- function(...) invisible(NULL)
   # Plot files are written during the expectation. A partial run must neither
-  # rewrite inline Markdown snapshots at end_file nor prune unvisited files.
+  # rewrite inline Markdown snapshots nor resolve pending Markdown candidates.
   snapshotReporter <- utils::getFromNamespace("SnapshotReporter", "testthat")
   plotReporter <- R6::R6Class(inherit = snapshotReporter,
-                              public = list(end_file = omit, end_reporter = omit))
+                              public = list(end_file = omit))
   testthat::local_mocked_bindings(test_that = plotTest, SnapshotReporter = plotReporter,
                                   .package = "testthat", .env = envir)
   testthat::local_mocked_bindings(expect_snapshot_table = omit, expect_snapshot_html = omit,

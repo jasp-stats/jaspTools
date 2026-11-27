@@ -51,7 +51,7 @@ agentTestAll <- function(logFile = NULL) {
   on.exit({
     Sys.setenv("NOT_CRAN" = envirValue)
     options("testthat.progress.max_fails" = optsValue)
-  })
+  }, add = TRUE)
 
   modulePaths <- getModulePathsForTesting()
 
@@ -60,7 +60,7 @@ agentTestAll <- function(logFile = NULL) {
     testDir <- file.path(modulePath, "tests", "testthat")
 
     allResults[[basename(modulePath)]] <- runTestsQuietly(function() {
-      testthat::test_dir(
+      runModuleTestDir(
         testDir,
         reporter        = agentTestReporter(),
         stop_on_failure = FALSE,
@@ -97,6 +97,7 @@ agentTestAll <- function(logFile = NULL) {
 #'
 #' @export agentTestAnalysis
 agentTestAnalysis <- function(name, logFile = NULL, includeAll = TRUE) {
+  preserveSnapshotReferences(environment())
   if (is.null(logFile))
     logFile <- tempfile(pattern = paste0("jasp-test-", name, "-"), tmpdir = dirname(tempdir()), fileext = ".json")
 
@@ -107,7 +108,7 @@ agentTestAnalysis <- function(name, logFile = NULL, includeAll = TRUE) {
   Sys.setenv("NOT_CRAN" = "true")
   on.exit({
     Sys.setenv("NOT_CRAN" = envirValue)
-  })
+  }, add = TRUE)
 
   testDir <- file.path(modulePath, "tests", "testthat")
 

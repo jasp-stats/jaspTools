@@ -563,7 +563,6 @@ generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses,
                                      tests = getTests(results$results, analysisIndex, totalAnalyses > 1L)) {
   desc <- generatedTestDescription(analysisName, analysisIndex, totalAnalyses, is.null(results))
   lines <- c(paste0("test_that(", encodeString(desc, quote = '"'), ", {"),
-             "  jaspTools::preserveSnapshotReferences()", "",
              runFromJaspFileLines(sourceFolder, jaspFileName, analysisIndex, syntax),
              resultExpectationLines(tests), "})")
   paste(lines, collapse = "\n")
@@ -770,7 +769,7 @@ resultExpectationLines <- function(tests = list()) {
 makeExpectations <- function(tests, name, options, dataset, datasets = NULL) {
   desc <- encodeString(paste(name, "results match"), quote = '"')
   preamble <- addPreambleLines(name, options, dataset, datasets)
-  lines <- c(paste0("test_that(", desc, ", {"), "  jaspTools::preserveSnapshotReferences()",
+  lines <- c(paste0("test_that(", desc, ", {"),
              paste0("  ", gsub("\n", "\n  ", preamble)), "", resultExpectationLines(tests), "})")
   paste(lines, collapse = "\n")
 }

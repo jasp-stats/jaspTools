@@ -20,9 +20,7 @@
 #' @return Invisibly returns `NULL`.
 #' @export
 local_table_snapshot_tolerance <- function(rtol = NULL, atol = NULL, .local_envir = parent.frame()) {
-  # A failed file-level setting prevents testthat from seeing later expectations.
-  policy <- withCallingHandlers(snapshotTableTolerance(rtol, atol),
-                                error = function(e) preserveSnapshotReferences())
+  policy <- snapshotTableTolerance(rtol, atol)
   withr::local_options(list(jaspTools.tableSnapshot.tolerance = policy),
                        .local_envir = .local_envir)
   invisible(NULL)

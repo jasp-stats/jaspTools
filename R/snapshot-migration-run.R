@@ -19,6 +19,7 @@ migrationSourceBytes <- function(lines, original) {
 
 # Use the ordinary testthat helper/setup/teardown lifecycle for both passes.
 migrationTestResults <- function(path, capture = NULL, phase) {
+  preserveSnapshotReferences(environment())
   # Some module helpers use global options() for their rounding policy.
   withr::local_options(list(jaspRoundToPrecision = getOption("jaspRoundToPrecision"),
                             jaspTools.tableSnapshot.tolerance = getOption("jaspTools.tableSnapshot.tolerance")))

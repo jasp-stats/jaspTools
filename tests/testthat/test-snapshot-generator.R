@@ -38,7 +38,8 @@ test_that("generated expectations preserve complete output nodes and stable resu
   manual <- makeExpectations(getTests(tree), "Example", list(), "debug.csv")
   expect_length(parse(text = manual), 1)
   statements <- as.list(parse(text = manual)[[1L]][[3L]])
-  expect_identical(statements[[2L]], quote(jaspTools::preserveSnapshotReferences()))
+  expect_identical(statements[[2L]], quote(options <- list()))
+  expect_false(grepl("preserveSnapshotReferences", block, fixed = TRUE))
   expect_match(manual, "expect_snapshot_html", fixed = TRUE)
   manualPlots <- vapply(Filter(function(test) test$type == "plot", getTests(tree)), "[[", "", "name")
   expect_false(anyDuplicated(manualPlots) > 0L)
@@ -134,7 +135,7 @@ test_that("example generation seeds from the rerun and stages changed snapshots"
   expect_identical(basename(refHtml), "html.html")
   expect_equal(jsonlite::read_json(refTable)$data[[1]]$score, 20)
   expect_true(any(grepl("<p>first</p>", readLines(refHtml), fixed = TRUE)))
-  replay <- as.data.frame(testthat::test_dir(dirname(file), reporter = "silent", stop_on_failure = FALSE))
+  replay <- as.data.frame(runModuleTestDir(dirname(file), reporter = "silent", stop_on_failure = FALSE))
   expect_equal(replay$passed, 3L)
   expect_equal(replay$failed, 0L)
   expect_false(replay$error)
@@ -155,7 +156,7 @@ test_that("example generation seeds from the rerun and stages changed snapshots"
   # A failed backend run can retain the exact output saved in the references.
   results <- list(status = "fatalError", results = list(
     scores = table(20), html = html("first"), errorMessage = "example failed"))
-  replay <- as.data.frame(testthat::test_dir(dirname(file), reporter = "silent", stop_on_failure = FALSE))
+  replay <- as.data.frame(runModuleTestDir(dirname(file), reporter = "silent", stop_on_failure = FALSE))
   expect_equal(replay$failed, 1L)
   expect_equal(replay$passed, 0L)
   expect_false(replay$error)

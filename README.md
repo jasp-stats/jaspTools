@@ -213,9 +213,10 @@ passed within tolerance. For an intentional refresh, run the expectation
 with `refresh = TRUE` on the chosen reference platform and review the staged
 changes before accepting them.
 
-Generated tests call `preserveSnapshotReferences()` before replaying the
-analysis, so an early error or skip retains the files needed for review. Use
-the same call at the beginning of handwritten tests that run an analysis.
+The jaspTools test runners keep accepted snapshots even if a test passes, fails,
+is skipped, or is removed. Delete obsolete references explicitly. For modules
+also run directly with serial testthat, put `jaspTools::preserveSnapshotReferences()`
+once in `tests/testthat/setup-snapshots.R`.
 Regeneration reports previously named outputs that would lose their expectation.
 When retiring an output intentionally, remove its expectation and reference
 together in the reviewed change.

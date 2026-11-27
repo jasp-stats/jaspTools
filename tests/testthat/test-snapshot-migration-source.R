@@ -34,7 +34,7 @@ test_that("migration edits parsed calls and preserves text, test cases and exist
   expect_true(any(grepl('\trows <- results[["résumé"]] # provenance', plan$text, fixed = TRUE)))
   expect_true(any(grepl('expect_snapshot_table(getTable("résumé"), ', plan$text, fixed = TRUE)))
   expect_true(any(endsWith(plan$text, ") # tail")))
-  expect_identical(plan$text[2L], "jaspTools::preserveSnapshotReferences()")
+  expect_identical(plan$text[1:2], fixture[1:2])
   expect_silent(parse(text = plan$capture))
   again <- planMigrationText(plan$text)
   expect_identical(again$text, plan$text)
@@ -62,8 +62,7 @@ test_that("capture verifies the original rows and records the same producer eval
     stopifnot(identical(node$title, as.character(count)), !is.null(node$schema))
     log <<- c(log, name)
   }
-  # The first expression registers references; execute the test case itself.
-  eval(parse(text = plan$capture)[[2L]])
+  eval(parse(text = plan$capture))
   expect_identical(log, plan$sites$name)
   expect_identical(count, 3L)
   expect_true('  rows <- snapshotTableNode$data' %in% plan$text)
@@ -125,7 +124,7 @@ test_that("generated table checks reuse their local variable across tables and p
 test_that("capture respects a module's custom legacy expectation or reference constructor", {
   plan <- planMigrationText(c('test_that("overrides", {',
     '  expect_equal_tables(node$data, list(1))', '})'))
-  code <- parse(text = plan$capture)[[2L]]
+  code <- parse(text = plan$capture)
   test_that <- function(desc, code) force(code)
   node <- list(data = list(1), schema = list())
   .jaspToolsCaptureTable <- function(...) stop("reached capture")

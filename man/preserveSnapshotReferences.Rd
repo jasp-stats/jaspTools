@@ -2,16 +2,19 @@
 % Please edit documentation in R/snapshot-expectations.R
 \name{preserveSnapshotReferences}
 \alias{preserveSnapshotReferences}
-\title{Preserve reviewed files when an analysis cannot reach its expectations}
+\title{Keep accepted snapshots across test runs}
 \usage{
-preserveSnapshotReferences()
+preserveSnapshotReferences(.local_envir = testthat::teardown_env())
+}
+\arguments{
+\item{.local_envir}{Environment whose lifetime covers the test run.
+Defaults to the current testthat suite.}
 }
 \value{
 Invisibly returns NULL.
 }
 \description{
-Call at the beginning of a test that runs an analysis. This registers its
-test file's existing table, HTML, visual and plot structure snapshots with
-testthat before the analysis can fail or skip. Generated tests include it
-automatically. Remove obsolete references explicitly when retiring outputs.
+The jaspTools runners apply this policy automatically. To use it when
+running a module directly with serial testthat, call this function once in
+\code{tests/testthat/setup-snapshots.R}. Retire obsolete references explicitly.
 }

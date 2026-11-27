@@ -34,26 +34,46 @@ expect_snapshot_html <- function(node, name) {
   expectResultSnapshot(node, name, "html")
 }
 
-#' Preserve reviewed files when an analysis cannot reach its expectations
+#' Keep accepted snapshots across test runs
 #'
-#' Call at the beginning of a test that runs an analysis. This registers its
-#' test file's existing table, HTML, visual and plot structure snapshots with
-#' testthat before the analysis can fail or skip. Generated tests include it
-#' automatically. Remove obsolete references explicitly when retiring outputs.
+#' The jaspTools runners apply this policy automatically. To use it when
+#' running a module directly with serial testthat, call this function once in
+#' `tests/testthat/setup-snapshots.R`. Retire obsolete references explicitly.
+#' @param .local_envir Environment whose lifetime covers the test run.
+#'   Defaults to the current testthat suite.
 #' @return Invisibly returns NULL.
 #' @export
-preserveSnapshotReferences <- function() {
-  # File-level settings can fail before the reporter starts the first test.
-  snapshotter <- getOption("testthat.snapshotter")
-  if (!is.null(snapshotter$file)) {
-    files <- list.files(file.path(snapshotter$snap_dir, snapshotter$file), recursive = TRUE)
-    refs <- unique(sub("\\.new(\\.[^./]+)$", "\\1", files))
-    refs <- refs[grepl("\\.(table\\.json|html|svg)$|^reference_plotobject/[^/]+\\.rds$", refs)]
-    for (file in refs)
-      snapshotter$announce_file_snapshot(file)
+preserveSnapshotReferences <- function(.local_envir = testthat::teardown_env()) {
+  # Suite setup and older generated tests may request the same policy again.
+  if (identical(utils::getFromNamespace("snapshot_cleanup", "testthat"), keepUnvisitedSnapshots))
+    return(invisible(NULL))
+
+  # Inline Markdown references are written separately, as each test file ends.
+  # testthat has already compared existing entries and staged any differences.
+  # Only new entries need to be appended to the accepted file.
+  writeSnaps <- utils::getFromNamespace("write_snaps", "testthat")
+  keepSnaps <- function(snaps, path, delete = FALSE) {
+    if (file.exists(path) && !endsWith(path, ".new.md")) {
+      old <- utils::getFromNamespace("read_snaps", "testthat")(path)
+      kept <- old
+      for (name in names(snaps)) {
+        if (length(snaps[[name]]) > length(old[[name]]))
+          kept[[name]] <- snaps[[name]]
+      }
+      if (identical(kept, old)) return(invisible(NULL))
+      snaps <- kept
+    }
+    writeSnaps(snaps, path, delete)
   }
+  # testthat prunes unvisited file snapshots at suite end, including whole
+  # directories when their original test file has been renamed or removed.
+  testthat::local_mocked_bindings(snapshot_cleanup = keepUnvisitedSnapshots,
+                                  write_snaps = keepSnaps,
+                                  .package = "testthat", .env = .local_envir)
   invisible(NULL)
 }
+
+keepUnvisitedSnapshots <- function(...) invisible(NULL)
 
 snapshotHtml <- function(node) {
   string <- function(x) is.character(x) && length(x) == 1L && !is.na(x)
