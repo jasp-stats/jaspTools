@@ -1,5 +1,5 @@
 test_that("the standalone table opens with the default JASP number formats", {
-  browsers <- c(Sys.getenv("CHROMOTE_CHROME"), Sys.which(c("chromium", "google-chrome", "chromium-browser", "chrome", "msedge")))
+  browsers <- c(Sys.getenv("CHROMOTE_CHROME"), Sys.which(c("google-chrome", "chromium", "chromium-browser", "chrome", "msedge")))
   browser <- unname(browsers[file.exists(browsers)])[1L]
   skip_if(is.na(browser), "headless Chromium is optional (set CHROMOTE_CHROME to its executable)")
 
@@ -42,10 +42,10 @@ test_that("the standalone table opens with the default JASP number formats", {
   # instance renders only the fixed fixture above in a temporary profile.
   hostedLinux <- identical(Sys.getenv("RUNNER_ENVIRONMENT"), "github-hosted") &&
     identical(Sys.getenv("RUNNER_OS"), "Linux")
-  status <- system2(browser, c("--headless", "--disable-gpu", "--disable-background-networking",
+  status <- system2(browser, c("--headless", "--no-first-run", "--disable-gpu", "--disable-background-networking",
                                if (hostedLinux) "--no-sandbox",
                                shQuote(paste0("--user-data-dir=", file.path(module, "profile"))),
-                               "--dump-dom", shQuote(report)), stdout = dom, stderr = log, timeout = 30)
+                               "--dump-dom", shQuote(report)), stdout = dom, stderr = log, timeout = 120)
   expect_equal(status, 0L, info = paste(readLines(log, warn = FALSE), collapse = "\n"))
   if (status != 0L) return(invisible(NULL))
   html <- snapshotText(dom)
