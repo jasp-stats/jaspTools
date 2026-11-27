@@ -33,8 +33,13 @@
 #'
 #' Each test runs the R syntax of its analysis: the call of the R wrapper of the analysis, as JASP
 #' shows it, with the options saved in the file upgraded to the version of the module. It runs
-#' with \code{\link{runAnalysisSyntax}} on the data of the file, and the test expects the tables
-#' and plots that run gives now. When these tables differ from the results JASP saved in the file
+#' with \code{\link{runAnalysisSyntax}} on the data of the file. Its tables and HTML output
+#' are recorded in the test file's \code{_snaps} folder. Generating the tests again stages
+#' changes to existing references for review. If a generated test file has custom table
+#' tolerances or refresh settings, rerun that test file to stage changes under its
+#' settings. Regeneration stops before overwriting these customizations.
+#' Plots use \code{\link{expect_equal_plots}}.
+#' When the tables differ from the results JASP saved in the file
 #' (see \code{\link{expect_equal_jasp_file}}), a warning says what differs. An analysis without
 #' R wrapper is run with \code{\link{runAnalysisFromJaspFile}} instead.
 #'
@@ -303,22 +308,6 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
     sanitizedName <- baseName
   }
 
-  # Track if we copied the file
-  copiedTo <- NULL
-
-  # Copy JASP file to module's jaspfiles/{sourceFolder}/ if requested
-  if (copyToJaspfiles) {
-    destDir <- file.path(module.dir, "tests", "testthat", "jaspfiles", sourceFolder)
-    if (!dir.exists(destDir)) {
-      dir.create(destDir, recursive = TRUE)
-      cli::cli_alert_info("Created directory: {.path {destDir}}")
-    }
-    destFile <- file.path(destDir, basename(jaspFile))
-    file.copy(jaspFile, destFile, overwrite = TRUE)
-    copiedTo <- destFile
-    cli::cli_alert_success("Copied to: {.file {destFile}}")
-  }
-
   # Create tests/testthat directory if needed
   testDir <- file.path(module.dir, "tests", "testthat")
 
@@ -330,17 +319,23 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
   # Determine test file path using "test-{sourceFolder}-Name.R" format
   testFileName <- paste0("test-", sourceFolder, "-", sanitizedName, ".R")
   testFilePath <- file.path(testDir, testFileName)
+  copiedTo <- if (copyToJaspfiles) file.path(testDir, "jaspfiles", sourceFolder, basename(jaspFile))
 
   # Check if file already exists
   if (file.exists(testFilePath) && !overwrite) {
     result <- testFilePath
     attr(result, "skipped") <- TRUE
+    if (copyToJaspfiles)
+      publishGeneratedTest(testFilePath, jaspFile, copiedTo)
     attr(result, "copiedTo") <- copiedTo
     return(result)
   }
+  previous <- if (file.exists(testFilePath))
+    generatedSnapshotCalls(parse(testFilePath, keep.source = FALSE), regenerating = testFileName)
 
   # Run each analysis and generate test expectations
   testBlocks <- list()
+  snapshots <- list()
 
   # The R syntax of an analysis is made with the QML form of the installed module
   if (hasModuleDirs())
@@ -371,44 +366,33 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
     )
 
     # Run the analysis again with the options and data of the file, as the test does
-    tryCatch(
-      {
-        set.seed(1)
-        results <- if (is.null(syntax)) runAnalysisFromJaspFile(jaspFile, i, view = FALSE, quiet = TRUE)
-                   else                 runJaspFileAnalysisSyntax(syntax, jaspFile)
+    results <- tryCatch({
+      set.seed(1)
+      result <- if (is.null(syntax)) runAnalysisFromJaspFile(jaspFile, i, view = FALSE, quiet = TRUE)
+                else                 runJaspFileAnalysisSyntax(syntax, jaspFile)
+      if (isTRUE(result$status %in% c("error", "fatalError", "validationError")))
+        stop(paste(c(result$status, result$results$errorMessage), collapse = ": "), call. = FALSE)
+      result
+    }, error = function(e) {
+      if (file.exists(testFilePath))
+        stop("Could not regenerate ", testFileName, " because analysis ", i, " (", analysisName,
+             ") failed: ", conditionMessage(e), call. = FALSE)
+      cli::cli_warn("Failed to run analysis {.val {analysisName}}: {e$message}")
+      NULL
+    })
 
-        # The expectations below come from this run: it should give what JASP saved in the file
-        mismatches <- jaspFileMismatches(results, analyses[[i]])
-        if (length(mismatches) > 0)
-          warnJaspFileMismatches(i, analysisName, jaspFile, mismatches)
+    tests <- list()
+    if (!is.null(results)) {
+      mismatches <- jaspFileMismatches(results, analyses[[i]])
+      if (length(mismatches) > 0)
+        warnJaspFileMismatches(i, analysisName, jaspFile, mismatches)
 
-        # Generate test block with expectations from results
-        testBlock <- generateExampleTestBlock(
-          analysisName = analysisName,
-          analysisIndex = i,
-          totalAnalyses = length(analyses),
-          jaspFileName = basename(jaspFile),
-          sourceFolder = sourceFolder,
-          results = results,
-          syntax = syntax
-        )
-
-        testBlocks <- c(testBlocks, list(testBlock))
-      },
-      error = function(e) {
-        cli::cli_warn("Failed to run analysis {.val {analysisName}}: {e$message}")
-        # Generate a basic test block that just checks for no error
-        testBlock <- generateExampleTestBlockBasic(
-          analysisName = analysisName,
-          analysisIndex = i,
-          totalAnalyses = length(analyses),
-          jaspFileName = basename(jaspFile),
-          sourceFolder = sourceFolder,
-          syntax = syntax
-        )
-        testBlocks <<- c(testBlocks, list(testBlock))
-      }
-    )
+      tests <- getTests(results$results, analysisIndex = i, multipleAnalyses = length(analyses) > 1L,
+                        previous = previous, description = generatedTestDescription(analysisName, i, length(analyses)))
+      snapshots <- c(snapshots, Filter(function(test) test$type != "plot", tests))
+    }
+    testBlocks[[length(testBlocks) + 1L]] <- generateExampleTestBlock(
+      analysisName, i, length(analyses), basename(jaspFile), sourceFolder, results, syntax, tests)
   }
 
   # Check if any tests were generated (all analyses might have been skipped)
@@ -417,47 +401,137 @@ makeTestsFromSingleJASPFile <- function(jaspFile, module.dir, sourceFolder,
   }
 
   # Generate the test file content
-  testContent <- generateExampleTestFileContent(baseName, sanitizedName, sourceFolder, testBlocks)
+  testContent <- generateExampleTestFileContent(baseName, sourceFolder, testBlocks)
 
-  # Write the test file
-  writeLines(testContent, testFilePath)
+  if (NROW(previous) > 0L) {
+    current <- generatedSnapshotCalls(parse(text = testContent, keep.source = FALSE))
+    removed <- setdiff(paste(previous$type, previous$name), paste(current$type, current$name))
+    if (length(removed))
+      stop("Regenerating ", testFileName, " would remove snapshot expectations: ", paste(removed, collapse = ", "),
+           ". Review these references and remove their expectations from the existing test file ",
+           "if you intend to retire them, then run generation again.", call. = FALSE)
+  }
 
-  # Add copiedTo attribute if applicable
+  publishGeneratedTest(testFilePath, jaspFile, copiedTo, testContent, snapshots)
   attr(testFilePath, "copiedTo") <- copiedTo
 
   return(testFilePath)
+}
+
+# Stage a whole generated test against copies of its reviewed files, then publish
+# the fixture, test, references and candidate replacements or deletions together.
+publishGeneratedTest <- function(testFile, jaspFile, copiedTo, content = NULL, snapshots = list()) {
+  root <- normalizePath(dirname(testFile), winslash = "/", mustWork = TRUE)
+  testFile <- file.path(root, basename(testFile))
+  copyExample <- !is.null(copiedTo) &&
+    normalizePath(jaspFile, winslash = "/", mustWork = FALSE) != normalizePath(copiedTo, winslash = "/", mustWork = FALSE)
+  if (copyExample)
+    copiedTo <- file.path(root, "jaspfiles", basename(dirname(copiedTo)), basename(copiedTo))
+
+  context <- sub("^test-", "", tools::file_path_sans_ext(basename(testFile)))
+  files <- vapply(snapshots, function(test) snapshotFilename(test$name, test$type), "")
+  refs <- file.path(root, "_snaps", context, files)
+  snapshotFiles <- c(refs, snapshotCandidatePath(refs))
+  destinations <- c(snapshotFiles, if (copyExample) copiedTo, if (!is.null(content)) testFile)
+  if (!length(destinations)) return(invisible(NULL))
+  before <- snapshotDecisionHashes(root, destinations)
+
+  stage <- file.path(root, basename(tempfile(".jaspTools-generate-", tmpdir = root)))
+  if (!dir.create(stage))
+    stop("Could not stage the generated test in ", stage, call. = FALSE)
+  on.exit(unlink(stage, recursive = TRUE, expand = FALSE))
+  existing <- snapshotFiles[file.exists(snapshotFiles)]
+  if (length(existing) && !all(file.copy(existing, stage, copy.mode = FALSE)))
+    stop("Could not stage the existing snapshots for ", testFile, call. = FALSE)
+  for (test in snapshots)
+    stageGeneratedSnapshot(test$node, test$name, test$type, stage)
+  if (copyExample && !file.copy(jaspFile, file.path(stage, basename(copiedTo)), copy.mode = FALSE))
+    stop("Could not copy the JASP example to ", copiedTo, call. = FALSE)
+  if (!is.null(content))
+    writeLines(content, file.path(stage, basename(testFile)))
+
+  staged <- file.path(stage, basename(destinations))
+  after <- unname(snapshotDecisionHashes(root, staged))
+  changes <- list()
+  for (i in seq_along(destinations)) {
+    if (identical(before[[i]], after[[i]])) next
+    dest <- destinations[[i]]
+    dir.create(dirname(dest), recursive = TRUE, showWarnings = FALSE)
+    changes[[length(changes) + 1L]] <- list(
+      paths = c(dest, if (is.na(after[[i]])) NA_character_ else staged[[i]]),
+      hashes = c(before[[i]], after[[i]])
+    )
+  }
+  final <- list(list(id = basename(testFile), paths = destinations, hashes = stats::setNames(after, destinations)))
+  commitSnapshotDecisions(root, changes, final)
+  if (copyExample) cli::cli_alert_success("Copied to: {.file {copiedTo}}")
+  invisible(NULL)
+}
+
+# Inspect generated R code without evaluating a module's test file or its settings.
+generatedSnapshotCalls <- function(code, regenerating = NULL) {
+  calls <- data.frame(type = character(), name = character(), description = character(), node = character())
+  types <- c(expect_equal_plots = "plot", expect_snapshot_table = "table", expect_snapshot_html = "html")
+  customSettings <- function() {
+    stop("Regenerating ", regenerating, " would overwrite custom table snapshot settings. ",
+         "Run the existing test file to stage changes with its settings.", call. = FALSE)
+  }
+  visit <- function(expr, description = "") {
+    if (is.call(expr)) {
+      fun <- expr[[1L]]
+      if (identical(fun, quote(testthat::test_that))) fun <- quote(test_that)
+      if (is.call(fun) && identical(fun[[1L]], quote(`::`)) && identical(fun[[2L]], quote(jaspTools)))
+        fun <- fun[[3L]]
+      if (is.symbol(fun)) {
+        name <- as.character(fun)
+        if (name == "test_that" && length(expr) >= 3L && is.character(expr[[2L]]))
+          description <- expr[[2L]]
+        if (!is.null(regenerating) && name == "local_table_snapshot_tolerance")
+          customSettings()
+        if (name %in% names(types)) {
+          signature <- switch(name, expect_equal_plots = expect_equal_plots,
+                              expect_snapshot_html = expect_snapshot_html, expect_snapshot_table)
+          args <- match.call(signature, expr)
+          if (!is.null(regenerating) && name == "expect_snapshot_table" &&
+              any(c("rtol", "atol", "columns", "refresh") %in% names(args)))
+            customSettings()
+          id <- args[["name"]]
+          if (is.character(id) && length(id) == 1L)
+            calls[nrow(calls) + 1L, ] <<- list(types[[name]], id, description, deparse1(args[["node"]]))
+        }
+      }
+    }
+    if (is.call(expr) || is.expression(expr))
+      for (i in seq_along(expr))
+        visit(expr[[i]], description)
+  }
+  visit(code)
+  if (!is.null(regenerating)) {
+    repeated <- duplicated(calls[c("type", "name")]) & calls$type != "plot"
+    if (any(repeated))
+      stop("Regenerating ", regenerating, " would reuse a snapshot name: ", calls$name[which(repeated)[1L]],
+           ". Give the outputs distinct names before regenerating.", call. = FALSE)
+  }
+  calls
 }
 
 
 #' Generate test file content for source-based tests
 #'
 #' @param baseName Original JASP file name without extension.
-#' @param sanitizedName Sanitized name for use in code.
 #' @param sourceFolder String indicating the source folder: \code{"library"},
 #'   \code{"verified"}, or \code{"other"}.
 #' @param testBlocks List of test block strings.
 #'
 #' @return Character string with complete test file content.
 #' @keywords internal
-generateExampleTestFileContent <- function(baseName, sanitizedName, sourceFolder, testBlocks) {
-  lines <- character(0)
-
-  # Header
+generateExampleTestFileContent <- function(baseName, sourceFolder, testBlocks) {
   sourceLabelCap <- paste0(toupper(substring(sourceFolder, 1, 1)), substring(sourceFolder, 2))
-  lines <- c(lines, paste0('context("', sourceLabelCap, ': ', baseName, '")'))
-  lines <- c(lines, "")
-
-  # Helper comment
-  lines <- c(lines, "# This test file was auto-generated from a JASP example file.")
-  lines <- c(lines, paste0("# The JASP file is stored in tests/testthat/jaspfiles/", sourceFolder, "/."))
-  lines <- c(lines, "")
-
-  # Add each test block
-  for (block in testBlocks) {
-    lines <- c(lines, block, "")
-  }
-
-  return(paste(lines, collapse = "\n"))
+  context <- encodeString(paste0(sourceLabelCap, ": ", baseName), quote = '"')
+  paste0("context(", context, ")\n\n",
+         "# This test file was auto-generated from a JASP example file.\n",
+         "# The JASP file is stored in tests/testthat/jaspfiles/", sourceFolder, "/.\n\n",
+         paste(testBlocks, collapse = "\n\n"), "\n")
 }
 
 
@@ -477,120 +551,34 @@ warnJaspFileMismatches <- function(index, analysisName, jaspFile, mismatches) {
 #' @param jaspFileName Name of the JASP file.
 #' @param sourceFolder String indicating the source folder: \code{"library"},
 #'   \code{"verified"}, or \code{"other"}.
-#' @param results The analysis results.
+#' @param results The analysis results, or NULL if the analysis failed during generation.
 #' @param syntax The R syntax the test runs, or NULL to run the analysis with
 #'   \code{runAnalysisFromJaspFile()}.
+#' @param tests Output nodes collected from the analysis results.
 #'
 #' @return Character string with the test_that block.
 #' @keywords internal
 generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses, jaspFileName,
-                                     sourceFolder, results, syntax = NULL) {
-  # Extract tests from results
-  tests <- tryCatch(
-    {
-      getTests(results$results)
-    },
-    error = function(e) {
-      list()
-    }
-  )
-
-  # Build the test block
-  lines <- character(0)
-
-  # Test description
-  if (totalAnalyses > 1) {
-    testDesc <- paste0(analysisName, " (analysis ", analysisIndex, ") results match")
-  } else {
-    testDesc <- paste0(analysisName, " results match")
-  }
-
-  lines <- c(lines, paste0('test_that("', testDesc, '", {'))
-  lines <- c(lines, "")
-
-  lines <- c(lines, runFromJaspFileLines(sourceFolder, jaspFileName, analysisIndex, syntax))
-
-  # Add expectations
-  if (length(tests) > 0) {
-    # Add table and plot expectations
-    figureNumber <- 0
-    for (test in tests) {
-      if (test$type == "table") {
-        lines <- c(lines, paste0('  table <- results[["results"]]', test$index))
-        # Format table data nicely - add proper indentation
-        tableData <- gsub("\n\t", "\n    ", test$data) # Convert tabs to spaces
-        lines <- c(lines, paste0("  jaspTools::expect_equal_tables(table,"))
-        lines <- c(lines, paste0("    ", tableData, ")"))
-        lines <- c(lines, "")
-      } else if (test$type == "plot") {
-        figureNumber <- figureNumber + 1
-        lines <- c(lines, paste0('  plotName <- results[["results"]]', test$index))
-        lines <- c(lines, '  testPlot <- results[["state"]][["figures"]][[plotName]][["obj"]]')
-        # Prefix with analysis-N_figure-M_name to avoid duplicates
-        plotTitle <- gsub("-+", "-", gsub("\\W", "-", tolower(test$title)))
-        plotTitle <- paste0("analysis-", analysisIndex, "_figure-", figureNumber, "_", plotTitle)
-        lines <- c(lines, paste0('  jaspTools::expect_equal_plots(testPlot, "', plotTitle, '")'))
-        lines <- c(lines, "")
-      }
-    }
-  } else {
-    # Fallback: just check no error
-    lines <- c(lines, "  # Basic check - analysis runs without error")
-    lines <- c(lines, '  expect_false(isTRUE(results[["status"]] == "error"),')
-    lines <- c(lines, '               info = results[["results"]][["error"]])')
-  }
-
-  lines <- c(lines, "})")
-
-  return(paste(lines, collapse = "\n"))
+                                     sourceFolder, results, syntax = NULL,
+                                     tests = getTests(results$results, analysisIndex, totalAnalyses > 1L)) {
+  desc <- generatedTestDescription(analysisName, analysisIndex, totalAnalyses, is.null(results))
+  lines <- c(paste0("test_that(", encodeString(desc, quote = '"'), ", {"),
+             runFromJaspFileLines(sourceFolder, jaspFileName, analysisIndex, syntax),
+             resultExpectationLines(tests), "})")
+  paste(lines, collapse = "\n")
 }
 
-
-#' Generate a basic test block (fallback when analysis fails)
-#'
-#' @param analysisName Name of the analysis function.
-#' @param analysisIndex Index of this analysis in the JASP file.
-#' @param totalAnalyses Total number of analyses in the file.
-#' @param jaspFileName Name of the JASP file.
-#' @param sourceFolder String indicating the source folder: \code{"library"},
-#'   \code{"verified"}, or \code{"other"}.
-#'
-#' @param syntax The R syntax the test runs, or NULL to run the analysis with
-#'   \code{runAnalysisFromJaspFile()}.
-#'
-#' @return Character string with the test_that block.
-#' @keywords internal
-generateExampleTestBlockBasic <- function(analysisName, analysisIndex, totalAnalyses, jaspFileName,
-                                          sourceFolder, syntax = NULL) {
-  lines <- character(0)
-
-  # Test description
-  if (totalAnalyses > 1) {
-    testDesc <- paste0(analysisName, " (analysis ", analysisIndex, ") runs without error")
-  } else {
-    testDesc <- paste0(analysisName, " runs without error")
-  }
-
-  lines <- c(lines, paste0('test_that("', testDesc, '", {'))
-  lines <- c(lines, "")
-
-  lines <- c(lines, runFromJaspFileLines(sourceFolder, jaspFileName, analysisIndex, syntax))
-
-  # Basic expectation
-  lines <- c(lines, "  # Check analysis runs without error")
-  lines <- c(lines, '  expect_false(isTRUE(results[["status"]] == "error"),')
-  lines <- c(lines, '               info = results[["results"]][["error"]])')
-
-  lines <- c(lines, "})")
-
-  return(paste(lines, collapse = "\n"))
+generatedTestDescription <- function(analysisName, analysisIndex, totalAnalyses, failed = FALSE) {
+  label <- if (totalAnalyses > 1) paste0(analysisName, " (analysis ", analysisIndex, ")") else analysisName
+  paste(label, if (failed) "runs without error" else "results match")
 }
 
 
 # The lines of a generated test that run analysis `analysisIndex` of a JASP file of the module again: its R syntax
 # (the call of its R wrapper) on the data of the file, or without `syntax` the analysis as the file saved it.
 runFromJaspFileLines <- function(sourceFolder, jaspFileName, analysisIndex, syntax = NULL) {
-  jaspFileLine <- paste0('  jaspFile <- testthat::test_path("jaspfiles", "', sourceFolder, '", "', jaspFileName, '")')
+  jaspFileLine <- sprintf('  jaspFile <- testthat::test_path("jaspfiles", %s, %s)',
+                          encodeString(sourceFolder, quote = '"'), encodeString(jaspFileName, quote = '"'))
 
   if (is.null(syntax))
     return(c(
@@ -611,249 +599,192 @@ runFromJaspFileLines <- function(sourceFolder, jaspFileName, analysisIndex, synt
 }
 
 
-makeUnitTestsFromResults <- function(results, name, dataset, options) {
-  if (!is.list(results) || is.null(names(results)) || results$status == "error") {
+makeUnitTestsFromResults <- function(results, name, dataset, options, datasets = NULL) {
+  if (!is.list(results) || is.null(names(results)) || isTRUE(results$status %in% c("error", "fatalError", "validationError"))) {
     stop("Can't make unit test from results: not a results list")
   }
 
   tests <- getTests(results$results)
   if (length(tests) == 0) {
-    stop("Could not identify any tables or plots to test")
+    stop("Could not identify any tables, HTML output, or plots to test")
   }
 
-  output <- makeExpectations(tests, name, options, dataset)
+  output <- makeExpectations(tests, name, options, dataset, datasets)
   cat(output)
 }
 
-getTests <- function(results) {
+getTests <- function(results, analysisIndex = NULL, multipleAnalyses = !is.null(analysisIndex),
+                     previous = NULL, description = "") {
   tests <- list()
+  figureNumber <- 0L
 
-  markResultsLocationExtractTests <- function(x) {
-    if (!"list" %in% class(x)) {
-      return(x)
+  visit <- function(node, path, meta = NULL) {
+    declared <- meta[["type"]]
+    type <- switch(if (is.null(declared)) "" else declared,
+                   table = "table", image = "plot", htmlNode = "html", reportNode = "html", NULL)
+
+    # Results from older analyses can omit metadata. Recognise the node itself in that case.
+    if (is.null(declared) && is.list(node)) {
+      fields <- names(node)
+      if (isResultsTable(node))
+        type <- "table"
+      else if (all(c("data", "width", "height") %in% fields))
+        type <- "plot"
+      else if (all(c("rawtext", "text") %in% fields) || all(c("html", "topHtml") %in% fields))
+        type <- "html"
     }
 
-    unitTestType <- NULL
-    if (isResultsTable(x)) {
-      unitTestType <- "table"
-    } else if (all(c("data", "width", "height") %in% names(x))) {
-      unitTestType <- "plot"
+    if (!is.null(type)) {
+      if (is.null(node) || !is.list(node))
+        stop("Missing ", type, " result at ", paste(path, collapse = "/"), call. = FALSE)
+      if (type == "plot") {
+        figureNumber <<- figureNumber + 1L
+        # Keep the names of the SVG and structural references used by existing plot tests.
+        title <- node[["title"]]
+        if (!is.null(analysisIndex)) {
+          name <- gsub("-+", "-", gsub("\\W", "-", tolower(title)))
+          name <- paste0("analysis-", analysisIndex, "_figure-", figureNumber, "_", name)
+        } else {
+          if (!is.character(title) || length(title) != 1L || is.na(title) || !nzchar(title))
+            title <- if (length(path)) as.character(path[[length(path)]]) else type
+          name <- gsub("-+", "-", gsub("\\W", "-", tolower(title)))
+          plots <- Filter(function(test) test$type == "plot", tests)
+          used <- vapply(plots, function(test) str_standardise_snapshot_name(test$name), character(1L))
+          if (!nzchar(str_standardise_snapshot_name(name)) || str_standardise_snapshot_name(name) %in% used)
+            name <- duplicatePlotSnapshotName(path)
+        }
+      } else {
+        title <- node[["title"]]
+        name <- if (is.character(title) && length(title) == 1L && !is.na(title) && title != "hide me")
+          snapshotNameSlug(title) else ""
+        if (!nzchar(name) && length(path))
+          name <- snapshotKeySlug(path[[length(path)]])
+        if (!nzchar(name)) name <- type
+      }
+      tests[[length(tests) + 1L]] <<- list(type = type, path = path, node = node, name = name)
+      return()
     }
 
-    if (!is.null(unitTestType) && unitTestType == "plot" || (unitTestType == "table" && length(x[["data"]]) > 0)) {
-      testid <- length(tests)
-      tests[[paste0("itemToUnitTest-", testid)]] <<- list(
-        title = unlist(x[["title"]]),
-        id = testid,
-        type = unitTestType,
-        data = ifelse(unitTestType == "table", makeTestTable(x[["data"]], print = FALSE), "")
-      )
-      x[["itemToUnitTest"]] <- testid
+    if (!is.list(node) || (!is.null(declared) && !declared %in% c("collection", "object")))
+      return()
+
+    children <- node
+    childrenMeta <- if (is.null(declared)) node[[".meta"]] else meta[["meta"]]
+    if (identical(declared, "collection")) {
+      children <- node[["collection"]]
+      path <- c(path, list("collection"))
     }
-
-    return(lapply(x, markResultsLocationExtractTests))
-  }
-
-  markedResults <- markResultsLocationExtractTests(results)
-  if (length(tests) > 0) {
-    tests <- addPathIndexToTests(tests, markedResults)
-    tests <- getOneTestPerCollection(tests)
-  }
-
-  return(tests)
-}
-
-addPathIndexToTests <- function(tests, markedResults) {
-  results <- unlist(markedResults)
-  for (testName in names(tests)) {
-    id <- tests[[testName]][["id"]]
-    dotSeparatedPathName <- getTestLocationInResultsById(results, id)
-    tests[[testName]][["index"]] <- normalizeTestPath(dotSeparatedPathName)
-  }
-  return(tests)
-}
-
-getTestLocationInResultsById <- function(results, id) {
-  testIndices <- which(grepl("itemToUnitTest", names(results)))
-  index <- testIndices[results[testIndices] == id]
-  if (length(index) != 1) {
-    stop("Failed to uniquely identify test case in results")
-  }
-
-  location <- names(results)[index]
-  return(gsub("itemToUnitTest", "data", location))
-}
-
-normalizeTestPath <- function(index) {
-  indexNames <- unlist(strsplit(index, ".", fixed = TRUE))
-  path <- paste0('[["', paste0(indexNames, collapse = '"]][["'), '"]]')
-
-  return(path)
-}
-
-getOneTestPerCollection <- function(tests) {
-  pathNames <- NULL
-  for (test in tests) {
-    pathNames <- c(pathNames, test$index)
-  }
-
-  firstSiblingOrUnique <- rep(TRUE, length(tests))
-
-  purgedTests <- tests[firstSiblingOrUnique]
-
-  return(purgedTests)
-}
-
-makeExpectations <- function(tests, name, options, dataset) {
-  centralizePreamble <- FALSE
-  if (length(tests) > 1) {
-    centralizePreamble <- TRUE
-  }
-
-  expectations <- ""
-
-  if (centralizePreamble) {
-    preamble <- addPreambleLines(name, options, dataset)
-    expectations <- paste0(preamble, "\n")
-  }
-
-  for (test in tests) {
-    if (!test$type %in% c("table", "plot")) {
-      stop("Unknown test type extracted from results, cannot continue: ", test$type)
+    if (length(childrenMeta)) {
+      names(childrenMeta) <- vapply(childrenMeta, "[[", character(1L), "name")
     }
-
-    expectation <- makeSingleExpectation(test, name, options, dataset, centralizePreamble)
-    expectations <- paste(expectations, expectation, sep = "\n\n")
+    # Retain the result-map order used to number existing plots. Older unnamed
+    # collections can be indexed by position; a literal key such as "1" stays a string.
+    keys <- names(children)
+    for (i in seq_along(children)) {
+      key <- if (!is.null(keys) && nzchar(keys[i])) keys[i] else i
+      if (!identical(key, ".meta"))
+        visit(children[[i]], c(path, list(key)), if (is.character(key)) childrenMeta[[key]])
+    }
+    for (key in setdiff(names(childrenMeta), keys))
+      visit(NULL, c(path, list(key)), childrenMeta[[key]])
   }
 
-  return(expectations)
-}
-
-makeSingleExpectation <- function(test, name, options, dataset, centralizePreamble) {
-  if (!is.character(test$title) || test$title == "") {
-    test$title <- paste("titleless", test$type, test$id, sep = "-")
-    cli::cli_warn("{test$type} does not have a title, using a generic one: {.val {test$title}}")
-  }
-
-  openingLine <- addOpeningLine(test)
-
-  preambleLines <- NA
-  if (!centralizePreamble) {
-    preambleLines <- addPreambleLines(name, options, dataset)
-    preambleLines <- gsub("\n", "\n\t", paste0("\t", preambleLines))
-  }
-
-  testSpecificLines <- NA
-  if (test$type == "table") {
-    testSpecificLines <- addTableSpecificLines(test)
-  } else if (test$type == "plot") {
-    testSpecificLines <- addPlotSpecificLines(test, name)
-  }
-
-  closingLine <- "})"
-
-  expectation <- paste(openingLine, preambleLines, testSpecificLines, closingLine, sep = "\n")
-  expectation <- gsub("NA\n", "", expectation)
-
-  return(expectation)
-}
-
-addOpeningLine <- function(test) {
-  opening <- paste0('test_that("', test$title)
-
-  titleContainsTestType <- grepl(test$type, test$title, ignore.case = TRUE)
-  if (test$type == "table") {
-    opening <- paste0(opening, ifelse(titleContainsTestType, "", " table"), ' results match", {')
-  } else if (test$type == "plot") {
-    opening <- paste0(opening, ifelse(titleContainsTestType, "", " plot"), ' matches", {')
-  }
-
-  return(opening)
-}
-
-addPreambleLines <- function(name, options, dataset) {
-  settingOfOptions <- addOptionSpecificationLines(name, options)
-  settingOfSeed <- "set.seed(1)"
-  runningOfAnalysis <- addRunAnalysisLines(name, dataset)
-
-  return(paste(settingOfOptions, settingOfSeed, runningOfAnalysis, sep = "\n"))
-}
-
-addRunAnalysisLines <- function(name, dataset) {
-  if (is.character(dataset)) {
-    dataArg <- paste0('"', dataset, '"')
-  } else {
-    dataArg <- paste0("dataset")
-  }
-
-  readingData <- paste0("dataset <- ", paste(capture.output(dput(dataset)), collapse = "\n"))
-
-  running <- paste0('results <- runAnalysis("', name, '", ', dataArg, ", options)")
-
-  if (is.character(dataset)) {
-    return(running)
-  } else {
-    return(paste(readingData, running, sep = "\n"))
-  }
-}
-
-addTableSpecificLines <- function(test) {
-  gettingTable <- paste0('\ttable <- results[["results"]]', test$index)
-
-  comparingTables <- paste0("\tjaspTools::expect_equal_tables(table,\n\t\t", gsub("\n", "\n\t\t", test$data), ")")
-
-  return(paste(gettingTable, comparingTables, sep = "\n"))
-}
-
-addPlotSpecificLines <- function(test, name) {
-  gettingPlotName <- paste0('\tplotName <- results[["results"]]', test$index)
-
-  gettingPlot <- paste0('\ttestPlot <- results[["state"]][["figures"]][[plotName]][["obj"]]')
-
-  title <- gsub("-+", "-", gsub("\\W", "-", tolower(test$title)))
-  comparingPlots <- paste0('\tjaspTools::expect_equal_plots(testPlot, "', title, '")')
-
-  return(paste(gettingPlotName, gettingPlot, comparingPlots, sep = "\n"))
-}
-
-addOptionSpecificationLines <- function(name, options) {
-  settingOfOptions <- paste0('options <- analysisOptions("', name, '")')
-
-  nonDefaultOpts <- getNonDefaultOptions(name, options)
-  if (length(nonDefaultOpts) > 0) {
-    nonDefaults <- paste0("options$", names(nonDefaultOpts), " <- ", nonDefaultOpts, collapse = "\n")
-    settingOfOptions <- paste0(settingOfOptions, "\n", nonDefaults)
-  }
-
-  return(settingOfOptions)
-}
-
-getNonDefaultOptions <- function(name, options) {
-  defaultOpts <- analysisOptions(name)
-  if (!is.list(defaultOpts) || is.null(names(defaultOpts))) {
-    stop("Couldn't find the default analysis options for this analysis")
-  }
-
-  nonDefaultOpts <- NULL
-  for (optName in names(options)) {
-    optValue <- options[[optName]]
-    if (!isTRUE(all.equal(defaultOpts[[optName]], optValue))) {
-      options[[optName]] <- prepOptionValueForPrinting(optValue)
-      nonDefaultOpts <- c(nonDefaultOpts, options[optName])
+  visit(results, list())
+  for (type in c("table", "html")) {
+    indices <- which(vapply(tests, function(test) test$type == type, logical(1)))
+    stems <- vapply(tests[indices], "[[", "", "name")
+    repeated <- duplicated(stems) | duplicated(stems, fromLast = TRUE)
+    known <- previous[previous$type == type, , drop = FALSE]
+    used <- known$name
+    for (i in seq_along(indices)) {
+      test <- tests[[indices[i]]]
+      # A reviewed reference belongs to this output even when its title or a
+      # neighbouring result changes. This also retains older hash-based names.
+      prior <- known$name[known$description == description & known$node == resultNodeCode(test$path)]
+      if (length(prior) == 1L) {
+        test$name <- prior
+      } else {
+        stem <- stems[[i]]
+        if (repeated[i]) {
+          keys <- vapply(test$path, snapshotKeySlug, "")
+          stem <- paste(c(stem, setdiff(keys, c("", "collection", stem))), collapse = "-")
+        }
+        if (multipleAnalyses) stem <- paste("analysis", analysisIndex, stem, sep = "-")
+        test$name <- uniqueSnapshotName(stem, used)
+      }
+      used <- c(used, test$name)
+      tests[[indices[i]]] <- test
     }
   }
-
-  return(nonDefaultOpts)
+  tests
 }
 
-prepOptionValueForPrinting <- function(value) {
-  if (is.list(value)) {
-    result <- paste(capture.output(dput(value)), collapse = "\n")
-  } else if (is.character(value) && length(value) == 1 && !startsWith(value, "\"")) {
-    result <- paste0("\"", value, "\"")
-  } else {
-    result <- value
-  }
+# This is the established fallback for manually generated duplicate plot titles.
+duplicatePlotSnapshotName <- function(path) {
+  parts <- vapply(path, function(key) {
+    if (is.numeric(key)) return(paste0("#", key))
+    key <- enc2utf8(key)
+    paste0(nchar(key, type = "bytes"), ":", key)
+  }, character(1L))
+  key <- paste(parts, collapse = "/")
+  hash <- digest::digest(enc2utf8(key), algo = "xxhash64", serialize = FALSE)
+  leaf <- if (length(path)) as.character(path[[length(path)]]) else ""
+  leaf <- chartr("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz", leaf)
+  leaf <- gsub("[^a-z0-9]+", "-", leaf, perl = TRUE)
+  leaf <- gsub("^-|-$", "", substr(leaf, 1L, 40L))
+  paste(c("analysis", "plot", leaf[nzchar(leaf)], hash), collapse = "-")
+}
 
-  return(result)
+resultNodeCode <- function(path) {
+  index <- paste(vapply(path, function(key) {
+    paste0("[[", if (is.numeric(key)) key else encodeString(key, quote = '"'), "]]")
+  }, character(1L)), collapse = "")
+  paste0('results[["results"]]', index)
+}
+
+snapshotExpectationLines <- function(test) {
+  node <- resultNodeCode(test$path)
+  name <- encodeString(test$name, quote = '"')
+  if (test$type == "plot")
+    return(c(paste0('  plotName <- ', node, '[["data"]]'),
+             '  testPlot <- results[["state"]][["figures"]][[plotName]][["obj"]]',
+             paste0("  jaspTools::expect_equal_plots(testPlot, ", name, ")")))
+
+  paste0("  jaspTools::expect_snapshot_", test$type, "(", node, ", ", name, ")")
+}
+
+resultExpectationLines <- function(tests = list()) {
+  lines <- c('  analysisFailed <- results[["status"]] %in% c("error", "fatalError", "validationError")',
+             '  expect_false(analysisFailed, info = results[["results"]][["errorMessage"]])')
+  if (!length(tests))
+    return(lines)
+
+  # A plot backend can skip the remainder of this test block.
+  plots <- vapply(tests, function(test) test$type == "plot", logical(1))
+  ordered <- c(tests[!plots], tests[plots])
+  output <- unlist(lapply(ordered, snapshotExpectationLines), use.names = FALSE)
+  c(lines, "", "  if (isFALSE(analysisFailed)) {", paste0("  ", output), "  }")
+}
+
+makeExpectations <- function(tests, name, options, dataset, datasets = NULL) {
+  desc <- encodeString(paste(name, "results match"), quote = '"')
+  preamble <- addPreambleLines(name, options, dataset, datasets)
+  lines <- c(paste0("test_that(", desc, ", {"),
+             paste0("  ", gsub("\n", "\n  ", preamble)), "", resultExpectationLines(tests), "})")
+  paste(lines, collapse = "\n")
+}
+
+addPreambleLines <- function(name, options, dataset, datasets = NULL) {
+  literal <- function(x) paste(deparse(x, backtick = TRUE, control = c("keepNA", "keepInteger", "niceNames",
+                                                                      "showAttributes", "digits17")), collapse = "\n")
+  # runAnalysis has already resolved which options the caller set, including explicitly set defaults.
+  optionsLine <- if (length(options)) paste0("options <- ", literal(options)) else
+    paste0("options <- analysisOptions(", literal(name), ")")
+  # data.table's internal pointer cannot be reconstructed from printed R code.
+  replayDataset <- function(x) if (data.table::is.data.table(x)) as.data.frame(x) else x
+  dataArg <- if (is.null(datasets)) "dataset" else "datasets"
+  data <- if (is.null(datasets)) replayDataset(dataset) else lapply(datasets, replayDataset)
+  dataLine <- paste0(dataArg, " <- ", literal(data))
+  run <- sprintf("results <- runAnalysis(%s, %s = %s, options = options)", literal(name), dataArg, dataArg)
+  paste(optionsLine, dataLine, "set.seed(1)", run, sep = "\n")
 }

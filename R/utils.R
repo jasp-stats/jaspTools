@@ -168,19 +168,6 @@ insideTestEnvironment <- function() {
   return(FALSE)
 }
 
-replaceFn <- function(fnName, fn, pkgName) {
-  reAssign <- function(env) {
-    unlockBinding(fnName, env)
-    assign(fnName, fn, env)
-    lockBinding(fnName, env)
-  }
-
-  try(silent=TRUE, {
-    reAssign(getNamespace(pkgName)) # if not attached
-    reAssign(as.environment(paste0("package:", pkgName))) # if attached
-  })
-}
-
 getTempOutputLocation <- function(dir = NULL) {
   loc <- file.path(tempdir(), "jaspTools")
   if (!is.null(dir)) {

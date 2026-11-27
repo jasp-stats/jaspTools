@@ -86,7 +86,7 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
   restoreRunState <- saveRunState()
   on.exit(restoreRunState(), add = TRUE)
 
-  datasets <- initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests, datasets = datasets)
+  loadedDatasets <- initAnalysisRuntime(dataset = dataset, options = options, makeTests = makeTests, datasets = datasets)
 
   # The module, analysis and QML form of the R function, from the Description.qml of its module
   info <- analysisRunInfo(name)
@@ -105,17 +105,17 @@ runAnalysis <- function(name, dataset = NULL, options, view = TRUE, quiet = FALS
       options      = options,
       version      = info$version,
       preloadData  = info$preloadData,
-      datasets     = datasets
+      datasets     = loadedDatasets
     )
     runQuietly(jaspBase::runWrappedAnalysis, args, display$quiet)
   } else {
-    runAnalysisWithOlderJaspBase(name, info, options, datasets, display$quiet)
+    runAnalysisWithOlderJaspBase(name, info, options, loadedDatasets, display$quiet)
   }
 
   results <- collectRunResults(returnVal, display$view, decode = !wrapped)
 
   if (makeTests)
-    makeUnitTestsFromResults(results, name, dataset, options)
+    makeUnitTestsFromResults(results, name, dataset, options, datasets)
 
   return(invisible(results))
 }

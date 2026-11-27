@@ -1,0 +1,53 @@
+{
+  "data": [
+    {
+      "Cloak": "Absent",
+      "Minimum": {
+        "format": "dp:0",
+        "type": "number",
+        "value": 0
+      },
+      "Valid": 12
+    },
+    {
+      "Cloak": "Present",
+      "Minimum": {
+        "format": "dp:0",
+        "type": "number",
+        "value": 2
+      },
+      "Valid": 12
+    }
+  ],
+  "footnotes": [
+    {
+      "cols": null,
+      "myOrder": 0,
+      "rows": null,
+      "symbol": "<em>Note.<\/em>",
+      "text": "Valid counts exclude missing observations."
+    }
+  ],
+  "name": "descriptives",
+  "schema": {
+    "fields": [
+      {
+        "name": "Cloak",
+        "title": "Cloak",
+        "type": "string"
+      },
+      {
+        "name": "Valid",
+        "title": "Valid",
+        "type": "integer"
+      },
+      {
+        "name": "Minimum",
+        "title": "Minimum",
+        "type": "mixed"
+      }
+    ]
+  },
+  "status": "complete",
+  "title": "Group Descriptives"
+}

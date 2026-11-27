@@ -156,17 +156,161 @@ It is not necessary to use a JASP dataset (such as the debug.csv file we showed 
 data.frame to the dataset argument of the `runAnalysis` function. 
 
 ### 3. Testing JASP analyses
-- `testAll`: test all analyses
-- `testAnalysis`: test a specific analysis
-- `manageTestPlots`: validate a new plot or inspect differing test plots
-- `makeTestTable`: transform the output of a JASP table to short, testable list
 
-To ensure that no aspects of JASP are accidentally broken, we use unit testing.
-These tests check if all tables still produce the same results, plots can be made, errors are caught, etc.
-If an analysis is changed, it's a good idea to check that no unit test returns an error.
-To this purpose jaspTools offers convenience functions for testing.
+Run `testAnalysis("AnalysisName")` for one analysis or `testAll()` for the
+configured modules. The corresponding `agentTestAnalysis()` and `agentTestAll()`
+return the test results and link an HTML report when the tested files have
+pending snapshots. Each module's report is available in `result$snapshotReviews`
+and its entry in the JSON test log.
 
-To create unit tests you can read [this guide](https://github.com/jasp-stats/jasp-desktop/blob/development/Docs/development/r-unit-test-guide.md).
+#### Writing and migrating tests
+
+`makeTestsFromExamples()` generates expectations from a fresh analysis run and
+writes table and HTML references under `tests/testthat/_snaps/<test-file>/`.
+Commit the generated R file and reviewed references together. Regenerating a
+test with an existing reference stages changes for review. The same expectations
+work in handwritten tests. For example, given a result with a binomial table,
+an HTML summary and a figure, the checks inside `test_that()` can read
+
+```r
+expect_snapshot_table(results$results$binomialTable, "binomial")
+expect_snapshot_html(results$results$summary, "analysis-summary")
+expect_equal_plots(results$state$figures[[1]]$obj, "distribution")
+```
+
+Existing inline tests still use their original rounding rules. New JSON
+snapshots retain the numeric values supplied by JASP, ordered column
+definitions, typed cells, groups, footnotes and table errors. HTML snapshots
+are readable HTML files. Plot snapshots continue to use vdiffr SVGs.
+
+Table snapshots keep the full-precision reference. Each continuous result
+passes when its absolute difference is at most the larger of `atol` and
+`rtol * max(abs(reference), abs(current))`. The defaults are `rtol = 1e-8`
+and `atol = 1e-12`. The schema's `number` and `pvalue` types identify
+continuous results, including typed values inside mixed cells. A p-value
+uses `atol = 0` by default so very small tail probabilities retain relative
+precision. Untyped fields and raw numbers in mixed cells compare exactly,
+as do integer fields, missing values, column definitions and footnotes.
+The module test uses the value supplied by the analysis regardless of how
+many digits JASP prints.
+
+Set defaults at the top of a test file, or override them for one table or a
+column identified by its schema name. For example, an older module might
+return its p-values in an ordinary numeric column named `p`.
+
+```r
+jaspTools::local_table_snapshot_tolerance(rtol = 1e-8, atol = 1e-12)
+
+test_that("the model reports estimates and tail probabilities", {
+  jaspTools::expect_snapshot_table(results$results$modelTable, "model",
+    columns = list(p = list(atol = 0)))
+})
+```
+
+A passing rerun keeps the accepted file byte-for-byte. When a table has a
+reviewable change, the candidate retains the reference values in cells that
+passed within tolerance. For an intentional refresh, run the expectation
+with `refresh = TRUE` on the chosen reference platform and review the staged
+changes before accepting them.
+
+The jaspTools test runners keep accepted snapshots even if a test passes, fails,
+is skipped, or is removed. Delete obsolete references explicitly. For modules
+also run directly with serial testthat, put `jaspTools::preserveSnapshotReferences()`
+once in `tests/testthat/setup-snapshots.R`.
+Regeneration reports previously named outputs that would lose their expectation.
+When retiring an output intentionally, remove its expectation and reference
+together in the reviewed change.
+
+#### Migrating existing module tests
+
+`migrateSnapshotTests()` inventories inline table checks across the configured
+modules, or across a vector of checkout paths. Start with a dry run, then
+apply the migration to a file or a group of modules in your usual JASP test
+environment.
+
+```r
+modules <- c("../jaspQualityControl", "../jaspDescriptives")
+plan <- jaspTools::migrateSnapshotTests(modules)
+with(plan, table(basename(module), status))
+
+pilot <- jaspTools::migrateSnapshotTests(modules, files = "test-msaGaugeLinearity.R", apply = TRUE)
+subset(pilot, status %in% c("blocked", "manual"))
+# Once ready to migrate the remaining files:
+rollout <- jaspTools::migrateSnapshotTests(modules, apply = TRUE)
+```
+
+Each file runs in a fresh copy with its original inline comparisons. For
+every supported check, the tool captures the **complete table from that run**.
+Migration takes snapshot names from explicit labels, test descriptions, or
+result keys. For example, the one-sample t-test is stored as
+`one-sample-t-test.table.json`. Newly generated example tests use the table
+title when available. Names that still repeat get a short suffix such as `-2`.
+It reruns the rewritten test with fresh fixtures and the new references before publishing
+the test and its JSON files together. A legacy mismatch or missing capture
+leaves that file for a later attempt. Review the module's Git diff and browse
+the new tables with `reviewSnapshots(modulePath, includeUnchanged = TRUE)`.
+
+The report identifies comparisons that need a person by filename and line.
+For example, a test comparing a transformed subset of rows may deliberately
+check a different quantity. Existing figure checks and targeted HTML assertions
+keep their original meaning. For newly migrated tables, choose any necessary
+file or column precision overrides using `local_table_snapshot_tolerance()`
+or `expect_snapshot_table()`. Files with a custom `jaspRoundToPrecision`
+rule are marked `manual` by default. After choosing the snapshot tolerances,
+pass `allowCustomRounding = TRUE` for those files. The original comparison
+still runs with its legacy rounding rule during capture.
+
+#### Reviewing a run
+
+```r
+result <- agentTestAnalysis("BinomialTest")
+result$snapshotReviews
+# Or build a report directly from a module checkout.
+reviewSnapshots(modulePath = "../jaspFrequencies")
+```
+
+Tables open with differences highlighted using JASP's default number formatting.
+Click the preview or press **T** to see the full-precision differences, then the
+formatted candidate, the formatted baseline, and the formatted differences again.
+When only a candidate or baseline exists, the same control toggles between
+its formatted and full-precision values.
+A changed cell stays shaded even when both values round to the same number.
+Footnotes appear below the table. Expand **Change details** for exact values,
+numeric deltas and the first differing decimal place.
+
+Figures open on a pixel overlay. HTML shows changes inside the rendered element.
+Both cycle through differences, candidate and baseline. To review only figures
+from one analysis, use `manageTestPlots("AnalysisName")`.
+
+Choose **Accept** or **Decline** at the top. To leave the decision to an agent,
+write a note below the preview and choose **Comment only**. Select **Export
+decisions** and give the JSON to the agent or apply it from R in the same
+checkout. The export includes comments and structured table changes.
+
+```r
+feedback <- applySnapshotReview("snapshot-decisions.json", modulePath = "../jaspFrequencies")
+feedback[, c("id", "status", "comment")]
+```
+
+An acceptance promotes the reviewed candidate, including a paired plot
+structure candidate when present. A changed reference or candidate requires a
+fresh review. A matching rerun clears the pending candidate. Use
+`reviewSnapshots(modulePath, includeUnchanged = TRUE)` to browse the accepted
+snapshot library. The offline report can also be generated from CI artifacts
+by restoring the references and candidates in their module directory layout.
+
+#### Try the included example
+
+```r
+source(system.file("examples/snapshot-review/demo.R", package = "jaspTools"))
+demo <- snapshotReviewExample()                # four deliberate differences
+clean <- snapshotReviewExample(changed = FALSE) # passing reference run
+```
+
+The example makes a temporary copy of its test suite, including a fifth-decimal
+change, a column replacement, a footnote, an HTML summary and a plot. See the
+[worked example](inst/examples/snapshot-review/README.md) and the
+[JASP module testing guide](https://github.com/jasp-stats/jasp-desktop/blob/development/Docs/development/r-unit-test-guide.md).
 
 ## Known limitations:
 - Click actions in the browser are not supported (e.g., "save as")

@@ -11,7 +11,8 @@ generateExampleTestBlock(
   jaspFileName,
   sourceFolder,
   results,
-  syntax = NULL
+  syntax = NULL,
+  tests = getTests(results$results, analysisIndex, totalAnalyses > 1L)
 )
 }
 \arguments{
@@ -26,10 +27,12 @@ generateExampleTestBlock(
 \item{sourceFolder}{String indicating the source folder: \code{"library"},
 \code{"verified"}, or \code{"other"}.}
 
-\item{results}{The analysis results.}
+\item{results}{The analysis results, or NULL if the analysis failed during generation.}
 
 \item{syntax}{The R syntax the test runs, or NULL to run the analysis with
 \code{runAnalysisFromJaspFile()}.}
+
+\item{tests}{Output nodes collected from the analysis results.}
 }
 \value{
 Character string with the test_that block.

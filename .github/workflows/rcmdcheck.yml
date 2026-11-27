@@ -80,8 +80,8 @@ jobs:
             if (length(warnings) == 0L)
               return(FALSE)
 
-            # there was one warning when this was created and it's not easy to fix
-            if (length(warnings) == 1L && grepl(pattern = "imports not declared", warnings))
+            # R reports the existing methods dependency in the singular when it is the only import.
+            if (length(warnings) == 1L && grepl("imports? not declared from:[[:space:]]+.methods.", warnings))
               return(FALSE)
 
             # otherwise, new warnings got introduced

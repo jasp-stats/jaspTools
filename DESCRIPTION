@@ -1,7 +1,7 @@
 Package: jaspTools
 Type: Package
 Title: Helps Preview and Debug JASP Analyses
-Version: 0.21.0
+Version: 0.21.0.9000
 Authors@R: c(
     person("Tim", "de Jong", role = "aut"),
     person("Don", "van den Bergh", role = c("ctb", "cre"), email = "d.vandenbergh@uva.nl"),
@@ -14,21 +14,23 @@ LazyData: true
 Imports:
   cli,
   data.table,
+  digest,
   httr,
   jaspSyntax (>= 1.4.2),
   jsonlite,
   lifecycle,
   pkgload,
+  R6,
   remotes,
   rjson,
   stringi,
   stringr,
   testthat (>= 3.2.2),
-  vdiffr (>= 1.0.7)
+  vdiffr (>= 1.0.7),
+  withr
 Suggests:
   ggplot2,
-  jaspBase,
-  withr
+  jaspBase
 Remotes:
   jasp-stats/jaspBase
 Additional_repositories: https://jasp-stats.r-universe.dev

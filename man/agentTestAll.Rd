@@ -16,6 +16,8 @@ Invisibly returns a \code{jaspAgentTestResults} object (S3 class) with:
 \item{status}{0 = all passed, 1 = failures, errors, or module-level errors.}
 \item{summary}{Named list of counts: \code{fail}, \code{error}, \code{warn}, \code{skip}, \code{pass}, \code{time}.}
 \item{logFile}{Path to the detailed JSON log file.}
+\item{snapshotReviews}{Named list of standalone HTML reports for modules
+with pending snapshots in the tested files.}
 \item{failures}{Data frame with columns \code{module}, \code{file}, \code{test}, \code{message}
 — one row per failed expectation or test error.}
 \item{warnings}{Data frame with columns \code{module}, \code{file}, \code{test}, \code{message}.}
@@ -33,9 +35,8 @@ suitable for LLM/MCP consumption. Detailed results (failures, warnings, backtrac
 are written to a JSON log file that can be queried on demand.
 }
 \details{
-Uses testthat's \code{LlmReporter} internally — a reporter designed for non-interactive
-environments that disables spinner animations and dynamic output while retaining full
-snapshot/vdiffr support.
+Uses testthat's agent reporter when available. Earlier testthat versions
+collect the same test results and snapshots with the silent reporter.
 }
 \examples{
 \dontrun{

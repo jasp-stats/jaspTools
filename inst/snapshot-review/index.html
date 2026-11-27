@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snapshot review · jaspTools</title>
+  <style>
+/* SNAPSHOT_REVIEW_CSS */
+  </style>
+</head>
+<body>
+  <header class="masthead">
+    <div><h1>Snapshot review</h1><p id="progress"></p></div>
+    <div class="buttons" role="group" aria-label="Snapshot decision">
+      <button id="accept" class="accept" title="Accept candidate (A)" disabled>Accept</button>
+      <button id="decline" class="decline" title="Decline candidate (R)" disabled>Decline</button>
+    </div>
+    <div class="buttons">
+      <button id="undo" title="Undo last decision (U)">Undo</button>
+      <button id="export" class="primary">Export decisions</button>
+    </div>
+  </header>
+  <div class="layout">
+    <nav aria-label="Snapshots">
+      <div class="filters">
+        <input id="search" type="search" aria-label="Find a snapshot" placeholder="Find a snapshot">
+        <select id="filter" aria-label="Filter snapshots">
+          <option value="all">All snapshots</option>
+          <option value="pending">Unresolved</option>
+          <option value="accept">Accepted</option>
+          <option value="decline">Declined</option>
+          <option value="comment">Comment only</option>
+          <option value="reference">Reference only</option>
+        </select>
+      </div>
+      <div id="items"></div>
+    </nav>
+    <main>
+      <div id="empty" hidden>No matching snapshots.</div>
+      <section id="review" hidden>
+        <div class="item-head">
+          <div><span id="status"></span><h2 id="title"></h2><code id="path"></code></div>
+          <div class="pager">
+            <button id="previous" title="Previous snapshot (left arrow)" aria-label="Previous snapshot">←</button>
+            <button id="next" title="Next snapshot (right arrow)" aria-label="Next snapshot">→</button>
+          </div>
+        </div>
+        <div class="view-controls">
+          <strong id="view-label" aria-live="polite"></strong>
+          <button id="cycle">Cycle preview</button>
+        </div>
+        <div id="preview"></div>
+        <div id="preview-details"></div>
+        <div class="decision" id="decision">
+          <label for="comment">Comment for the agent</label>
+          <textarea id="comment" rows="2"></textarea>
+          <div class="buttons">
+            <button id="comment-only" title="Send this comment and leave the snapshot unresolved">Comment only</button>
+          </div>
+        </div>
+      </section>
+      <p id="message" role="status">Pass the exported JSON to the agent running <code>applySnapshotReview()</code>.</p>
+    </main>
+  </div>
+  <!-- SNAPSHOT_REVIEW_DATA -->
+  <script>
+/* SNAPSHOT_REVIEW_JS */
+  </script>
+</body>
+</html>
