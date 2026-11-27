@@ -1,5 +1,8 @@
 # Development version
 
+* `migrateSnapshotTests()` previews existing inline table tests across modules
+  and converts supported comparisons after checking the original expectation
+  and rerunning the rewritten file against its full-precision references.
 * Generated table and HTML tests use external JSON and HTML snapshots.
   `expect_snapshot_table()` checks the complete JASP table, including typed
   cells, column order and footnotes. Existing inline tests remain supported.

@@ -178,9 +178,6 @@ expect_snapshot_html(results$results$summary, "analysis-summary")
 expect_equal_plots(results$state$figures[[1]]$obj, "distribution")
 ```
 
-To migrate an inline `expect_equal_tables(table$data, list(...))`, pass the
-whole table to `expect_snapshot_table(table, "name")` and run the test. Review
-the first candidate against the original expected result before accepting it.
 Existing inline tests still use their original rounding rules. New JSON
 snapshots retain the numeric values supplied by JASP, ordered column
 definitions, typed cells, groups, footnotes and table errors. HTML snapshots
@@ -222,6 +219,41 @@ the same call at the beginning of handwritten tests that run an analysis.
 Regeneration reports previously named outputs that would lose their expectation.
 When retiring an output intentionally, remove its expectation and reference
 together in the reviewed change.
+
+#### Migrating existing module tests
+
+`migrateSnapshotTests()` inventories inline table checks across the configured
+modules, or across a vector of checkout paths. Start with a dry run, then
+apply the migration to a file or a group of modules in your usual JASP test
+environment.
+
+```r
+modules <- c("../jaspQualityControl", "../jaspDescriptives")
+plan <- jaspTools::migrateSnapshotTests(modules)
+with(plan, table(basename(module), status))
+
+pilot <- jaspTools::migrateSnapshotTests(modules, files = "test-msaGaugeLinearity.R", apply = TRUE)
+subset(pilot, status %in% c("blocked", "manual"))
+# Once ready to migrate the remaining files:
+rollout <- jaspTools::migrateSnapshotTests(modules, apply = TRUE)
+```
+
+Each file runs in a fresh copy with its original inline comparisons. For
+every supported check, the tool captures the **complete table from that run**.
+It reruns the rewritten test with fresh fixtures and the new references before publishing
+the test and its JSON files together. A legacy mismatch or missing capture
+leaves that file for a later attempt. Review the module's Git diff and browse
+the new tables with `reviewSnapshots(modulePath, includeUnchanged = TRUE)`.
+
+The report identifies comparisons that need a person by filename and line.
+For example, a test comparing a transformed subset of rows may deliberately
+check a different quantity. Existing figure checks and targeted HTML assertions
+keep their original meaning. For newly migrated tables, choose any necessary
+file or column precision overrides using `local_table_snapshot_tolerance()`
+or `expect_snapshot_table()`. Files with a custom `jaspRoundToPrecision`
+rule are marked `manual` by default. After choosing the snapshot tolerances,
+pass `allowCustomRounding = TRUE` for those files. The original comparison
+still runs with its legacy rounding rule during capture.
 
 #### Reviewing a run
 
