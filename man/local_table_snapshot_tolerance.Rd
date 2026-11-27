@@ -30,3 +30,9 @@ allowance times the larger magnitude of the two values. Declared p-values
 use an absolute allowance of zero unless the column has an explicit
 override. Set both tolerances to zero to require exact numeric matches.
 }
+\details{
+Fields with a missing or unrecognized schema type require an exact match,
+even with a column override. In a \code{mixed} field, the cell must declare
+\code{type = "number"} or \code{type = "pvalue"} for its \code{value} to use a tolerance.
+A bare numeric value in a mixed field always compares exactly.
+}

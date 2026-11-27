@@ -552,7 +552,7 @@ generateExampleTestBlock <- function(analysisName, analysisIndex, totalAnalyses,
   lines <- c(lines, "  jaspTools::preserveSnapshotReferences()", "")
 
   lines <- c(lines, runFromJaspFileLines(sourceFolder, jaspFileName, analysisIndex, syntax))
-  lines <- c(lines, resultStatusExpectation(), "", outputExpectationLines(tests), "})")
+  lines <- c(lines, resultExpectationLines(tests), "})")
 
   return(paste(lines, collapse = "\n"))
 }
@@ -588,7 +588,7 @@ generateExampleTestBlockBasic <- function(analysisName, analysisIndex, totalAnal
 
   lines <- c(lines, runFromJaspFileLines(sourceFolder, jaspFileName, analysisIndex, syntax))
 
-  lines <- c(lines, resultStatusExpectation(), "})")
+  lines <- c(lines, resultExpectationLines(), "})")
 
   return(paste(lines, collapse = "\n"))
 }
@@ -737,24 +737,24 @@ snapshotExpectationLines <- function(test) {
   paste0("  jaspTools::expect_snapshot_", test$type, "(", node, ", ", name, ")")
 }
 
-outputExpectationLines <- function(tests) {
+resultExpectationLines <- function(tests = list()) {
+  lines <- c('  analysisFailed <- results[["status"]] %in% c("error", "fatalError", "validationError")',
+             '  expect_false(analysisFailed, info = results[["results"]][["errorMessage"]])')
+  if (!length(tests))
+    return(lines)
+
   # A plot backend can skip the remainder of this test block.
   plots <- vapply(tests, function(test) test$type == "plot", logical(1))
   ordered <- c(tests[!plots], tests[plots])
-  unlist(lapply(ordered, function(test) c(snapshotExpectationLines(test), "")), use.names = FALSE)
-}
-
-resultStatusExpectation <- function() {
-  c('  expect_false(results[["status"]] %in% c("error", "fatalError", "validationError"),',
-    '               info = results[["results"]][["errorMessage"]])')
+  output <- unlist(lapply(ordered, snapshotExpectationLines), use.names = FALSE)
+  c(lines, "", "  if (isFALSE(analysisFailed)) {", paste0("  ", output), "  }")
 }
 
 makeExpectations <- function(tests, name, options, dataset) {
   desc <- encodeString(paste(name, "results match"), quote = '"')
   preamble <- addPreambleLines(name, options, dataset)
   lines <- c(paste0("test_that(", desc, ", {"), "  jaspTools::preserveSnapshotReferences()",
-             paste0("  ", gsub("\n", "\n  ", preamble)), "", resultStatusExpectation(),
-             "", outputExpectationLines(tests), "})")
+             paste0("  ", gsub("\n", "\n  ", preamble)), "", resultExpectationLines(tests), "})")
   paste(lines, collapse = "\n")
 }
 

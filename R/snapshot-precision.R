@@ -7,6 +7,11 @@
 #' use an absolute allowance of zero unless the column has an explicit
 #' override. Set both tolerances to zero to require exact numeric matches.
 #'
+#' Fields with a missing or unrecognized schema type require an exact match,
+#' even with a column override. In a `mixed` field, the cell must declare
+#' `type = "number"` or `type = "pvalue"` for its `value` to use a tolerance.
+#' A bare numeric value in a mixed field always compares exactly.
+#'
 #' @param rtol Nonnegative finite relative tolerance. The package default is
 #'   `1e-8`. `NULL` inherits the current setting.
 #' @param atol Nonnegative finite absolute tolerance. The package default is

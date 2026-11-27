@@ -186,12 +186,14 @@ snapshots retain the numeric values supplied by JASP, ordered column
 definitions, typed cells, groups, footnotes and table errors. HTML snapshots
 are readable HTML files. Plot snapshots continue to use vdiffr SVGs.
 
-Table snapshots keep the full-precision reference. Each numerical result
+Table snapshots keep the full-precision reference. Each continuous result
 passes when its absolute difference is at most the larger of `atol` and
 `rtol * max(abs(reference), abs(current))`. The defaults are `rtol = 1e-8`
-and `atol = 1e-12`. A field declared as a p-value uses `atol = 0` so even
-very small tail probabilities retain relative precision. Integer fields,
-missing values, column definitions and footnotes are compared exactly.
+and `atol = 1e-12`. The schema's `number` and `pvalue` types identify
+continuous results, including typed values inside mixed cells. A p-value
+uses `atol = 0` by default so very small tail probabilities retain relative
+precision. Untyped fields and raw numbers in mixed cells compare exactly,
+as do integer fields, missing values, column definitions and footnotes.
 The module test uses the value supplied by the analysis regardless of how
 many digits JASP prints.
 

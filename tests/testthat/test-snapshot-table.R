@@ -151,6 +151,20 @@ test_that("only numeric payloads in aligned result cells can be merged", {
   expect_identical(d$merged, b)
 })
 
+test_that("column overrides preserve exact comparisons for untyped values", {
+  fields <- list(list(name = "untyped"), list(name = "unknown", type = "custom"),
+                 list(name = "bare", type = "mixed"))
+  a <- list(schema = list(fields = fields), data = list(list(untyped = 1, unknown = 1, bare = 1)))
+  b <- a
+  b$data[[1L]] <- lapply(a$data[[1L]], function(x) x + 1e-10)
+  ids <- .snapshotFieldNames(a)
+  policy <- snapshotTableTolerance(columns = lapply(b$data[[1L]], function(x) list(atol = 1)),
+                                   fields = ids)
+  d <- snapshotTableDiff(a, b, policy, merge = TRUE)
+  expect_identical(vapply(d$changes, `[[`, "", "column"), ids)
+  expect_identical(d$merged, b)
+})
+
 test_that("declared p-values use a pure relative allowance unless the column opts in", {
   a <- snapshotExampleTable()
   a$schema$fields[[3L]] <- list(name = "p", type = "pvalue")

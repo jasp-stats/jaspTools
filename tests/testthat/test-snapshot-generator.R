@@ -126,9 +126,37 @@ test_that("example generation seeds from the rerun and stages changed snapshots"
     scores = table(20), html = html("first"), errorMessage = "example failed"))
   replay <- as.data.frame(testthat::test_dir(dirname(file), reporter = "silent", stop_on_failure = FALSE))
   expect_equal(replay$failed, 1L)
+  expect_equal(replay$passed, 0L)
+  expect_false(replay$error)
+  expect_identical(tools::md5sum(names(originalFiles)), originalFiles)
 
-  originalFiles <- tools::md5sum(c(file, list.files(refDir, full.names = TRUE)))
   results <- list(status = "fatalError", results = list(errorMessage = "example failed"))
   expect_error(generate(), "Could not regenerate.*example failed")
   expect_identical(tools::md5sum(names(originalFiles)), originalFiles)
+})
+
+test_that("a first failed replay leaves no table, HTML or plot artifacts", {
+  module <- withr::local_tempdir()
+  testDir <- file.path(module, "tests", "testthat")
+  dir.create(testDir, recursive = TRUE)
+  tree <- list(
+    stats = list(schema = list(fields = list(list(name = "n"))), data = list(list(n = 12))),
+    note = list(text = "<p>stale</p>", rawtext = "stale"),
+    plot = list(title = "Figure", data = "resources/1.png", width = 100, height = 100)
+  )
+  result <- list(status = "validationError", results = c(tree, list(errorMessage = "Invalid input")))
+  local_mocked_bindings(
+    runAnalysisFromJaspFile = function(...) result,
+    addPreambleLines = function(...) 'results <- jaspTools::runAnalysisFromJaspFile("example.jasp", 1)'
+  )
+  example <- generateExampleTestBlock("Example", 1, 1, "example.jasp", "other", list(results = tree))
+  manual <- makeExpectations(getTests(tree), "Manual", list(), "example.csv")
+  writeLines(example, file.path(testDir, "test-example.R"))
+  writeLines(manual, file.path(testDir, "test-manual.R"))
+
+  replay <- as.data.frame(testthat::test_dir(testDir, reporter = "silent", stop_on_failure = FALSE))
+  expect_equal(replay$failed, c(1L, 1L))
+  expect_equal(replay$passed, c(0L, 0L))
+  expect_false(any(replay$error | replay$skipped))
+  expect_length(list.files(file.path(testDir, "_snaps"), recursive = TRUE), 0L)
 })
